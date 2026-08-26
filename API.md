@@ -111,7 +111,7 @@ export const contract = defineContract({
 })
 ```
 
-`type$<T>()` (recorded as `Type<T>` in D17; the exported name is `type$`) returns a `Schema<T>` whose validation is the identity function. It adds no
+`type$<T>()` returns a `Schema<T>` whose validation is the identity function. It adds no
 dependency and no runtime cost.
 
 ---

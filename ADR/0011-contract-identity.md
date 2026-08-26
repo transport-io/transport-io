@@ -31,6 +31,16 @@ application, that is a mass disconnect on every deploy that touches the contract
 The per-event comparison catches strictly more of what matters and strictly less of what
 does not.
 
+## The principle
+
+**Refuse what cannot be caught later; permit what can.**
+
+That sentence decides every question this record answers, and it generalises past them.
+A failure with a clean, local, per-message error does not belong in a handshake that
+refuses whole sessions. A failure that corrupts silently and cannot be attributed does.
+When a future question asks whether some new disagreement should be fatal at connect time,
+this is the test to apply.
+
 ## Why payload schemas are excluded
 
 Including them is the obvious implementation and it is wrong.

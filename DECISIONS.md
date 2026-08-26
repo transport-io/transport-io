@@ -285,7 +285,7 @@ defect. Tested against the real transport, never a fake.
 
 ### D17. Schema layer: BYO via Standard Schema, no built-in validator
 Core accepts anything implementing `StandardSchemaV1` — zod, valibot and arktype all ship
-it — so core has zero runtime dependency and zero peer dependency. A types-only `Type<T>()`
+it — so core has zero runtime dependency and zero peer dependency. A types-only `type$<T>()`
 helper serves users who want inference without runtime validation. Validate inbound only,
 never outbound: you produced your own payload, and double validation doubles hot-path cost.
 
@@ -903,11 +903,31 @@ for the session. Recorded in `ADR/0009` as a *consequence* of the shared-lane tr
 than as an isolated fix: head-of-line blocking was accepted knowingly, this was not, and a
 third consequence from the same source would be a reason to revisit the trade.
 
-Still open as ordinary implementation work, tracked here so they are not lost: `except()`
-needs an exclusion set on the `Adapter` interface or it silently applies only to local
-peers; `staleDropped` must be renamed on the receiver side to `staleReceived`; `returns`
-must be constrained to `lane: 'stream'` in the type; drop counters need an API surface;
-`type$` and `Type` must agree; and `host`/`path` defaults need recording.
+The six items previously listed here as "still open" were an open-questions list wearing a
+different name, which this project bans. They are decided and applied:
+
+- **`except()` crosses the bus.** `Adapter.broadcast` takes
+  `opts: { lane: Lane; except?: readonly PeerId[] }`. Without it, exclusion silently applied
+  only to local peers, so the canonical `except(session.id)` idiom would have echoed to the
+  sender on every other node.
+- **The two stale counters have distinct names.** `staleDropped` is the sender-side TTL drop
+  (D15); `staleReceived` is the receiver-side sequence drop (D19). One name for two causes
+  was the defect.
+- **`returns` is only valid on the stream lane.** `EventDef` is a discriminated union on
+  `lane`, so a datagram event carrying `returns` fails to compile rather than becoming
+  callable over a lane with no response path.
+- **Drop counters have a surface.** `Session.stats(): PeerStats` exposes `queueDepth`,
+  `overflowDropped`, `staleDropped` and `staleReceived`. D15 mandated exposing them and
+  nothing did.
+- **The types-only helper is `type$<T>()`**, in the API and in D17. The two names disagreed.
+- **`host` defaults to `'::'` and `path` to `'/'`**, stated in API.md §2.1. Both were
+  invented while drafting and are now recorded as chosen: `'::'` because dual-stack is the
+  right default for a server that expects browsers, `'/'` because a library that needs a
+  path segment before it works has an avoidable first-run failure.
+
+The stream frame header layout is likewise decided rather than pending: §5's diagram and
+budget table are normative, verified at 12 bytes against the field list, and the `Reserved`
+field introduced by the four-byte Event ID MUST be zero.
 
 ### D60. Threshold shape
 Swept every numeric threshold in `DECISIONS.md` and the ADRs for the defect that broke D13.
@@ -965,3 +985,44 @@ counterpart in a comment beside it, and the pairing is asserted:
 | `commitlint` | `pr-title` job — the same config file, so the two cannot drift |
 
 Hooks are fast feedback. CI is the guarantee.
+
+### D62. Required checks, and what "merge-blocking" means
+Presence of a job in `ci.yml` is not the same as it blocking a merge. The pairing rule in
+D61 — that no hook may be the only place a check exists — is only true if the CI
+counterpart actually gates the merge button.
+
+The following are **required status checks** on `main`, configured in repository settings
+rather than in the workflow file, because GitHub takes them from branch protection and not
+from the YAML:
+
+| check | job |
+|---|---|
+| PR title | `pr-title` |
+| typecheck / lint / dead code / docs | `static` |
+| unit tests | `unit` |
+| integration tests | `integration` |
+| pack validation | `publish-shape` |
+| changeset present | `changeset` |
+| source changed without documentation | `docs-freshness` |
+
+Plus: squash merge only, linear history required, and no bypass for administrators on this
+list. Until the remote exists these are unconfigured, so the pairing rule is currently
+**asserted but not enforced** — that is a real gap and closing it is the first task when the
+repository is pushed.
+
+### D63. Development platform
+macOS and Linux. Windows is unsupported for development: hook commands invoke
+`./node_modules/.bin/` paths directly, which are `.cmd` shims on Windows, and the scripts
+assume a POSIX shell. WSL works. This is separate from *running* the library, which is not
+blocked on Windows — the transport publishes a `win32-x64` prebuild.
+
+Recorded because the alternative is leaving it as an undocumented property of one machine,
+the same category as the Node 20 gap below.
+
+### D64. Node 22 is the development floor, and the local environment now matches
+`engines: >=22`, and the local toolchain was Node 20.20.2 — a warning on install and a
+wrong-environment bug the moment integration tests load the transport. Resolved before the
+framer rather than after: Node 22.23.2 installed and set as the default.
+
+The ADR 0006 runtime-split evidence (Bun segfault 3/3, Node 0/3) was gathered on Node 20 and
+is re-run on Node 22 as part of Phase 2b, per the audit finding `runtime-evidence-is-eol-node`.

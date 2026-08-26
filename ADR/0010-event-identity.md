@@ -41,29 +41,33 @@ That property is what makes rolling deploys work, and it is also what makes the 
 identity check in ADR 0011 cheap — most of the disagreement it would otherwise have to
 detect cannot arise.
 
-## The collision cost, quantified
+## Width: four bytes, and why not two
 
-A 16-bit space collides by the birthday bound. Approximate probability that some pair of
-`n` event names collides:
+The first draft used two bytes. Its collision table is the argument against it:
 
-| events | collision probability |
-|---|---|
-| 20 | ~0.3% |
-| 50 | ~1.9% |
-| 100 | ~7.3% |
-| 200 | ~26% |
+| width | 100 events | 200 events | 1000 events | header | datagram payload |
+|---|---|---|---|---|---|
+| 2 bytes | 7.27% | 26.19% | 99.95% | 11 | 1013 |
+| 3 bytes | 0.03% | 0.12% | 2.93% | 12 | 1012 |
+| **4 bytes** | **0.0001%** | **0.0005%** | **0.0116%** | **13** | **1011** |
 
-For the contract sizes this library targets, collisions are uncommon; at 200 events they
-are likely. This is acceptable **only because the failure is loud and early**: it is
-detected when the contract is constructed, not at runtime, and the message names both
-colliding events and the one-line fix. A silent 7% failure rate would not be acceptable; a
-build error that says what to do is.
+At two bytes a collision is not a tail risk, it is a routine outcome: one contract in four
+at 200 events.
 
-Widening to `u32` would drop the probability to negligible at a cost of two more bytes per
-datagram, which is roughly 0.2% of a 1017-byte payload budget. That is the obvious
-revisit, and it is deliberately not taken now: two bytes is two bytes on the lane whose
-entire justification is being small, and the build-time error is a real mitigation rather
-than a hope.
+What decided it is not the probability but **what a collision costs the person who hits
+one.** They are told to rename an event in their own domain language because two SHA-256
+prefixes happened to match — "rename `roomDeleted`, it collides with `userTyping`". No
+error message makes that acceptable, and it lands in exactly the place this library is
+meant to feel sharp.
+
+Two bytes of a 1,013-byte payload budget is not a meaningful protection for an application.
+A forced rename is a meaningful cost. Four bytes makes the collision a non-event for 0.2%
+of the budget, and three bytes was rejected only because the remaining byte buys another
+two orders of magnitude for nothing that matters.
+
+The build-time collision error stays regardless. It should be unreachable rather than
+absent, and an explicit `id` override remains available for anyone who contrives a
+collision or needs a fixed value for an external implementer.
 
 ## Deploy story, stated as a property rather than discovered
 

@@ -91,10 +91,24 @@ Part 2.
 
 **Never reproduce an external interface from memory.** Depend on the published source, or
 read it. Never retype an external type declaration, constant, hash, or protocol value from
-recollection. A hand-vendored `StandardSchemaV1` silently broke every validator; a
-fabricated contract fingerprint appeared in a document that promises every snippet runs.
-Both looked plausible. Both were wrong. If a value can be computed, compute it and check it
-in.
+recollection.
+
+This has failed three times: a hand-vendored `StandardSchemaV1` that silently broke every
+validator, a fabricated contract fingerprint in a document promising every snippet runs, and
+five of twelve invented dependency versions. Twice it was caught by luck — an install
+failure and a variance error. The fingerprint would have shipped.
+
+So the rule is mechanical, not a thing to remember at the moment you are not thinking about
+it:
+
+- **Dependencies are added with the package manager**, never by hand-editing
+  `package.json`. `npm i -D <pkg>` writes the version, so there is nothing to invent. A
+  hand-written version string in a diff is a defect regardless of whether it happens to be
+  correct.
+- **Any external constant appearing in a document is computed or fetched in the same turn
+  it is written**, and the command that produced it goes next to it. A hash, an ID, a size
+  limit, a browser version: if it cannot be produced by a command in the transcript, it does
+  not go in the document.
 
 **A threshold is an absolute quantity, or a proportion of something this library counts.**
 Never a proportion of a baseline established at measurement time. The memory-soak criterion
@@ -130,6 +144,14 @@ The second line is what keeps hover readable — 126 characters instead of 303, 
 validator internals. It is opt-in by nature, so it is canonical by convention: it appears
 in the README, in every API.md example, in `examples/chat`, and in `AGENTS.md`. The inline
 form appears nowhere.
+
+## Platform support
+
+Development is supported on **macOS and Linux**. Windows is not, and this is a statement
+rather than an oversight: hook commands invoke `./node_modules/.bin/` paths directly, which
+are `.cmd` shims on Windows, and the scripts assume a POSIX shell. Windows contributors
+should use WSL. Note this is about *developing* the library — the transport itself publishes
+a `win32-x64` prebuild, so running it on Windows is a separate question that is not blocked.
 
 ## Hooks vs CI
 

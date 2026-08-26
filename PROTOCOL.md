@@ -100,7 +100,7 @@ Each peer writes exactly one `HANDSHAKE` frame as frame 0 of its emit stream, im
 on session establishment. The payload is a JSON object:
 
 ```json
-{ "v": 0, "feat": [], "events": [["chat", 12768, "stream"]] }
+{ "v": 0, "feat": [], "events": [["chat", 836792189, "stream"]] }
 ```
 
 | field | type | meaning |
@@ -148,7 +148,7 @@ ascending by name by Unicode code point:
 
 ```json
 { "v": 0, "feat": [],
-  "events": [["chat", 12768, "stream"], ["cursor", 18084, "datagram"], ["save", 5501, "stream"]] }
+  "events": [["chat", 836792189, "stream"], ["cursor", 1185214141, "datagram"], ["save", 360565394, "stream"]] }
 ```
 
 Each peer compares the two tables entry by entry:
@@ -162,6 +162,15 @@ Each peer compares the two tables entry by entry:
 
 A refusal MUST name the offending event in the close reason, for example
 `event 'cursor' is 'datagram' here and 'stream' at the peer`.
+
+**Property worth knowing before you deploy: the server sends its event table to every peer
+that completes a handshake.** Anyone who can open a session learns the full set of event
+names and lanes — not payloads, not schemas, not data, but the surface. For almost every
+application this is uninteresting, and it is the same information a client bundle already
+contains. It is stated here rather than left to be discovered because it is occasionally
+not uninteresting: if event names encode unreleased features or internal structure, an
+unauthenticated peer can read them. Gate session establishment behind authentication if
+that matters.
 
 **Payload schema shape is not exchanged and not compared.** A schema disagreement produces
 one `WT_VALIDATION_FAILED` on one message, which is local, readable and recoverable. An
@@ -188,7 +197,9 @@ frame boundaries.
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                          Length (32)                          |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|    Type (8)   |   Codec (8)   |         Event ID (16)         |
+|    Type (8)   |   Codec (8)   |          Reserved (16)        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Event ID (32)                         |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                         Payload (*)                           |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -198,14 +209,15 @@ frame boundaries.
 
 | field | bytes | notes |
 |---|---|---|
-| Length | 4 | Counts every byte **after** this field: 4 header bytes plus payload. |
+| Length | 4 | Counts every byte **after** this field: 8 header bytes plus payload. |
 | Type | 1 | §5.2 |
 | Codec | 1 | §5.3 |
-| Event ID | 2 | §5.4 |
-| **Fixed overhead** | **8** | 4 length + 4 header |
+| Reserved | 2 | MUST be zero. Rejected as a protocol error otherwise. |
+| Event ID | 4 | §5.4 |
+| **Fixed overhead** | **12** | 4 length + 8 header |
 | Payload | 1 to 1 048 576 | |
 
-`Length` MUST be at least **5** — four header bytes plus at least one payload byte.
+`Length` MUST be at least **9** — eight header bytes plus at least one payload byte.
 
 **A `Length` of 0 is a protocol error.** So is a payload of zero bytes. Stream close is the
 terminator for a call response (§3.2), so no zero-length sentinel is needed anywhere in
@@ -213,9 +225,9 @@ this protocol, and permitting one is actively harmful: at least one widely used 
 halts on a zero-length application write. Receivers MUST reject such a frame rather than
 forward it.
 
-`Length` exceeding `1048580` (1 MiB payload plus the 4 header bytes it counts) is a
+`Length` exceeding `1048584` (1 MiB payload plus the 8 header bytes it counts) is a
 protocol error. `Length` counts only bytes *after* itself, so the four bytes of the Length
-field are not included — the same convention its minimum of 5 already reflects.
+field are not included — the same convention its minimum of 9 already reflects.
 
 The 1 MiB payload cap applies to **`EMIT` frames only**. `CALL_REQUEST` and
 `CALL_RESPONSE` frames are capped at 16 MiB, because a call is the documented home for
@@ -266,7 +278,7 @@ valid frame. This is deliberate and cheap corruption detection.
 
 ### 5.4 Event ID
 
-The **first two bytes of SHA-256 of the event's name**, big-endian, as a `u16`.
+The **first four bytes of SHA-256 of the event's name**, big-endian, as a `u32`.
 
 Identity is derived from the name, never from position. Two peers computing an ID for the
 same name therefore always agree, and adding, removing or reordering events changes no
@@ -277,7 +289,7 @@ Two names in one contract whose hashes collide are a **contract construction err
 reported when the contract is built, naming both events. The fix is an explicit `id` on one
 of them, which becomes part of the contract and is therefore shared by both peers.
 
-`0x0000` means **not applicable** and is used by `HANDSHAKE`, `CALL_RESPONSE`, `CALL_ERROR`,
+`0x00000000` means **not applicable** and is used by `HANDSHAKE`, `CALL_RESPONSE`, `CALL_ERROR`,
 `JOIN` and `LEAVE` — every frame whose meaning comes from the stream or from its own
 payload rather than from the event table. A room name is not a contract event, so `JOIN`
 and `LEAVE` have no event identity to carry.
@@ -344,11 +356,13 @@ subscription implements it as a call, which is already the authenticated path.
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|   Codec (8)   |         Event ID (16)         |   Origin...   |
+|   Codec (8)   |                 Event ID (32)                 |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|           ...Origin (32), continued...        |  Sequence...  |
+|  ...Event ID  |                  Origin (32)                  |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|          ...Sequence (32), continued...       |  Payload (*)  |
+|   ...Origin   |                 Sequence (32)                 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  ...Sequence  |                  Payload (*)                  |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
@@ -360,19 +374,48 @@ itself.
 | field | bytes | notes |
 |---|---|---|
 | Codec | 1 | Same table as §5.3. |
-| Event ID | 2 | Same rules as §5.4. `0x0000` is invalid here. |
+| Event ID | 4 | Same rules as §5.4. `0x00000000` is invalid here. |
 | Origin | 4 | §7.3 |
 | Sequence | 4 | §7.3 |
-| **Fixed overhead** | **11** | |
-| Payload | 1 to `limit − 11` | §7.4 |
+| **Fixed overhead** | **13** | |
+| Payload | 1 to `limit − 13` | §7.4 |
 
 A zero-length payload is a protocol error, as on streams (§5.1).
 
 ### 7.3 Sequence
 
-**Origin** identifies the peer that produced the datagram: the first four bytes of
-SHA-256 of its `PeerId`, big-endian. It is stamped once by the originating node and never
-rewritten.
+**Origin** identifies the peer that produced the datagram. It is stamped once by the
+session host that owns that peer and is never rewritten in transit.
+
+Origin is **allocated, not derived**. A hash of the `PeerId` would carry the same birthday
+problem as a hashed event ID — roughly 0.01% at 1,000 concurrent peers and 1.2% at 10,000
+— and a collision here is close to undebuggable from outside: two peers silently share a
+sequence space and each discards the other's datagrams as stale. Allocation removes the
+class of failure instead of making it rare.
+
+The normative requirements are:
+
+1. **Who assigns it.** The session host that accepts the peer, at session establishment,
+   before any datagram is sent.
+2. **Uniqueness scope.** An origin MUST be unique among all peers concurrently connected to
+   the same deployment — not merely to the same process. Uniqueness within one process is
+   not uniqueness across a bus.
+3. **Reuse.** An origin MUST NOT be reissued while any peer that observed it may still hold
+   sequence state for it. Since sequence state is discarded when a session ends and
+   reconnection creates a new session (§11), a conforming host satisfies this by never
+   reusing a value within its own lifetime. A host that exhausts the space MUST refuse new
+   sessions rather than wrap.
+4. **Across processes.** A single-process deployment MAY use a plain monotonic counter. A
+   deployment with more than one session host MUST partition the space so that two hosts
+   cannot issue the same value. The recommended partition is a 10-bit host ordinal in the
+   high bits and a 22-bit per-host counter in the low bits, giving 1,024 hosts and
+   4,194,303 sessions per host lifetime. Allocating the host ordinal is the adapter's
+   responsibility: `MemoryAdapter` is a single host and uses ordinal `0`; a cross-process
+   adapter MUST provide a distinct ordinal per host, and MUST NOT hand the same ordinal to
+   two live hosts.
+
+`0x00000000` is reserved and MUST NOT be allocated, so a zero-filled buffer cannot parse as
+a valid datagram from a real peer.
 
 **Sequence** is a `u32` counter, monotonically increasing per `(origin, event)`, starting
 at 1 and wrapping to 1 after `0xFFFFFFFF`.
@@ -419,13 +462,13 @@ MUST query the transport at send time rather than assuming a fixed value.
 The maximum payload is:
 
 ```
-maxPayload = effectiveDatagramSize − 11
+maxPayload = effectiveDatagramSize − 13
 ```
 
 where `effectiveDatagramSize` is the transport's reported maximum, or **1024** when the
 transport reports zero or does not report one. 1024 is the conservative floor, chosen
 because at least one major browser hardcodes exactly that value regardless of the true path
-MTU. The corresponding conservative payload maximum is **1013 bytes**.
+MTU. The corresponding conservative payload maximum is **1011 bytes**.
 
 A sender MUST check the payload against this limit **before** writing. It MUST NOT rely on
 the transport to report an oversized datagram, because at least one widely used
