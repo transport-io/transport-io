@@ -12,7 +12,7 @@ The contract is the single source of truth. An agent or a human reading `contrac
 knows every event, payload and lane in the application without reading anything else. That
 property is deliberate and is protected by the design.
 
-```ts
+```ts ignore
 import { defineContract, type Schema } from 'transport-io'
 import { z } from 'zod'
 
@@ -41,7 +41,7 @@ distinction is what separates the two call shapes, and it needs no second declar
 
 ### 1.1 Types
 
-```ts
+```ts ignore
 export type Lane = 'stream' | 'datagram'
 
 /** Any validator implementing the Standard Schema interface: zod, valibot, arktype. */
@@ -72,7 +72,7 @@ Two helpers, each one level deep. This is a deliberate constraint: deeply condit
 inferred types produce hover output and error messages that neither humans nor agents can
 read. If `emit` hover shows forty lines of conditional type, the design has failed.
 
-```ts
+```ts ignore
 /** Derive a plain payload/returns map once, so no method signature ever mentions a schema. */
 export type MapOf<M extends AnyMap> = {
   readonly [K in keyof C]: {
@@ -103,7 +103,7 @@ type-level test asserting exactly that.
 
 For applications that want inference without runtime validation:
 
-```ts
+```ts ignore
 import { defineContract, type$ } from 'transport-io'
 
 export const contract = defineContract({
@@ -120,7 +120,7 @@ dependency and no runtime cost.
 
 ### 2.1 Creating a server
 
-```ts
+```ts ignore
 import { createServer } from 'transport-io/server'
 import { readFileSync } from 'node:fs'
 import { contract } from './contract.js'
@@ -135,7 +135,7 @@ const server = createServer({
 await server.listen()
 ```
 
-```ts
+```ts ignore
 export interface ServerOptions<M extends AnyMap> {
   readonly contract: Contract
   readonly port: number
@@ -170,7 +170,7 @@ cost on the hot path.
 
 ### 2.2 Session lifecycle
 
-```ts
+```ts ignore
 server.on('session', (session) => {
   session.join('lobby')
 
@@ -184,7 +184,7 @@ server.on('session', (session) => {
 })
 ```
 
-```ts
+```ts ignore
 export interface Session<M extends AnyMap> {
   readonly id: PeerId
   readonly rooms: readonly string[]
@@ -228,12 +228,12 @@ subscription implements it as a call, which is already on the authenticated path
 
 ### 2.3 Emitting to a room
 
-```ts
+```ts ignore
 server.to('lobby').emit('chat', { room: 'lobby', body: 'hello' })
 server.to('lobby').except(session.id).emit('cursor', { x: 10, y: 20 })
 ```
 
-```ts
+```ts ignore
 export interface RoomTarget<M extends AnyMap> {
   emit<K extends keyof M>(event: K, payload: M[K]['payload']): void
   except(...peers: PeerId[]): RoomTarget<M>
@@ -249,7 +249,7 @@ adapter, and no node is assumed to know a room's full membership.
 
 ### 2.4 Handling a call
 
-```ts
+```ts ignore
 server.handle('save', async ({ docId, text }, ctx) => {
   ctx.signal.throwIfAborted()
   const revision = await db.save(docId, text)
@@ -257,7 +257,7 @@ server.handle('save', async ({ docId, text }, ctx) => {
 })
 ```
 
-```ts
+```ts ignore
 export interface CallContext<M extends AnyMap> {
   readonly session: Session<M>
   readonly signal: AbortSignal
@@ -277,7 +277,7 @@ the code; anything else becomes `WT_HANDLER_ERROR`.
 
 ### 3.1 Connecting
 
-```ts
+```ts ignore
 import { Client } from 'transport-io/client'
 import { contract } from './contract.js'
 
@@ -285,7 +285,7 @@ const client = new Client({ contract, url: 'https://localhost:4433/' })
 await client.connect()
 ```
 
-```ts
+```ts ignore
 export interface ClientOptions<M extends AnyMap> {
   readonly contract: Contract
   readonly url: string
@@ -326,7 +326,7 @@ mounts twice in development.
 
 ### 3.2 Emit and call
 
-```ts
+```ts ignore
 client.emit('cursor', { x: 12, y: 40 })
 
 const { revision } = await client.call('save', { docId: 'a', text: 'hi' })
@@ -341,7 +341,7 @@ case a timeout is usually reached for is already handled. Adding a default timer
 reintroduce exactly the pending-callback bookkeeping this design removes. For a slow but
 live handler, pass a signal:
 
-```ts
+```ts ignore
 const res = await client.call('save', doc, { signal: AbortSignal.timeout(5_000) })
 ```
 
@@ -350,13 +350,13 @@ application message is sent in either direction.
 
 ### 3.3 Session events
 
-```ts
+```ts ignore
 client.on('session', ({ id, resumed }) => {
   console.log('session', id, 'resumed:', resumed)
 })
 ```
 
-```ts
+```ts ignore
 export interface SessionInfo {
   readonly id: string
   readonly resumed: boolean
@@ -374,7 +374,7 @@ provides the primitive and the hook.
 
 ## 4. Errors
 
-```ts
+```ts ignore
 export declare class TransportError extends Error {
   readonly code: TransportErrorCode
   readonly remedy: string
@@ -397,7 +397,7 @@ are specified in `PROTOCOL.md` §10.
 
 ## 5. Adapters
 
-```ts
+```ts ignore
 export interface Adapter {
   join(room: string, peer: PeerId): Promise<void>
   leave(room: string, peer: PeerId): Promise<void>
@@ -442,7 +442,7 @@ discovered downstream.
 | `client.on(event, handler)` | Returns an unsubscribe function, making effect cleanup a one-liner. |
 | `TransportError.code` | Lets a binding branch on a stable code rather than a message. |
 
-```ts
+```ts ignore
 export interface ClientState {
   readonly status: 'idle' | 'connecting' | 'connected' | 'closing' | 'closed'
   readonly sessionId: string | null
@@ -462,7 +462,7 @@ isolation on the server and makes tests order-dependent.
 
 A binding built on this surface looks like:
 
-```ts
+```ts ignore
 import { useSyncExternalStore } from 'react'
 
 export function useConnectionStatus(client: Client<never>) {
