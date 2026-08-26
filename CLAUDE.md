@@ -131,6 +131,16 @@ validator internals. It is opt-in by nature, so it is canonical by convention: i
 in the README, in every API.md example, in `examples/chat`, and in `AGENTS.md`. The inline
 form appears nowhere.
 
+## Hooks vs CI
+
+`lefthook` (Go binary, one committed YAML, installed by `prepare`). `pre-commit` is Biome
+and the documentation-staleness check, staged-scoped and parallel, ~95 ms. `commit-msg` is
+commitlint.
+
+**Typecheck, knip, tests and e2e never go in a hook.** A slow pre-commit gets bypassed
+within a week. And nothing in `lefthook.yml` may be the only place a check exists: hooks are
+fast feedback, CI is the guarantee. See D61.
+
 ## Working style
 
 - Ask when a decision is unresolved. Never guess and move on — an unasked question becomes

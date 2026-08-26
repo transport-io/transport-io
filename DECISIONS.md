@@ -926,3 +926,42 @@ a threshold.
 **Rule going forward: a threshold is stated as an absolute quantity, or as a proportion of
 something this library counts. Never as a proportion of a baseline established at
 measurement time.**
+
+### D61. lefthook for git hooks, and what may not go in them
+**lefthook**, not husky and not simple-git-hooks. Recorded with the reasons so nobody
+swaps it later for a more familiar name:
+
+- A single **Go binary**. Verified: the generated `.git/hooks/pre-commit` is a POSIX `sh`
+  script that invokes a native executable directly. There is no Node in the hook runner
+  path, unlike husky's shell-plus-Node arrangement.
+- **Parallel execution** of hook commands, declared rather than hand-rolled.
+- **One committed YAML file** at the repo root instead of shell scripts scattered across
+  directories.
+
+**Wiring.** `lefthook.yml` is committed at the root and installed by a `prepare` script, so
+a fresh clone gets working hooks with no manual step. Verified by deleting both hooks and
+running `npm run prepare`: 0 hooks before, 2 after.
+
+**`pre-commit`** runs staged-file-scoped and parallel: Biome format and lint over
+`{staged_files}`, and the documentation-staleness check.
+
+**`commit-msg`** runs commitlint, enforcing subject-only, the scope validated against the
+workspace package list, and the `!` breaking marker.
+
+**What may not go in a hook: typecheck, knip, unit tests, e2e.** Those belong to CI. A slow
+pre-commit gets bypassed within a week, and a hook everyone skips is worse than no hook.
+The measured gap is the argument: pre-commit is **~95 ms**, while typecheck alone is 367 ms
+and knip 453 ms on an empty repository — and both grow with the codebase while a
+staged-scoped hook does not.
+
+**The rule that matters most: nothing in `lefthook.yml` may be the only place a check
+exists.** Local hooks can always be bypassed and CI cannot. Every hook command names its CI
+counterpart in a comment beside it, and the pairing is asserted:
+
+| hook command | CI counterpart |
+|---|---|
+| `biome` | `static` job — `biome ci .` |
+| `docs-freshness` | `docs-freshness` job, against the PR diff |
+| `commitlint` | `pr-title` job — the same config file, so the two cannot drift |
+
+Hooks are fast feedback. CI is the guarantee.

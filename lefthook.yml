@@ -1,16 +1,29 @@
-# Fast local feedback. The PR-title gate in CI is the guarantee (DECISIONS.md D29).
+# Hooks are fast feedback. CI is the guarantee.
+#
+# Local hooks can always be bypassed and CI cannot, so NOTHING here may be the only
+# place a check exists. Every command below has a CI counterpart, named beside it.
+#
+# Deliberately NOT here: typecheck, knip, unit tests, e2e. Those are slow, and a slow
+# pre-commit gets bypassed within a week. A hook everyone skips is worse than no hook.
+# They run in CI (.github/workflows/ci.yml) where skipping is not an option.
+# See DECISIONS.md D61.
+
 pre-commit:
   parallel: true
   commands:
     biome:
+      # CI counterpart: `static` job -> `biome ci .`
       glob: '*.{ts,json}'
-      run: npx biome check --no-errors-on-unmatched {staged_files}
-    typecheck:
-      run: npx tsc --build
+      run: ./node_modules/.bin/biome check --no-errors-on-unmatched {staged_files}
     docs-freshness:
+      # CI counterpart: `docs-freshness` job, against the PR diff, where the answer
+      # is recorded rather than dismissed locally.
       run: bun run scripts/docs-freshness.ts
 
 commit-msg:
   commands:
     commitlint:
-      run: npx commitlint --edit {1}
+      # CI counterpart: `pr-title` job. Under squash merge the PR title becomes the
+      # commit subject, so that gate — not this hook — protects the changelog.
+      # Same config file, so the two cannot drift.
+      run: ./node_modules/.bin/commitlint --edit {1}
