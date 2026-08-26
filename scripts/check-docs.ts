@@ -70,7 +70,9 @@ mkdirSync(OUT, { recursive: true })
 
 let blockCount = 0
 let fileCount = 0
-for (const doc of ['API.md', 'README.md']) {
+// AGENTS.md was exempt from this gate entirely — four `ts` blocks that no tool had ever
+// compiled, in the document whose whole purpose is to be read and copied by a machine.
+for (const doc of ['API.md', 'README.md', 'AGENTS.md']) {
   const blocks = extractBlocks(doc)
   if (blocks.length === 0) continue
   // Blocks from one document are fragments of one surface, so they are concatenated in

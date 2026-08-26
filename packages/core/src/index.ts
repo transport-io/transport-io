@@ -4,6 +4,11 @@ export {
   type Frame as AdapterFrame,
   MemoryAdapter,
   type PeerId,
+  // `Adapter.onRemote` is typed in terms of this, so anyone writing a Redis adapter needs
+  // it. Without it their only options were `unknown` or retyping the interface by hand —
+  // the exact failure mode CLAUDE.md records as having already broken this project three
+  // times.
+  type RemoteEnvelope,
 } from './adapter.ts'
 export { Client, type ClientOptions, type ClientState, type Status } from './client.ts'
 export {

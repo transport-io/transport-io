@@ -27,7 +27,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc --build"
@@ -42,5 +44,11 @@
     "@moq/web-transport-linux-arm64-gnu": "0.1.4",
     "@moq/web-transport-linux-x64-gnu": "0.1.4",
     "@moq/web-transport-win32-x64-msvc": "0.1.4"
+  },
+  "author": "#V0ID <hey@v0id.me>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/v0id-user/transport-io.git",
+    "directory": "packages/core"
   }
 }

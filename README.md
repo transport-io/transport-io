@@ -108,8 +108,12 @@ first stable release.
 
 ## Install
 
+**Not published yet.** There is no `transport-io` on npm, and the name is unclaimed — so
+`npm install transport-io` will either 404 or, worse, fetch a stranger's package on this
+document's authority. Until the first release, install from the repository:
+
 ```bash
-npm install transport-io
+npm install github:v0id-user/transport-io
 ```
 
 The server also needs the native QUIC transport, which is a **separate, deliberate
@@ -131,8 +135,15 @@ Two things about that native package are worth knowing before CI surprises you:
   it. Use a `trixie` variant or Ubuntu 24.04. There is no musl build at all, so Alpine
   falls back to a source compile.
 
-Node 22 or newer. TypeScript 5.0 or newer for consumers, gated by `const` type parameters
-in the public types and checked in CI.
+**Consumers** need Node 22 or newer, and TypeScript 5.0 or newer — gated by `const` type
+parameters in the public types, and checked in CI.
+
+**Contributors** additionally need [Bun](https://bun.sh) and `openssl` on `PATH`. Bun runs
+the unit tests, the documentation gate and the example build; `openssl` mints the
+short-lived certificate the browser needs for WebTransport. Neither is optional: `npm
+install` succeeds without Bun and then the first `git commit` fails, because the hooks shell
+out to it. Development is supported on macOS and Linux only — Windows contributors should
+use WSL.
 
 ## Use
 

@@ -12,7 +12,7 @@ that declare `returns`**. Everything else follows from those.
 ## Install
 
 ```
-npm install transport-io
+npm install github:v0id-user/transport-io
 npm install @fails-components/webtransport-transport-http3-quiche   # server only
 ```
 
@@ -121,6 +121,9 @@ server.onSession((peer) => {
   peer.on('cursor', (pos) => void server.to('lobby').except(peer.id).emit('cursor', pos))
 })
 
+declare const cert: string    // PEM, from your own certificate source
+declare const privKey: string // PEM
+
 const listener = await listenHttp3({ port: 4433, cert, privKey })
 for await (const conn of listener.sessions()) void server.accept(conn)
 ```
@@ -181,12 +184,21 @@ surfaces as `WT_HANDSHAKE_TIMEOUT`.
 ## Writing an adapter
 
 ```ts
-interface Adapter {
-  join(room: string, peer: PeerId): Promise<void>
-  leave(room: string, peer: PeerId): Promise<void>
-  broadcast(room: string, frame: Uint8Array,
-            opts: { lane: 'stream' | 'datagram'; except?: readonly PeerId[] }): Promise<void>
-  onRemote(cb: (e: RemoteEnvelope) => void): void
+// A skeleton that must satisfy the real interface, rather than a copy of it. If `Adapter`
+// changes, this block stops compiling — a retyped interface would just quietly go stale.
+import type {
+  Adapter,
+  AdapterFrame,
+  BroadcastOptions,
+  PeerId,
+  RemoteEnvelope,
+} from 'transport-io'
+
+class MyAdapter implements Adapter {
+  async join(room: string, peer: PeerId): Promise<void> {}
+  async leave(room: string, peer: PeerId): Promise<void> {}
+  async broadcast(room: string, frame: AdapterFrame, opts: BroadcastOptions): Promise<void> {}
+  onRemote(cb: (envelope: RemoteEnvelope) => void): void {}
 }
 ```
 
