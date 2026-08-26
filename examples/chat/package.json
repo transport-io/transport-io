@@ -1,0 +1,15 @@
+{
+  "name": "@transport-io/example-chat",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cert": "bun run scripts/gen-cert.ts",
+    "build:web": "bun build web/main.ts --outdir web/dist --target browser",
+    "dev": "bun run cert && bun run build:web && node --experimental-strip-types server.node.ts",
+    "start": "node --experimental-strip-types server.node.ts"
+  },
+  "dependencies": {
+    "transport-io": "workspace:*"
+  }
+}

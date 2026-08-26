@@ -63,6 +63,12 @@ export const withOverride = defineContract({
 
 ## 2. Client
 
+A `Connection` comes from the transport seam, and which one you import decides where the
+code runs. `transport-io/browser-transport` uses the platform's own `WebTransport` and
+loads nothing native. `transport-io/node-transport` loads the QUIC binding and must only be
+imported from a file named `*.node.ts` — a lint rule enforces that, because the binding
+segfaults Bun on exit.
+
 ```ts
 import { Client, type ClientOptions } from 'transport-io'
 

@@ -8,14 +8,12 @@
       "project": ["scripts/**/*.ts"]
     },
     "packages/core": {
-      "entry": [
-        "src/index.ts",
-        "src/testing/index.ts",
-        "src/**/*.test.ts",
-        "src/**/*.test-d.ts",
-        "src/**/*.node.test.ts"
-      ],
+      "entry": ["src/**/*.test.ts", "src/**/*.test-d.ts", "src/**/*.node.test.ts"],
       "project": ["src/**/*.ts"]
+    },
+    "examples/chat": {
+      "entry": ["web/main.ts", "scripts/*.ts"],
+      "project": ["**/*.ts"]
     }
   }
 }
