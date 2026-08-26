@@ -242,6 +242,18 @@ export class Session {
 
   /** Register a responder. Only events declaring `returns` are callable. */
   handle(event: string, handler: CallHandler): () => void {
+    // D1 at the registration point, which is the one that actually turns a droppable
+    // message into an acknowledged one. Guarding `call()` alone would leave a responder
+    // happily answering over a bidirectional stream for an event whose contract says the
+    // message may be dropped.
+    const entry = this.#table.byName(event)
+    if (entry !== undefined && entry.lane === 'datagram') {
+      throw new TransportError(
+        'WT_PROTOCOL_ERROR',
+        `'${event}' is a datagram event, so it has no response path to handle`,
+        'Move the event to the stream lane and give it `returns`, or handle it with on().',
+      )
+    }
     this.#callHandlers.set(event, handler)
     return () => {
       this.#callHandlers.delete(event)
@@ -268,6 +280,13 @@ export class Session {
         'WT_UNKNOWN_EVENT',
         `'${event}' is not in the contract`,
         'Add it to the contract, or check the spelling.',
+      )
+    }
+    if (entry.lane === 'datagram') {
+      throw new TransportError(
+        'WT_PROTOCOL_ERROR',
+        `'${event}' is a datagram event and cannot be called`,
+        'A datagram may be dropped, so there is no response to await. Use emit(), or move the event to the stream lane.',
       )
     }
     opts?.signal?.throwIfAborted()
@@ -477,6 +496,18 @@ export class Session {
         writer,
         'WT_UNKNOWN_EVENT',
         `event id ${request.eventId} is not in the contract`,
+      )
+      return
+    }
+    if (entry.lane === 'datagram') {
+      // A peer is not bound by our types. A second implementation written from
+      // PROTOCOL.md can open a bidirectional stream for any event id it likes, and
+      // answering one for a datagram event would silently upgrade a droppable message to a
+      // guaranteed one on this side of the wire.
+      await this.#failCall(
+        writer,
+        'WT_PROTOCOL_ERROR',
+        `event '${entry.name}' is on the datagram lane and is not callable`,
       )
       return
     }

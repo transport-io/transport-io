@@ -1586,3 +1586,34 @@ is the assertion that would have caught both deaths.
 **Reconsider when:** never for the completion-not-hand-off rule. The single in-flight write
 could become a small window if measurement ever shows the round trip dominating throughput;
 that is a performance change and needs a number first.
+
+### D78. D1 is enforced at three points, because one of them is not enough
+`{ lane: 'datagram', payload, returns }` compiled, `CallableOf` admitted the event, and a
+`call()` on it opened a bidirectional stream, reached a registered handler and came back
+answered. A contract that says "this message may be dropped" produced a guaranteed, ordered,
+acknowledged message — with the type system agreeing at every step. That is a violation of
+D1, the first decision this project made, and it was reachable through the public API.
+
+The type hole was excess property checking against a **union**: TypeScript admits any
+property present on *any* member, so `returns` on the datagram branch was accepted because
+the stream branch has it. Closed with `returns?: never`, asserted in `types.test-d.ts`.
+
+The type fix alone would have been theatre, for a reason worth stating: **a peer is not
+bound by our types.** A Go implementation written from `PROTOCOL.md`, or any JavaScript
+consumer one `as never` away from the contract, can open a bidirectional stream for any
+event id it likes. So the runtime enforces D1 at all three points where the lane can be
+subverted:
+
+| point | what it refuses |
+|---|---|
+| `call()` | calling a datagram event from this side, before a stream is opened |
+| `handle()` | registering a call handler for a datagram event at all |
+| `#serveCall` | an inbound `CALL_REQUEST` naming a datagram event, refused with `CALL_ERROR` |
+
+`handle()` is the one that matters most and is the least obvious. Guarding `call()` alone
+leaves a responder happily answering over a bidirectional stream for an event whose contract
+promises the message may be dropped — the violation completes even though this side never
+initiated it.
+
+**Reconsider when:** never. If an event needs a response it belongs on the stream lane, and
+moving it there is a contract change that `negotiate()` already refuses to paper over.

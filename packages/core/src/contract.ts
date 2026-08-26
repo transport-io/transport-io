@@ -9,9 +9,23 @@ import { EVENT_ID_NOT_APPLICABLE } from './protocol.ts'
 export type Lane = 'stream' | 'datagram'
 export type Schema = StandardSchemaV1
 
-/** `returns` is meaningful only on the stream lane: a datagram has no response path. */
+/**
+ * `returns` is meaningful only on the stream lane: a datagram has no response path.
+ *
+ * The `returns?: never` on the datagram branch is load-bearing, not decoration. Excess
+ * property checking against a *union* admits any property present on any member, so
+ * `{ lane: 'datagram', payload, returns }` compiled happily, `CallableOf` admitted it, and
+ * `call()` served it over a bidirectional stream. A contract that says "may be dropped"
+ * produced a guaranteed ordered message with the type system agreeing — a direct violation
+ * of D1, the first decision this project made.
+ */
 export type EventDef =
-  | { readonly lane: 'datagram'; readonly payload: Schema; readonly id?: number }
+  | {
+      readonly lane: 'datagram'
+      readonly payload: Schema
+      readonly id?: number
+      readonly returns?: never
+    }
   | {
       readonly lane: 'stream'
       readonly payload: Schema

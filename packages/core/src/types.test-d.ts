@@ -53,3 +53,15 @@ client.emit('chat', { room: 'lobby', body: 42 })
 client.emit('chat', { x: 1, y: 2 })
 // @ts-expect-error handler parameter cannot be widened to a mismatched shape
 client.on('cursor', (p: { room: string }) => void p)
+
+// D1, at the type level. `returns` on a datagram event must not compile: excess property
+// checking against a union admits any property present on any member, so this was accepted
+// and `CallableOf` then made the event callable.
+const _badLane = defineContract({
+  // @ts-expect-error a datagram event has no response path, so `returns` is not a thing
+  cursor: { lane: 'datagram', payload: type$<{ x: number }>(), returns: type$<{ ok: true }>() },
+})
+void _badLane
+
+// And the consequence: a datagram event is not in the callable set.
+expectTypeOf<CallableOf<AppMap>>().toEqualTypeOf<'save'>()
