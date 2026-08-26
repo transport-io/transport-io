@@ -300,8 +300,12 @@ The three constraints resolve differently because the lanes make different promi
   seconds and resumes — the ring never overflows and we deliver 64 stale cursor
   positions, which is worse than dropping them because the app renders history. Counted
   as `staleDropped`, separate from `overflowDropped`, so the two causes stay
-  distinguishable. **Default TTL is 150ms**, overridable per event, with `ttl: null`
-  disabling expiry for events that want raw delivery. 150ms sits inside the window where
+  distinguishable. **TTL is 150ms**, session-wide. It is *not* per-event and there is no
+  `ttl: null` escape hatch — an earlier draft of this entry promised both, `EventDef` never
+  grew the field, and `DatagramQueue` is constructed with no arguments, so the escape hatch
+  for the one case the default gets wrong was unreachable by any means. The promise is
+  withdrawn rather than implemented: a per-event knob is a contract-shape change, and no
+  measured case has yet needed it. 150ms sits inside the window where
   a late frame is still worth showing: cursor lag is perceptible around 100ms and reads
   as broken by 200ms. The interaction with the ring is what makes it work — a peer
   stalling 2s leaves 64 queued frames, and at 60Hz all but the newest ~9 are past TTL, so
@@ -502,7 +506,7 @@ We squash merge, which changes where enforcement matters.
 
 **Scopes are required, not optional:** `feat(core):`, `fix(react):`, `chore(ci):`.
 transport-io gets its own commitlint config; the global `^[A-Za-z0-9 ,:]{4,72}$` subject
-rule from hela does not travel here. Parentheses are allowed, and the scope is validated
+rule from another of this author's projects does not travel here. Parentheses are allowed, and the scope is validated
 against the actual workspace package list so `feat(cor):` fails.
 
 **Subject only, never a body.** No commit has a body — not for rationale, not for
@@ -835,8 +839,10 @@ The pre-implementation audit raised 54 findings; 49 were upheld. Full detail in
 `AUDIT.md`. The decisions below resolve them.
 
 ### D52. Event identity is a name hash, not a position
-An event's wire identifier is the **first two bytes of SHA-256 of its name**, big-endian,
-as a `u16`. Collisions are a contract-construction error naming both events, resolved by an
+An event's wire identifier is the **first four bytes of SHA-256 of its name**, big-endian,
+as a `u32`. (Superseded the two-byte `u16` of the first draft — at two bytes one contract in
+four collides at 200 events, and the remedy would have been telling a user to rename an
+event in their own domain language.) Collisions are a contract-construction error naming both events, resolved by an
 explicit `id` that becomes part of the contract.
 
 Positional identity was the original draft and was never recorded as a decision, which is
@@ -948,9 +954,12 @@ a copy. Any constant that can be computed is computed and checked in, never type
 memory.
 
 ### D59. Audit resolutions
-Applied to the documents: the frame length cap corrected to `1048580` (`Length` excludes
-itself, as its own minimum of 5 already implied); the §7.1 diagram redrawn and verified at
-8+16+32 bits = 7 bytes against the budget table; `JOIN` and `LEAVE` added to the `0x0000`
+Applied to the documents: the frame length cap corrected (`Length` excludes itself, as its
+own minimum already implied) and the §7.1 datagram diagram redrawn against the budget table.
+Both numbers moved again when the event id widened to four bytes — the cap is now `1048584`
+and `MIN_LENGTH` is 9, the datagram header 13 bytes — which is why every one of them is
+asserted against `protocol.ts` by `scripts/check-docs.ts` rather than restated here where it
+would go stale a third time; `JOIN` and `LEAVE` added to the `0x0000`
 event-ID carve-out, since a room name is not a contract event; the 1 MiB cap scoped to
 `EMIT` only, with calls at 16 MiB; `WT_TOO_MANY_STREAMS` moved from a session-close code to
 stream reset code 9, matching D18's "reject the open" rather than killing the session;
@@ -1652,3 +1661,44 @@ verbatim in `API.md` reported `'unknown'` for it. Now a `TransportError` with a 
 
 **Reconsider when:** nothing here is a trade-off, so nothing here has a trigger. It is a
 list of things that were simply absent.
+
+### D80. Where the documents were ahead of the code, and which way each was resolved
+The audit's verdict was that the documentation is well ahead of the implementation. Each
+gap has two possible remedies and defaulting to either is how the gap grew, so each was
+decided on its own.
+
+**Built, because a second implementation genuinely needs the behaviour:** the per-frame-type
+payload cap (§5.3 described one and the decoder applied the call cap to everything, letting
+a peer declare sixteen times the emit cap), the pre-handshake datagram guard (§7 says
+discarded, the code decoded and delivered), and the four API promises in D79.
+
+**Withdrawn, because the document was describing a feature nobody built and nobody has
+needed:**
+
+- **Per-event datagram TTL and `ttl: null`.** `EventDef` never grew the field and
+  `DatagramQueue` takes no arguments, so the escape hatch for the one case the 150 ms
+  default gets wrong was unreachable. A per-event knob is a contract-shape change; it can
+  arrive with a measured case that needs it.
+- **"Gate session establishment behind authentication."** This read as a feature of the
+  protocol. It is not one: `Connection` exposes no headers, URL, peer address or identity,
+  `ServerOptions` has no reject hook, and `accept()` writes the full event table **before**
+  `onSession` fires, so the disclosure the sentence was mitigating happens before any
+  application code runs. §3 now says plainly that this library authenticates nothing and
+  that the mitigation belongs below it. `AGENTS.md`'s "that path is already authenticated"
+  went with it.
+
+**Corrected, because the document was simply stale:** the event id width in D-entries and
+ADR 0010 still said two bytes and `u16` against a wire that has been four bytes and `u32`
+since the widening; D59's worked arithmetic still carried the pre-widening numbers; and §7.3
+argued for a 32-bit Origin *hash* eighty lines after the same section established that
+Origin is allocated and explicitly rejected hashing — an implementer who read to the end
+would have built the collision the first half exists to eliminate.
+
+A normative reference to an unrelated private project of the author's was also removed from
+D29. It was a scope leak the earlier cleanup missed.
+
+**The rule this leaves behind:** every numeric constant in `PROTOCOL.md` is asserted against
+`protocol.ts` by `scripts/check-docs.ts`, which is why the widening broke the *documents*
+and not the *gate*. Prose has no such gate, which is why the stale prose survived three
+rounds of review. Where a document states behaviour, prefer a test whose name is the
+statement — see D75 and D78.

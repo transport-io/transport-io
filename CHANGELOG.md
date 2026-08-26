@@ -73,6 +73,20 @@ hand-written notes for the pre-release period.
   a server could not be shut down. Recorded together in D69 rather than as three unrelated
   bugs.
 
+- **Four normative promises had no implementation.** `WT_PEER_TOO_SLOW`, the receiver-side
+  stream cap, close codes 1000/1001, and "core degrades rather than crashing when an adapter
+  rejects" were each stated in `PROTOCOL.md`, restated in an ADR and restated in `AGENTS.md`.
+  Three had a test whose *name* was the promise and whose body asserted something cheaper to
+  reach. All four now exist and are asserted on the wire.
+- **A datagram event could be called.** `{ lane: 'datagram', returns }` compiled — excess
+  property checking against a union admits any member's properties — and the call was served
+  over a bidirectional stream and answered. A contract saying "may be dropped" produced a
+  guaranteed ordered message with the type system agreeing. D1 is now enforced at `call()`,
+  `handle()` and on inbound frames, because a peer is not bound by our types.
+- **Documented behaviour that did not exist has been withdrawn rather than faked**: per-event
+  datagram TTL, `ttl: null`, and the instruction to gate sessions behind authentication in a
+  library that authenticates nothing and has nowhere to put it.
+
 ### Tooling
 
 - Repository tooling landed before any library code, with CI green on a stub entry.

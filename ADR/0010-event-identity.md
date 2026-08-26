@@ -4,8 +4,8 @@
 
 ## Decision
 
-An event's wire identifier is the **first two bytes of SHA-256 of its name**, big-endian,
-as a `u16`. It is not derived from position in the contract, in declaration order or in
+An event's wire identifier is the **first four bytes of SHA-256 of its name**, big-endian,
+as a `u32`. It is not derived from position in the contract, in declaration order or in
 sorted order.
 
 Collisions are detected when the contract is built and are a **hard error** naming both
@@ -43,7 +43,7 @@ detect cannot arise.
 
 ## Width: four bytes, and why not two
 
-The first draft used two bytes. Its collision table is the argument against it:
+The first draft used two bytes, and shipped before being corrected. Its collision table is the argument against it:
 
 | width | 100 events | 200 events | 1000 events | header | datagram payload |
 |---|---|---|---|---|---|

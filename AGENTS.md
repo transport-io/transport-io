@@ -130,8 +130,11 @@ for await (const conn of listener.sessions()) void server.accept(conn)
 
 **Rooms are server-authoritative.** A client cannot join by sending anything; only
 `peer.join()` does it, and the client learns membership from a notification. If you want
-client-initiated subscription, make it an ordinary event you handle on the server — that
-path is already authenticated.
+client-initiated subscription, make it an ordinary event you handle on the server, where
+you can apply whatever authorization your application has. **This library authenticates
+nothing** and gives a handler no peer identity beyond `peer.id`, which it assigned itself —
+so "handle it on the server" means your check runs there, not that anyone has been
+identified. See PROTOCOL.md §3.
 
 `server.to(room).emit()` returns a promise because it crosses the adapter, but local
 delivery does not wait for it. Broadcasting to a room with no members is not an error.

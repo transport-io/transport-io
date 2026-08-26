@@ -169,8 +169,21 @@ names and lanes — not payloads, not schemas, not data, but the surface. For al
 application this is uninteresting, and it is the same information a client bundle already
 contains. It is stated here rather than left to be discovered because it is occasionally
 not uninteresting: if event names encode unreleased features or internal structure, an
-unauthenticated peer can read them. Gate session establishment behind authentication if
-that matters.
+unauthenticated peer can read them.
+
+**This library authenticates nothing, and offers no hook to.** `Connection` exposes no
+headers, no URL, no peer address and no identity; `ServerOptions` has no reject callback;
+and the handshake payload is exhaustively `{ v, feat, events }`. The only control an
+application has is whether to call `accept()` on a connection at all — and the transport
+listener hands it nothing to decide on. Note also that `accept()` writes the full event
+table before `onSession` fires, so the disclosure described above happens **before** any
+application code runs; refusing the peer afterwards does not undo it.
+
+If event names are sensitive, the mitigation is at a layer below this one: terminate the
+HTTP/3 request behind something that authenticates, and do not route unauthenticated peers
+to the WebTransport endpoint at all. Earlier drafts of this section told operators to "gate
+session establishment behind authentication", which read as a feature of this protocol. It
+is not one.
 
 **Payload schema shape is not exchanged and not compared.** A schema disagreement produces
 one `WT_VALIDATION_FAILED` on one message, which is local, readable and recoverable. An
@@ -480,7 +493,12 @@ the newcomer's datagrams are discarded **forever** as "not greater than the high
 seen". Keying on the origin makes one encoding correct for every recipient and keeps each
 sender's stream independent.
 
-Origin is a 32-bit hash, so distinct peers collide with probability approximately
+Origin is **allocated by the server, never hashed** — see the top of this section, which
+this paragraph contradicted for as long as both existed. The collision analysis that used
+to sit here described a design that was rejected precisely because it had one; it is kept
+below only as the argument against, and applies to no conforming implementation.
+
+Were Origin a 32-bit hash, distinct peers would collide with probability approximately
 `n² / 2³³` — about one in eight thousand at 1,000 concurrent peers, and about 1% at 10,000.
 A collision degrades rather than corrupts: two peers share a last-write-wins slot for one
 event, so one of them loses updates it should have kept. The datagram lane already permits
