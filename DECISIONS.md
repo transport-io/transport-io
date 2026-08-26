@@ -310,8 +310,31 @@ joining reaches 1, and the newcomer's datagrams are discarded permanently as sta
 on origin makes one encoding correct for every recipient and keeps senders independent.
 
 The origin field also supplies what D20's self-publish dedupe needed and previously had no
-place to live. Header cost rises from 7 to 11 bytes; conservative payload maximum falls
-from 1017 to 1013. Core drops stale
+place to live. With the four-byte event ID (D52) the header is 13 bytes and the conservative
+payload maximum is 1011.
+
+**Origins are quarantined and reused, not retired.** The first draft said never reuse
+within a host's lifetime, which is right about correctness and wrong about operations: 2²²
+values at 100 sessions per second exhausts in 11.7 hours, so a busy host would stop
+accepting sessions and need a restart — a scheduled outage disguised as a safety property,
+arriving in production because it is a function of uptime times load rather than of
+anything testable.
+
+Reuse is provably safe because both confusable windows are values this protocol sets: a
+receiver discards `(origin, event)` sequence state after 60 seconds idle, and an in-flight
+datagram cannot outlive the 150 ms send-queue TTL plus transit. A released origin is
+therefore quarantined **120 seconds**, twice the longer bound. Steady-state occupancy
+becomes `concurrent + churn × 120s` — 1.4% of the space at 500 sessions/second — so
+exhaustion is a genuine limit on **concurrency**, roughly 4.2 million live-plus-quarantined
+per host, never a clock.
+
+Host ordinals recycle under the same rule with a **300-second** quarantine, because
+autoscaling churns hosts and a 1,024-value space would otherwise exhaust for the same
+reason. **1,024 concurrent session hosts is a stated ceiling**, not an implementation
+detail; a deployment approaching it needs a wider origin field behind a `feat` token.
+
+All four intervals are constants in `protocol.ts` and are asserted against PROTOCOL.md by
+the docs gate. Core drops stale
 and duplicate arrivals by default and exposes `{ seq, staleDropped }`. Every datagram use
 case wants last-write-wins; making each app rebuild it is the too-raw-primitive mistake.
 Opt out per event for apps that want raw.
@@ -1005,19 +1028,52 @@ from the YAML:
 | changeset present | `changeset` |
 | source changed without documentation | `docs-freshness` |
 
-Plus: squash merge only, linear history required, and no bypass for administrators on this
-list. Until the remote exists these are unconfigured, so the pairing rule is currently
-**asserted but not enforced** — that is a real gap and closing it is the first task when the
-repository is pushed.
+Plus: squash merge only, linear history required, force-pushes and deletions blocked.
 
-### D63. Development platform
-macOS and Linux. Windows is unsupported for development: hook commands invoke
-`./node_modules/.bin/` paths directly, which are `.cmd` shims on Windows, and the scripts
-assume a POSIX shell. WSL works. This is separate from *running* the library, which is not
-blocked on Windows — the transport publishes a `win32-x64` prebuild.
+Because this cannot be expressed in a workflow file, it is committed as
+`scripts/protect-branch.sh` with a runbook, so creating the remote is two commands rather
+than one command plus a thing someone remembers:
 
-Recorded because the alternative is leaving it as an undocumented property of one machine,
-the same category as the Node 20 gap below.
+```bash
+gh repo create v0id-user/transport-io --private --source=. --push
+./scripts/protect-branch.sh
+```
+
+The script also sets `squash_merge_commit_message=BLANK`, which is the flag people miss:
+GitHub otherwise puts the PR description into the commit body, breaking the subject-only
+rule in D29 on the only commit that survives a squash.
+
+The seven required contexts must match the CI job names exactly or protection silently
+guards nothing, so that pairing is asserted mechanically rather than trusted. The window in
+which the rule is asserted-but-not-enforced is now as short as the two commands above.
+
+### D63. Windows: hooks are cross-platform, and CI is what gates anyway
+An earlier version of this decision said Windows was unsupported for development. That
+was a large conclusion from a small cause — direct `./node_modules/.bin/` paths, which are
+`.cmd` shims on Windows — and it locked out contributors for an optimisation worth
+milliseconds.
+
+Measured before deciding:
+
+| hook command form | cost | resolves on Windows |
+|---|---|---|
+| `./node_modules/.bin/biome` | 105 ms | no, `.cmd` shim |
+| `npx --no-install biome` | ~250 ms | yes |
+| `bun run <script>` | **112 ms** | **yes** |
+
+lefthook does **not** add `node_modules/.bin` to `PATH` — verified directly, a bare
+`biome` gives `sh: biome: command not found` — so bare names were never an option. A
+package.json script is, because the script runner adds `.bin` to `PATH` itself and
+resolves the Windows shims. The indirection costs **7 ms** against a budget with room,
+where npx would have cost 144.
+
+So hooks are cross-platform by construction and Windows contributors keep them.
+
+Two honest caveats. Windows is not in CI, so this is unverified rather than guaranteed;
+WSL is the tested path. And this was never load-bearing regardless: by D61, hooks are
+convenience and CI is the guarantee, so a contributor whose hooks did not run could still
+develop, commit and open a pull request with every gate enforced. Scoping the decision to
+what is actually true costs nothing and excludes nobody.
 
 ### D64. Node 22 is the development floor, and the local environment now matches
 `engines: >=22`, and the local toolchain was Node 20.20.2 — a warning on install and a

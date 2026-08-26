@@ -400,19 +400,55 @@ The normative requirements are:
 2. **Uniqueness scope.** An origin MUST be unique among all peers concurrently connected to
    the same deployment — not merely to the same process. Uniqueness within one process is
    not uniqueness across a bus.
-3. **Reuse.** An origin MUST NOT be reissued while any peer that observed it may still hold
-   sequence state for it. Since sequence state is discarded when a session ends and
-   reconnection creates a new session (§11), a conforming host satisfies this by never
-   reusing a value within its own lifetime. A host that exhausts the space MUST refuse new
-   sessions rather than wrap.
-4. **Across processes.** A single-process deployment MAY use a plain monotonic counter. A
-   deployment with more than one session host MUST partition the space so that two hosts
-   cannot issue the same value. The recommended partition is a 10-bit host ordinal in the
-   high bits and a 22-bit per-host counter in the low bits, giving 1,024 hosts and
-   4,194,303 sessions per host lifetime. Allocating the host ordinal is the adapter's
-   responsibility: `MemoryAdapter` is a single host and uses ordinal `0`; a cross-process
-   adapter MUST provide a distinct ordinal per host, and MUST NOT hand the same ordinal to
-   two live hosts.
+3. **Reuse, via quarantine.** An origin MUST NOT be reissued while any peer that observed
+   it may still hold sequence state for it. It MAY be reissued once that is impossible.
+
+   Never reusing would make the counter a clock rather than a capacity limit: 2²² values
+   at 100 sessions per second exhausts in 11.7 hours and at 500 per second in 2.3 hours,
+   so a busy host would stop accepting sessions and need a restart. That is a scheduled
+   outage disguised as a safety property, and it arrives in production because it is a
+   function of uptime multiplied by load rather than of anything testable.
+
+   Reuse is safe because both windows that could confuse a reused origin are bounded by
+   values this protocol sets:
+
+   - **Receiver sequence-state retention.** A receiver MUST discard its
+     `(origin, event)` sequence state after `60` seconds with no datagram for that pair.
+   - **Maximum in-flight datagram lifetime.** A datagram older than the send-queue TTL
+     (§9, 150 ms) is never transmitted, so an in-flight datagram cannot outlive that TTL
+     plus network transit.
+
+   **A released origin is therefore quarantined for at least `120` seconds** — twice the
+   longer of the two bounds — before returning to the pool. There is no mechanism by which
+   a datagram or a sequence entry survives that interval.
+
+   With quarantine, steady-state occupancy is `concurrent + churn × 120s`. At 500 sessions
+   per second that is 60,000 values, 1.4% of the space; at 20,000 per second it is 2.4
+   million, 57%. Exhaustion becomes a genuine **limit on concurrency**, roughly 4.2 million
+   live-plus-quarantined sessions per host, and never a function of how long the host has
+   been up. A host that actually reaches it MUST refuse new sessions with
+   `WT_TOO_MANY_STREAMS`-style clarity rather than wrap, because at that point the limit is
+   real.
+4. **Across processes.** A single-process deployment MAY use a plain monotonic counter
+   with the quarantine above. A deployment with more than one session host MUST partition
+   the space so that two hosts cannot issue the same value. The recommended partition is a
+   10-bit host ordinal in the high bits and a 22-bit per-host counter in the low bits.
+
+   **Stated limit: 1,024 concurrent session hosts.** This is a real ceiling, not an
+   implementation detail, and a deployment approaching it needs a wider origin field
+   negotiated through a `feat` token rather than a workaround.
+
+   Allocating the host ordinal is the adapter's responsibility. `MemoryAdapter` is a single
+   host and uses ordinal `0`. A cross-process adapter MUST provide a distinct ordinal per
+   host and MUST NOT hand the same ordinal to two live hosts.
+
+   **Ordinals are recycled under the same rule**, because autoscaling churns hosts and a
+   1,024-value space would otherwise exhaust for the same reason the counter would. When a
+   host leaves, every session it owned ends, and receivers discard the corresponding
+   sequence state within the 60-second retention window. An ordinal is therefore
+   quarantined for at least `300` seconds before reallocation — longer than the
+   per-origin quarantine because host departure is detected less promptly than session
+   close, and because ordinal churn is slow enough that the extra margin costs nothing.
 
 `0x00000000` is reserved and MUST NOT be allocated, so a zero-filled buffer cannot parse as
 a valid datagram from a real peer.

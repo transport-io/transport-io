@@ -11,7 +11,6 @@
 import { TransportError } from './errors.ts'
 import {
   Codec,
-  EVENT_ID_NOT_APPLICABLE,
   FrameType,
   isFrameType,
   LENGTH_PREFIX_BYTES,
@@ -146,5 +145,3 @@ export class FrameDecoder {
     return frames
   }
 }
-
-export { EVENT_ID_NOT_APPLICABLE }

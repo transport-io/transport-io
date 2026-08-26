@@ -10,15 +10,17 @@
     "packages/*"
   ],
   "scripts": {
-    "prepare": "lefthook install",
-    "typecheck": "tsc --build",
+    "build": "tsc --build",
+    "commitlint": "commitlint",
+    "deadcode": "knip",
+    "docs:check": "bun run scripts/check-docs.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "deadcode": "knip",
-    "test:unit": "bun test",
+    "lint:staged": "biome check --no-errors-on-unmatched",
+    "prepare": "lefthook install",
     "test:node": "node --test packages/*/src/**/*.node.test.ts",
-    "docs:check": "bun run scripts/check-docs.ts",
-    "build": "tsc --build",
+    "test:unit": "bun test",
+    "typecheck": "tsc --build",
     "verify:pack": "npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core"
   },
   "devDependencies": {

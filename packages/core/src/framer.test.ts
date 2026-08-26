@@ -216,12 +216,60 @@ describe('property: round-trip survives any chunking', () => {
   })
 })
 
-describe('malformed input is refused with a code and a remedy', () => {
-  test('a zero length prefix is a protocol error', () => {
-    const d = new FrameDecoder()
-    expect(() => d.push(new Uint8Array([0, 0, 0, 0]))).toThrow(TransportError)
+describe('zero-length frames are a protocol error on both sides (upstream #365)', () => {
+  // Writing a zero-length Uint8Array freezes the reference server with a quic_bug rather
+  // than erroring, so a zero-length frame must never reach the transport and must never
+  // be forwarded to an application. Stream close terminates a response, so no zero-length
+  // sentinel was ever needed. Both directions get their own test.
+
+  test('ENCODE refuses a zero-length payload', () => {
+    try {
+      encodeFrame(emit(new Uint8Array(0)))
+      throw new Error('expected a throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(TransportError)
+      expect((e as TransportError).code).toBe('WT_PROTOCOL_ERROR')
+      expect((e as TransportError).remedy).toContain('at least one byte')
+    }
   })
 
+  test('DECODE refuses a length prefix of 0', () => {
+    try {
+      new FrameDecoder().push(new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]))
+      throw new Error('expected a throw')
+    } catch (e) {
+      expect((e as TransportError).code).toBe('WT_PROTOCOL_ERROR')
+    }
+  })
+
+  test('DECODE refuses a header-only frame rather than forwarding an empty payload', () => {
+    // Length === STREAM_HEADER_BYTES declares a well-formed header and no payload, which
+    // is the case that would otherwise surface to an application as an empty message.
+    const bytes = new Uint8Array(4 + STREAM_HEADER_BYTES)
+    new DataView(bytes.buffer).setUint32(0, STREAM_HEADER_BYTES, false)
+    bytes[4] = FrameType.EMIT
+    bytes[5] = Codec.JSON
+    expect(() => new FrameDecoder().push(bytes)).toThrow(TransportError)
+  })
+
+  test('DECODE never yields a frame with an empty payload, for any input', () => {
+    fc.assert(
+      fc.property(fc.uint8Array({ minLength: 0, maxLength: 200 }), (junk) => {
+        const d = new FrameDecoder()
+        let frames: Frame[] = []
+        try {
+          frames = d.push(junk)
+        } catch {
+          return // refusing is the correct outcome
+        }
+        for (const f of frames) expect(f.payload.byteLength).toBeGreaterThan(0)
+      }),
+      { numRuns: 500 },
+    )
+  })
+})
+
+describe('malformed input is refused with a code and a remedy', () => {
   test('a zero-filled buffer cannot parse as a valid frame', () => {
     const d = new FrameDecoder()
     expect(() => d.push(new Uint8Array(32))).toThrow(TransportError)
@@ -243,10 +291,6 @@ describe('malformed input is refused with a code and a remedy', () => {
     const bytes = encodeFrame(emit(new Uint8Array([1])))
     bytes[6] = 0x01
     expect(() => new FrameDecoder().push(bytes)).toThrow(TransportError)
-  })
-
-  test('a zero-length payload is not representable', () => {
-    expect(() => encodeFrame(emit(new Uint8Array(0)))).toThrow(TransportError)
   })
 
   test('EVENT_ID_NOT_APPLICABLE round-trips for stream-scoped frames', () => {

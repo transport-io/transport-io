@@ -47,6 +47,15 @@ export const DATAGRAM_CONSERVATIVE_FLOOR = 1024
 export const DATAGRAM_CONSERVATIVE_PAYLOAD_MAX: number =
   DATAGRAM_CONSERVATIVE_FLOOR - DATAGRAM_HEADER_BYTES
 
+/** PROTOCOL.md §7.3 — a receiver discards (origin, event) sequence state after this idle. */
+export const SEQUENCE_STATE_RETENTION_MS = 60_000
+/** PROTOCOL.md §7.3 — a released Origin waits this long before returning to the pool. */
+export const ORIGIN_QUARANTINE_MS = 120_000
+/** PROTOCOL.md §7.3 — a departed host's ordinal waits this long before reallocation. */
+export const HOST_ORDINAL_QUARANTINE_MS = 300_000
+/** PROTOCOL.md §7.3 — stated ceiling on concurrent session hosts. */
+export const MAX_SESSION_HOSTS = 1024
+
 /** PROTOCOL.md §4.1 */
 export const HANDSHAKE_DEADLINE_MS = 5000
 /** PROTOCOL.md §10.2 */

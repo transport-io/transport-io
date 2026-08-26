@@ -20,11 +20,18 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import {
+  CLOSE_REASON_MAX_BYTES,
   CloseCode,
+  DATAGRAM_CONSERVATIVE_FLOOR,
   DATAGRAM_CONSERVATIVE_PAYLOAD_MAX,
   DATAGRAM_HEADER_BYTES,
   FrameType,
+  HANDSHAKE_DEADLINE_MS,
+  HOST_ORDINAL_QUARANTINE_MS,
+  MAX_SESSION_HOSTS,
+  ORIGIN_QUARANTINE_MS,
   ResetCode,
+  SEQUENCE_STATE_RETENTION_MS,
   STREAM_FRAME_OVERHEAD_BYTES,
 } from '../packages/core/src/protocol.ts'
 
@@ -151,6 +158,44 @@ else {
     ['stream frame overhead', overheads[0] as number, STREAM_FRAME_OVERHEAD_BYTES],
     ['datagram header bytes', overheads[1] as number, DATAGRAM_HEADER_BYTES],
     ['datagram payload max', payloadMax, DATAGRAM_CONSERVATIVE_PAYLOAD_MAX],
+    ['datagram conservative floor', floor, DATAGRAM_CONSERVATIVE_FLOOR],
+    [
+      'handshake deadline ms',
+      Number(/\*\*Deadline: (\d+) ms/.exec(proto)?.[1] ?? -1),
+      HANDSHAKE_DEADLINE_MS,
+    ],
+    [
+      'close reason max bytes',
+      Number(/exceed \*\*(\d+) bytes\*\*/.exec(proto)?.[1] ?? -1),
+      CLOSE_REASON_MAX_BYTES,
+    ],
+    [
+      'sequence state retention ms',
+      Number(/after `(\d+)` seconds with no datagram/.exec(proto)?.[1] ?? -1) * 1000,
+      SEQUENCE_STATE_RETENTION_MS,
+    ],
+    [
+      'origin quarantine ms',
+      Number(
+        /origin is therefore quarantined for at least `(\d+)` seconds/.exec(proto)?.[1] ?? -1,
+      ) * 1000,
+      ORIGIN_QUARANTINE_MS,
+    ],
+    [
+      'host ordinal quarantine ms',
+      Number(
+        /quarantined for at least `(\d+)` seconds before reallocation/.exec(proto)?.[1] ?? -1,
+      ) * 1000,
+      HOST_ORDINAL_QUARANTINE_MS,
+    ],
+    [
+      'max session hosts',
+      Number(
+        /Stated limit: ([\d,]+) concurrent session hosts/.exec(proto)?.[1]?.replace(/,/g, '') ??
+          -1,
+      ),
+      MAX_SESSION_HOSTS,
+    ],
   ]
   for (const [label, fromDoc, fromCode] of checks) {
     if (fromDoc !== fromCode)

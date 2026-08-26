@@ -1,12 +1,16 @@
 # Hooks are fast feedback. CI is the guarantee.
 #
 # Local hooks can always be bypassed and CI cannot, so NOTHING here may be the only
-# place a check exists. Every command below has a CI counterpart, named beside it.
+# place a check exists. Every command below names its CI counterpart.
 #
 # Deliberately NOT here: typecheck, knip, unit tests, e2e. Those are slow, and a slow
 # pre-commit gets bypassed within a week. A hook everyone skips is worse than no hook.
-# They run in CI (.github/workflows/ci.yml) where skipping is not an option.
-# See DECISIONS.md D61.
+# They run in CI (.github/workflows/ci.yml) where skipping is not an option. See D61.
+#
+# Commands go through `bun run <script>` rather than ./node_modules/.bin/ paths.
+# lefthook does not add node_modules/.bin to PATH (verified: `sh: biome: command not
+# found`), and a bare .bin path is a .cmd shim on Windows. A script runner resolves
+# both correctly. Measured cost of the indirection: 7 ms. See D63.
 
 pre-commit:
   parallel: true
@@ -14,10 +18,9 @@ pre-commit:
     biome:
       # CI counterpart: `static` job -> `biome ci .`
       glob: '*.{ts,json}'
-      run: ./node_modules/.bin/biome check --no-errors-on-unmatched {staged_files}
+      run: bun run lint:staged {staged_files}
     docs-freshness:
-      # CI counterpart: `docs-freshness` job, against the PR diff, where the answer
-      # is recorded rather than dismissed locally.
+      # CI counterpart: `docs-freshness` job, against the PR diff.
       run: bun run scripts/docs-freshness.ts
 
 commit-msg:
@@ -25,5 +28,4 @@ commit-msg:
     commitlint:
       # CI counterpart: `pr-title` job. Under squash merge the PR title becomes the
       # commit subject, so that gate — not this hook — protects the changelog.
-      # Same config file, so the two cannot drift.
-      run: ./node_modules/.bin/commitlint --edit {1}
+      run: bun run commitlint --edit {1}
