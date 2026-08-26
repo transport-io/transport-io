@@ -1093,3 +1093,48 @@ framer rather than after: Node 22.23.2 installed and set as the default.
 
 The ADR 0006 runtime-split evidence (Bun segfault 3/3, Node 0/3) was gathered on Node 20 and
 is re-run on Node 22 as part of Phase 2b, per the audit finding `runtime-evidence-is-eol-node`.
+
+### D65. The soak failed. Stream churn leaks 11.6 KB per call stream, upstream.
+Run on 2026-08-26, darwin-arm64, Node 22.23.2, 500 concurrent sessions. **It did not
+reach the first post-warmup sample**: RSS went from 226 MB to a 3.9 GB JavaScript heap OOM
+in 2.8 minutes.
+
+Bisected rather than guessed:
+
+| scenario | heap per bidirectional stream |
+|---|---|
+| transport-io over the loopback | 0.045 KB |
+| transport-io over the real transport | 11.8 KB |
+| **the binding alone, no transport-io at all** | **11.76 KB** |
+| datagrams over the real transport | flat — 20,000 emits, 0.6 KB total |
+
+The leak is **upstream and unbounded**. It is not ours: transport-io over a loopback is
+flat over 20,000 calls, and the binding on its own leaks the same amount with none of our
+code in the picture. It is per **bidirectional stream**, not per message — 20,000 datagrams
+plateau at 112 MB while 4,000 calls climb without pause. A 16,000-stream run is linear
+throughout with no plateau, so it is a leak rather than a bounded cache.
+
+**Practical impact.** At 11.6 KB per stream, the 4 MB/h bound allows 353 streams per hour —
+about one call every ten seconds. At ten calls per second it is 408 MB/h; at a hundred,
+4 GB/h.
+
+**This is a Stage 1 blocker and the graduation criteria are not met.** Nothing is published
+until it is resolved. Recording it plainly rather than adjusting the bound, because the
+bound is not what is wrong.
+
+**What it does not invalidate.** D2 remains correct as a design: a stream per call is why a
+stalled call blocks nothing, and the loopback numbers show the model itself costs 0.045 KB
+per call. The cost is entirely in one implementation of one transport, which is exactly the
+scenario ADR 0007's seam was built for — a second transport is now a plausible remedy
+rather than a hypothetical.
+
+**Options, in the order they should be considered:**
+1. Report upstream with this measurement. It is a sharper reproduction than the existing
+   issue, which reports 500 MB to 700 MB over twelve hours; this is 181 MB over sixteen
+   thousand streams in a couple of minutes, with a script that needs no application code.
+2. Evaluate the second transport behind the seam (`@moq/web-transport`, a NAPI binding over
+   a Rust QUIC stack) against the same probe.
+3. Neither of these is a reason to change the protocol. A stream per call stays.
+
+`scratch/binding-only.node.ts` reproduces it in isolation and should move into the
+repository as a pinned regression measurement.

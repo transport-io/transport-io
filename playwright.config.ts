@@ -16,7 +16,7 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   timeout: 45_000,
-  reporter: process.env['CI'] === undefined ? 'list' : 'github',
+  reporter: process.env.CI === undefined ? 'list' : 'github',
   use: {
     baseURL: 'http://localhost:8080',
     trace: 'retain-on-failure',
@@ -25,7 +25,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run e2e:server',
     url: 'http://localhost:8080/cert-hash',
-    reuseExistingServer: process.env['CI'] === undefined,
+    reuseExistingServer: process.env.CI === undefined,
     timeout: 60_000,
     stdout: 'pipe',
     stderr: 'pipe',

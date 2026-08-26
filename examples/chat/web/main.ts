@@ -38,7 +38,7 @@ function moveCursor(from: string, x: number, y: number): void {
   if (dot === undefined) {
     dot = document.createElement('div')
     dot.className = 'cursor'
-    dot.dataset['name'] = from
+    dot.dataset.name = from
     surface.append(dot)
     cursors.set(from, dot)
   }
@@ -64,7 +64,7 @@ const client = new Client<ChatMap>({
 client.subscribe(() => {
   const s = client.getSnapshot()
   statusEl.textContent = s.status
-  statusEl.dataset['state'] = s.status
+  statusEl.dataset.state = s.status
   roomsEl.textContent = s.rooms.join(', ') || '—'
   if (s.lastError !== null)
     append('system', `${s.lastError.code}: ${s.lastError.remedy}`, Date.now())

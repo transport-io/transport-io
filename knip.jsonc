@@ -1,0 +1,26 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreDependencies": [
+    // Loaded by a dynamic import inside the JS glue package, never statically, so no
+    // analysis can see it. Needed by the e2e and the soak; users install it themselves.
+    "@fails-components/webtransport-transport-http3-quiche",
+    // Used only by a TypeScript block in README.md, which the docs gate compiles and knip
+    // cannot see through markdown. Removing it breaks scripts/check-docs.ts.
+    "zod"
+  ],
+  // Used by the e2e and soak harnesses to mint a short-lived certificate.
+  "ignoreBinaries": ["openssl"],
+  "workspaces": {
+    ".": { "entry": ["scripts/*.ts"], "project": ["scripts/**/*.ts"] },
+    "packages/core": {
+      "entry": [
+        "src/bench/*.node.ts",
+        "src/**/*.test.ts",
+        "src/**/*.test-d.ts",
+        "src/**/*.node.test.ts"
+      ],
+      "project": ["src/**/*.ts"]
+    },
+    "examples/chat": { "entry": ["web/main.ts", "scripts/*.ts"], "project": ["**/*.ts"] }
+  }
+}

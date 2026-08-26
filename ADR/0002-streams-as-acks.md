@@ -34,8 +34,16 @@ protocol break.
 
 ## Revisit when
 
-The soak in D13 shows RSS growth above 4 MB/h by linear fit, or p99 call latency exceeds
-50 ms at 500 concurrent sessions with no network cause. Both are measured by the same
+**This trigger has fired.** The soak measured 11.6 KB of unbounded heap growth per
+bidirectional stream, which is 408 MB/h at ten calls per second. See D65.
+
+It did not fire on the design. transport-io over an in-memory transport costs 0.045 KB per
+call — the model is sound — and the binding leaks the same 11.76 KB with none of our code
+present. The cost is in one implementation of one transport, which is what ADR 0007's seam
+exists to make replaceable. A stream per call stays.
+
+The original trigger, for the record: RSS growth above 4 MB/h by linear fit, or p99 call
+latency above 50 ms at 500 concurrent sessions with no network cause. Both are measured by the same
 harness, so this trigger fires from evidence already being collected rather than from an
 impression that "churn feels expensive".
 

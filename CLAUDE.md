@@ -86,6 +86,9 @@ Part 2.
 - **Bun segfaults on exit** when the native addon is loaded, 3/3 runs. Node, 0/3.
 - **Safari cannot talk to a quiche-backed server** and is unsupported in v1. Chrome and
   Firefox only.
+- **The transport leaks 11.6 KB per bidirectional stream**, unbounded, upstream. The soak
+  fails and Stage 1 is blocked. Not ours: the loopback costs 0.045 KB and the binding leaks
+  the same amount alone. See D65.
 
 ## Rules that exist because something nearly shipped
 

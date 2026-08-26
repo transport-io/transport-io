@@ -11,6 +11,7 @@
     "examples/*"
   ],
   "scripts": {
+    "bench:stream-churn": "./scripts/check-node.sh && node --expose-gc packages/core/src/bench/stream-churn.node.ts",
     "build": "tsc --build",
     "check:node": "./scripts/check-node.sh",
     "commitlint": "commitlint",
@@ -22,6 +23,7 @@
     "lint:fix": "biome check --write .",
     "lint:staged": "biome check --no-errors-on-unmatched",
     "prepare": "lefthook install",
+    "soak": "./scripts/check-node.sh && node --expose-gc scripts/soak.node.ts",
     "test:node": "node --test \"packages/*/src/**/*.node.test.ts\"",
     "test:unit": "bun test --path-ignore-patterns=\"**/*.node.test.ts\" --path-ignore-patterns=\"e2e/**\"",
     "typecheck": "tsc --build && tsc -p tsconfig.test.json",
@@ -42,6 +44,7 @@
     "knip": "^6.32.2",
     "lefthook": "^2.1.10",
     "publint": "^0.3.24",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "zod": "^4.4.3"
   }
 }
