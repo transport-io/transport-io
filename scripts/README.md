@@ -33,6 +33,37 @@ title — written by whoever opens the PR — is arbitrary code on the runner un
 bound through `env:` and read as `"$NAME"`. See D74; the repository shipped exactly that
 defect. Line-based, no YAML dependency.
 
+## Publishing — a thing a human does, deliberately, from their own machine
+
+Nothing in `.github/workflows/` publishes: there is no publish job, no `NPM_TOKEN`, no
+`changesets/action`, no `registry-url`. That is the design, not an omission.
+
+Preflight, all verified before the first release:
+
+| check | state |
+|---|---|
+| `transport-io` on npm | **404 — unclaimed** |
+| root `package.json` | `private: true` (never publishes) |
+| `examples/chat` | `private: true` |
+| `packages/core` | not private — the one package that publishes |
+| tarball | `dist` (minus `bench`), `LICENSE`, `README.md` |
+| CI | publishes nothing |
+
+The sequence:
+
+```bash
+npx changeset version        # consumes the changesets; lands on 0.1.0 from 0.0.0
+npm run verify:pack          # attw + publint + the consumer TypeScript floor
+npm -w packages/core publish # deliberate, from your machine
+```
+
+**One thing must change in the same commit as the first publish.** README.md and
+`packages/core/README.md` both say the package is not on npm and give a
+`github:v0id-user/transport-io` install line. That is true until it is not. Swap both to
+`npm install transport-io` when the name exists, and not before — an install line that
+points at a name nobody owns is how a reader ends up installing a stranger's package on this
+project's authority.
+
 ## `check-norms.ts` — normative prose names the test that proves it
 
 Every `MUST` in `PROTOCOL.md` and every bold guarantee in `API.md` carries an identifier
