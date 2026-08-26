@@ -1046,7 +1046,7 @@ Because this cannot be expressed in a workflow file, it is committed as
 than one command plus a thing someone remembers:
 
 ```bash
-gh repo create v0id-user/transport-io --private --source=. --push
+gh repo create <your-account>/transport-io --private --source=. --push
 ./scripts/protect-branch.sh
 ```
 

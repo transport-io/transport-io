@@ -7,7 +7,7 @@ pairing rule in D61 (no hook may be the only place a check exists) is asserted b
 enforced. This script closes that window in one command.
 
 ```bash
-gh repo create v0id-user/transport-io --private --source=. --push
+gh repo create <your-account>/transport-io --private --source=. --push
 ./scripts/protect-branch.sh
 ```
 
