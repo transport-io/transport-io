@@ -1820,3 +1820,31 @@ the whole thing into a no-op that reports nothing and exits 0.
 **Reconsider when:** the unproven ceiling cannot be lowered because a statement is genuinely
 untestable at this layer. That is an argument for deleting the statement, not for raising the
 ceiling.
+
+### D83. The first publish is `0.1.0`, not `1.0.0`
+Stage 1 was defined as the first stable publish with semver in force. Amended: the first
+publish is `0.1.0`, and the Stage 1 rules apply from it.
+
+Three reasons, none of them a matter of taste.
+
+**`call()` ships with a documented defect outside our control.** The headline feature leaks
+~5.95 KB of server memory per stream, upstream in the QUIC binding (D65, D67, D73). A
+`1.0.0` whose flagship capability carries a known leak is a claim the code does not support.
+
+**Thirty-one before-release defects were found in one sweep**, hours before the first
+publish. Among them: four normative promises with no implementation, a datagram event that
+could be called and answered, a session leaked on every disconnect, and an emit bound that
+could not be reached. That is not the shape of a codebase whose API is settled — it is the
+shape of one that has not been read hard enough yet, and the sweep is evidence of both.
+
+**`0.x` costs nothing and `1.0.0` promises what there is no evidence for.** Nobody is
+depending on this yet, so the option to break something cheaply is free; the promise of
+stability is not.
+
+**What still applies from the first publish.** No breaking change without a version bump and
+a changelog entry. The difference under `0.x` is that a **minor** bump is allowed to break,
+and the README says so rather than leaving a reader to infer it from the leading zero.
+
+**Reconsider when:** a sweep of the same depth as the one that produced D74–D82 finds
+nothing of that severity, and the upstream stream leak is fixed or routed around. Both are
+observable, neither is a date.

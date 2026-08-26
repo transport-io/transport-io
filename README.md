@@ -104,6 +104,17 @@ event's lane is breaking and is refused at connect, by design: it changes a guar
 negotiation mechanism exists; the compatibility promise does not, and will not until the
 first stable release.
 
+### The package is `0.x`, and a minor bump may break you
+
+The first publish is `0.1.0`. Under `0.x` a **minor** bump is allowed to contain breaking
+changes — pin an exact version, or accept that `^0.1.0` can move under you.
+
+Every breaking change still gets a version bump and a changelog entry; that rule is in force
+from the first publish. What `0.x` withholds is the promise that a minor bump is safe, and
+that promise is withheld deliberately: `call()` ships with a documented upstream leak, and a
+single audit shortly before the first release found thirty-one defects worth fixing first.
+That is not an API anyone should treat as settled yet. See D83.
+
 ---
 
 ## Install
