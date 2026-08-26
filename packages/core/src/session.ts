@@ -103,7 +103,8 @@ export class Session {
   #inboundCalls = 0
 
   #writer: WritableStreamDefaultWriter<Uint8Array> | undefined
-  #writeChain: Promise<void> = Promise.resolve()
+  #writing = false
+  #handshakeSent = false
   #negotiated: Negotiated | undefined
   #handshakeResolve!: (n: Negotiated) => void
   #handshakeReject!: (e: unknown) => void
@@ -145,11 +146,12 @@ export class Session {
     this.#conn.onDatagram((bytes) => this.#onDatagram(bytes))
 
     const writable = await this.#conn.openEmitStream()
-    this.#writer = writable.getWriter()
+    const writer = writable.getWriter()
+    this.#writer = writer
 
     // Frame 0 of the emit stream. In-order delivery within a stream makes early traffic
     // impossible by construction, so there is no race to guard.
-    await this.#write(
+    await writer.write(
       encodeFrame({
         type: FrameType.HANDSHAKE,
         codec: Codec.JSON,
@@ -157,6 +159,8 @@ export class Session {
         payload: encodePayload(buildHandshake(this.#table)),
       }),
     )
+    this.#handshakeSent = true
+    this.#flushEmits()
 
     const timer = setTimeout(() => {
       this.#handshakeReject(
@@ -527,14 +531,6 @@ export class Session {
 
   // ------------------------------------------------------------------ internals
 
-  #flushEmits(): void {
-    for (;;) {
-      const next = this.#emitQueue.shift()
-      if (next === undefined) break
-      void this.#write(next)
-    }
-  }
-
   /**
    * Coalesced, never synchronous. A burst of emits inside one turn accumulates in the
    * bounded ring, so drop-oldest applies; and because the TTL is checked at drain, a
@@ -549,11 +545,45 @@ export class Session {
     })
   }
 
-  #write(bytes: Uint8Array): Promise<void> {
+  /**
+   * One write in flight at a time, and the frame stays in the queue until that write
+   * *completes*. That is the whole fix: previously this drained the entire queue on the
+   * same turn as the push and appended each frame to an unbounded promise chain, so depth
+   * returned to zero after every push and `EmitQueue`'s bound could never be reached from
+   * a Session. The backlog did not go away, it went somewhere that could not disconnect
+   * anyone — and whose `.catch(() => undefined)` discarded every write failure on the lane
+   * that advertises reliable ordered delivery.
+   *
+   * Nothing flushes before the handshake, so frame 0 keeps its position by construction
+   * and a burst arriving mid-handshake accumulates against the bound rather than racing it.
+   */
+  #flushEmits(): void {
+    if (this.#writing || !this.#handshakeSent) return
     const w = this.#writer
-    if (w === undefined) return Promise.resolve()
-    this.#writeChain = this.#writeChain.then(() => w.write(bytes)).catch(() => undefined)
-    return this.#writeChain
+    if (w === undefined) return
+    const next = this.#emitQueue.peek()
+    if (next === undefined) return
+
+    this.#writing = true
+    void w.write(next).then(
+      () => {
+        this.#emitQueue.shift()
+        this.#writing = false
+        this.#flushEmits()
+      },
+      (e: unknown) => {
+        this.#writing = false
+        // §5.5: one emit stream per direction and no way to reopen it, so a fault on it is
+        // fatal to the lane. Swallowing it left the lane silently dead while `getSnapshot()`
+        // still reported `connected`.
+        this.#conn.close(CloseCode.WT_PROTOCOL_ERROR, closeReason(e))
+      },
+    )
+  }
+
+  /** Frames written to the contract but not yet accepted by the transport. */
+  get emitQueueDepth(): number {
+    return this.#emitQueue.depth
   }
 
   async #readEmitStream(readable: ReadableStream<Uint8Array>): Promise<void> {

@@ -43,6 +43,11 @@ hand-written notes for the pre-release period.
   every push, so a burst never queued and neither policy ever applied — the whole
   backpressure design was dead code in the session path. The flush is coalesced now, and
   loss, duplication, reordering and both drop causes are forced deliberately in tests.
+- **And then the emit bound was unreachable, because of that fix.** The datagram flush
+  became coalesced; the emit flush stayed synchronous and drained into an unbounded promise
+  chain, so queue depth returned to zero after every push and `WT_PEER_TOO_SLOW` could never
+  fire. A frame now leaves the queue when its write *completes*, not when it is handed off.
+  A bound is only a bound if something stays in the bounded thing (D77).
 - **Datagram sequences were scoped to the session**, which is broken under fan-out in two
   separate ways. Now scoped to a new 4-byte origin field, allocated and quarantined rather
   than derived or retired.

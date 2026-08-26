@@ -1542,3 +1542,47 @@ cycles reports **−2 B/session** across 85,783 cycles, with heap flat at 9.6–
 
 **Reconsider when:** `soak:churn` reports a positive slope, or `ORIGIN_QUARANTINE_MS`
 changes — the warmup default is tied to it and has to move with it.
+
+### D77. The emit bound is only a bound if something stays in the bounded thing
+D15 has now been dead code twice, and the second death was caused by the fix for the first.
+That is the part worth recording; the fix itself is four lines.
+
+**Death 1.** `emit` drained the queue synchronously on every push, so a burst never queued
+and neither the datagram ring nor its TTL ever applied.
+
+**Death 2.** The fix made the *datagram* flush coalesced, through an injectable scheduler —
+which is why the ring and the TTL are genuinely exercised today. The **emit** flush was left
+synchronous and unconditional: push, then drain the entire queue on the same turn into
+`#write`, which appended each frame to an unbounded promise chain and returned. Depth
+therefore returned to zero after every push, `length >= max` could never be true from a
+Session, and `CloseCode.WT_PEER_TOO_SLOW` was unreachable — a documented, observable,
+normative behaviour with no code path leading to it.
+
+The backlog had not gone anywhere. It moved out of a bounded queue that disconnects and
+into an unbounded chain that does not, and that chain's `.catch(() => undefined)` also
+discarded every write failure on the lane advertising reliable ordered delivery. Measured:
+200,000 emits of 200 bytes into a stalled writer produced two accepted writes, 102 MB of
+heap growth, and a peer that was never disconnected.
+
+**Why it was invisible.** The test was `new EmitQueue(3)`, push four items, expect a throw.
+It asserted the queue — which was never wrong — and never went through a Session, which was.
+Same shape as D69: the component was tested, the integration was the thing that failed.
+
+**The fix.** One write in flight at a time, and a frame leaves the queue only when its write
+*completes*, not when it is handed off. `EmitQueue.peek()` exists for exactly that
+distinction. Depth now measures frames the transport has not accepted, so the bound is
+reachable and reaching it disconnects the peer, as §10.2 has always said it would. A
+rejected write closes the session per §5.5 instead of being swallowed. Nothing flushes
+before the handshake, so frame 0 keeps its position by construction and a burst arriving
+mid-handshake accumulates against the bound rather than racing it.
+
+**The general rule, since this is the second instance:** a bound placed on a container is
+enforced only while items remain in the container long enough to be counted. Any code that
+removes an item at hand-off time rather than at completion time has moved the queue
+somewhere else, and the somewhere else is almost never bounded. Before trusting a bound,
+assert the depth is non-zero under load — `backpressure.test.ts` does exactly that, and it
+is the assertion that would have caught both deaths.
+
+**Reconsider when:** never for the completion-not-hand-off rule. The single in-flight write
+could become a small window if measurement ever shows the round trip dominating throughput;
+that is a performance change and needs a number first.

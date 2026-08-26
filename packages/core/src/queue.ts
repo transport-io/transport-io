@@ -94,6 +94,15 @@ export class EmitQueue<T> {
     this.#items.push(item)
   }
 
+  /**
+   * The head, left in place. An item leaves this queue only when its write has actually
+   * completed — `shift()` on hand-off would make depth a measure of nothing, which is
+   * precisely how the bound came to be unreachable.
+   */
+  peek(): T | undefined {
+    return this.#items[0]
+  }
+
   shift(): T | undefined {
     return this.#items.shift()
   }
