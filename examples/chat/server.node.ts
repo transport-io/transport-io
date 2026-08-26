@@ -17,8 +17,12 @@ import { type ChatMap, contract } from './contract.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const certDir = join(here, '.cert')
-const WT_PORT = 4433
-const WEB_PORT = 8080
+// Overridable, because 8080 is the most contended port on any developer's machine and the
+// e2e config offers the same override. Both halves have to read it or the override is a
+// knob that moves what Playwright waits for without moving what this binds — which is
+// exactly what it did until a fresh-clone run caught it.
+const WT_PORT = Number(process.env.E2E_WT_PORT ?? 4433)
+const WEB_PORT = Number(process.env.E2E_PORT ?? 8080)
 const ROOM = 'lobby'
 
 let cert: string

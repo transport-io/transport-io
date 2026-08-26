@@ -1848,3 +1848,24 @@ and the README says so rather than leaving a reader to infer it from the leading
 **Reconsider when:** a sweep of the same depth as the one that produced D74–D82 finds
 nothing of that severity, and the upstream stream leak is fixed or routed around. Both are
 observable, neither is a date.
+
+### D84. `close()` is idempotent in both halves, not just the one that was
+Found by running the full lane soak after D76 rather than by reading the diff.
+
+`Session.close()` calls `dispose()` and then `conn.close()`. `dispose()` was made idempotent
+in D76; `conn.close()` was not. A client disconnecting while the server tears the same
+session down is ordinary and, under load, constant — so the transport was told to close the
+same session twice, over and over. quiche logs `WebTransportHttp3 close sent twice` and
+refuses the extra call.
+
+The number is the point: **865,464 of those lines in one 60-minute soak**, enough to bury
+the soak's own sampled output entirely. Nothing failed, no test went red, and the behaviour
+was a protocol-level complaint from the transport that this library generated and then
+ignored. It was visible only because the soak was run end to end after the fix that caused
+it, which is the argument for running the soak at all.
+
+`close()` now returns early when already disposed, and `lifecycle.test.ts` asserts the
+transport is told exactly once however many times `close()` is called.
+
+**Reconsider when:** never. An idempotent teardown that is idempotent in only one of its two
+steps is not idempotent.

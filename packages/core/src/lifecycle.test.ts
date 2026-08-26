@@ -15,8 +15,9 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { Client } from './client.ts'
-import { defineContract, type MapOf, type$ } from './contract.ts'
+import { buildEventTable, defineContract, type MapOf, type$ } from './contract.ts'
 import { createServer } from './server.ts'
+import { Session } from './session.ts'
 import { HostileAdapter } from './testing/hostile-adapter.ts'
 import { loopbackPair } from './transport/loopback.ts'
 
@@ -169,5 +170,40 @@ describe('an adapter that rejects degrades core rather than crashing it', () => 
     await new Promise((r) => setTimeout(r, 60))
     expect(received).toEqual([])
     expect(client.getSnapshot().rooms).toEqual([])
+  })
+})
+
+describe('closing twice is not two closes', () => {
+  test('the transport is told once, however many times close() is called', async () => {
+    let closes = 0
+    const [ours, theirs] = loopbackPair()
+    void theirs
+    const conn = new Proxy(ours, {
+      get(t, p, r) {
+        if (p === 'close')
+          return (code: number, reason: string) => {
+            closes++
+            ;(t as unknown as { close: (c: number, r: string) => void }).close(code, reason)
+          }
+        const v = Reflect.get(t, p, r) as unknown
+        return typeof v === 'function' ? v.bind(t) : v
+      },
+    })
+
+    const session = new Session(conn as never, {
+      table: await buildEventTable(contract),
+      origin: 1,
+    })
+    void session.start().catch(() => undefined)
+    await new Promise((r) => setTimeout(r, 5))
+
+    session.close(0, 'first')
+    session.close(0, 'second')
+    session.close(0, 'third')
+
+    // quiche logs "WebTransportHttp3 close sent twice" and refuses the extra ones. A client
+    // disconnecting while the server tears the same session down is ordinary, so this fired
+    // routinely under the soak — a protocol-level complaint we generated and ignored.
+    expect(closes).toBe(1)
   })
 })

@@ -430,6 +430,12 @@ export class Session {
   }
 
   close(code: number, reason: string): void {
+    // Idempotent in both halves. `dispose()` already was; `conn.close()` was not, so a
+    // second close — a client disconnecting while the server is tearing the same session
+    // down, which is ordinary — reached the transport twice. quiche logs
+    // "WebTransportHttp3 close sent twice" and refuses it, which is a protocol-level
+    // complaint we were generating and then ignoring.
+    if (this.#disposed) return
     this.dispose()
     this.#conn.close(code, reason)
   }
