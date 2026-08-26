@@ -9,6 +9,7 @@ import { TransportError } from './errors.ts'
 import { encodeFrame, type Frame, FrameDecoder } from './framer.ts'
 import { buildHandshake, type Negotiated, negotiate, parseHandshake } from './handshake.ts'
 import {
+  CLOSE_REASON_MAX_BYTES,
   CloseCode,
   Codec,
   EVENT_ID_NOT_APPLICABLE,
@@ -46,6 +47,41 @@ export interface SessionOptions {
   readonly scheduleFlush?: (flush: () => void) => void
 }
 
+/**
+ * §10.2 exists so that a peer can tell a version disagreement from a framing bug. Closing
+ * every refusal with 1004 made the table decorative: an implementer told "unrecoverable
+ * framing violation" goes looking for a framing bug that is not there, and a peer that
+ * retries on 1004 retries forever against a mismatch that will never resolve.
+ */
+function closeCodeFor(e: unknown): number {
+  if (e instanceof TransportError) {
+    if (e.code === 'WT_PROTOCOL_VERSION_MISMATCH') return CloseCode.WT_PROTOCOL_VERSION_MISMATCH
+    if (e.code === 'WT_CONTRACT_MISMATCH') return CloseCode.WT_CONTRACT_MISMATCH
+  }
+  return CloseCode.WT_PROTOCOL_ERROR
+}
+
+/**
+ * §10.2 caps the reason at 1024 **bytes**. Slicing to 1024 characters overshoots by up to
+ * threefold on non-ASCII — and event names, which appear in mismatch messages, are the
+ * user's own domain language. Truncated on a code-point boundary so the result is never
+ * a broken surrogate pair.
+ */
+function closeReason(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e)
+  const encoder = new TextEncoder()
+  if (encoder.encode(message).byteLength <= CLOSE_REASON_MAX_BYTES) return message
+  let out = ''
+  let bytes = 0
+  for (const ch of message) {
+    const size = encoder.encode(ch).byteLength
+    if (bytes + size > CLOSE_REASON_MAX_BYTES) break
+    out += ch
+    bytes += size
+  }
+  return out
+}
+
 export class Session {
   readonly #conn: Connection
   readonly #table: EventTable
@@ -64,6 +100,7 @@ export class Session {
   readonly #controlHandlers = new Set<(type: number, body: unknown) => void>()
   readonly #callHandlers = new Map<string, CallHandler>()
   #openCalls = 0
+  #inboundCalls = 0
 
   #writer: WritableStreamDefaultWriter<Uint8Array> | undefined
   #writeChain: Promise<void> = Promise.resolve()
@@ -87,6 +124,11 @@ export class Session {
       this.#handshakeResolve = res
       this.#handshakeReject = rej
     })
+    // `ready` is rejected from the emit-stream read loop, which can reach a refusal before
+    // start() has got as far as awaiting it — the peer's handshake is frame 0 and may be
+    // decoded during our own `openEmitStream()`. An unobserved rejection terminates a Node
+    // server by default, so it is observed here. start() still surfaces it to its caller.
+    void this.ready.catch(() => undefined)
   }
 
   get origin(): number {
@@ -95,7 +137,7 @@ export class Session {
 
   async start(): Promise<Negotiated> {
     this.#conn.onEmitStream((readable) => void this.#readEmitStream(readable))
-    this.#conn.onBidi((stream) => void this.#serveCall(stream))
+    this.#conn.onBidi((stream) => this.#acceptCall(stream))
     this.#conn.onDatagram((bytes) => this.#onDatagram(bytes))
 
     const writable = await this.#conn.openEmitStream()
@@ -239,6 +281,33 @@ export class Session {
 
   get openCalls(): number {
     return this.#openCalls
+  }
+
+  /**
+   * The cap is a receiver-side refusal or it is nothing. `call()` declining to open a
+   * 257th stream protects the peer from us; it does nothing about a peer that opens 10,000
+   * — a Go implementation written from PROTOCOL.md, or a browser calling
+   * `createBidirectionalStream()` directly. That is the case §10.1 code 9 exists for.
+   *
+   * Refused before the request is read, deliberately: the cost this bound exists to bound
+   * is the decoder, the handler and the 16 MiB the decoder will buffer, all of which come
+   * after the first read.
+   */
+  #acceptCall(stream: BidiStream): void {
+    if (this.#inboundCalls >= MAX_CONCURRENT_CALL_STREAMS) {
+      const refusal = new Error(`code:${ResetCode.WT_TOO_MANY_STREAMS}`)
+      void stream.writable.abort(refusal).catch(() => undefined)
+      void stream.readable.cancel(refusal).catch(() => undefined)
+      return
+    }
+    this.#inboundCalls++
+    void this.#serveCall(stream).finally(() => {
+      this.#inboundCalls--
+    })
+  }
+
+  get inboundCalls(): number {
+    return this.#inboundCalls
   }
 
   /** Used by the hub to forward an already-encoded frame without re-encoding per peer. */
@@ -474,7 +543,7 @@ export class Session {
       // A protocol error on the emit stream is fatal to the lane: there is one stream per
       // direction and no way to reopen it, so resetting would end stream traffic silently.
       this.#handshakeReject(e)
-      this.#conn.close(CloseCode.WT_PROTOCOL_ERROR, (e as Error).message.slice(0, 1024))
+      this.#conn.close(closeCodeFor(e), closeReason(e))
     }
   }
 

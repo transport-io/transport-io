@@ -107,7 +107,9 @@ describe('handshake negotiation', () => {
     expect(n.localOnly).toEqual([])
   })
 
-  test('a lane disagreement IS a mismatch — it is a guarantee, not a detail', async () => {
+  // A unit test of negotiate(), which is all it ever was. It says nothing about what a
+  // peer receives; the close code for this case is asserted in protocol-promises.test.ts.
+  test('negotiate() rejects a lane disagreement — it is a guarantee, not a detail', async () => {
     const local = buildHandshake(await table(base))
     const peer = buildHandshake(
       await table({ ...base, cursor: { lane: 'stream', payload: type$<unknown>() } }),

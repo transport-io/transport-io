@@ -135,6 +135,9 @@ export class Client<M extends AnyMap = AnyMap> {
       // must pass or every session on the dominant browser would be refused. Only an
       // explicit reliable-only is a lie about the datagram lane.
       if (conn.reliability() === 'reliable-only') {
+        // §10.2 code 1006. Throwing without closing left the peer holding a session this
+        // side had already abandoned, with nothing on the wire to say why.
+        conn.close(CloseCode.WT_RELIABILITY_REFUSED, 'reliable-only transport refused')
         throw new TransportError(
           'WT_RELIABILITY_REFUSED',
           'the session negotiated reliable-only transport',

@@ -134,7 +134,12 @@ describe('call: abort maps to a stream reset', () => {
 })
 
 describe('call: the concurrent stream cap', () => {
-  test('the 257th open is refused, and the session stays up', async () => {
+  // Renamed. The old name — "the 257th open is refused" — read as the §10.1 receiver-side
+  // refusal, which this does not exercise: it drives the cap through `client.call()`, so
+  // the refusal is this side's own, before a stream is ever opened. The receiver half is
+  // asserted in protocol-promises.test.ts, which is where WT_TOO_MANY_STREAMS is observed
+  // on the wire. Both halves are real; only one of them was ever tested.
+  test('this side declines to open a 257th call stream, and the session stays up', async () => {
     const { server, client } = await wire()
     const release: (() => void)[] = []
     server.handle('slow', async () => {

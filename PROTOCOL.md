@@ -232,8 +232,11 @@ field are not included — the same convention its minimum of 9 already reflects
 The 1 MiB payload cap applies to **`EMIT` frames only**. `CALL_REQUEST` and
 `CALL_RESPONSE` frames are capped at 16 MiB, because a call is the documented home for
 payloads too large to emit and inheriting the emit cap would leave them nowhere to go.
-Exceeding either cap resets that stream with `WT_PAYLOAD_TOO_LARGE`, except on the emit
-stream, where §5.5 applies.
+Exceeding either cap is a protocol error raised by the decoder as
+`WT_PAYLOAD_TOO_LARGE` — not a §10.1 reset code, which is a distinction this document
+previously got wrong. On a call stream the receiver abandons the stream, and the
+initiator's call rejects with `WT_PROTOCOL_ERROR` because no response frame arrived. On
+the emit stream, §5.5 applies.
 
 ### 5.5 Errors on the emit stream escalate
 
@@ -583,19 +586,19 @@ operator can distinguish a slow network from a slow consumer.
 
 One byte. Sent as the QUIC application error code on `RESET_STREAM` or `STOP_SENDING`.
 
+**A reset carries a code and nothing else, so it is used only where there is no stream
+left to explain on.** Everything a responder can say about a *call* — the handler threw,
+the event is not in the contract, the payload failed validation, the handshake had not
+completed — is sent as a `CALL_ERROR` frame (§6.4) carrying both a code and a message, on
+the stream the call already owns. That is strictly more than a reset can express, and it
+is why this table is three rows rather than ten.
+
 | code | name | meaning and remedy |
 |---|---|---|
-| `0` | `WT_NO_ERROR` | Normal termination. No action. |
+| `0` | `WT_NO_ERROR` | Normal termination. Implicit in a clean FIN; never sent explicitly. |
 | `1` | `WT_ABORTED` | The initiator cancelled. Abandon the work; this is routine. |
-| `2` | `WT_HANDLER_ERROR` | The handler threw. Inspect server logs. |
-| `3` | `WT_PROTOCOL_ERROR` | Malformed frame. Check framing against §5. |
-| `4` | `WT_UNSUPPORTED_CODEC` | Codec byte other than `0x01`. Send JSON. |
-| `5` | `WT_PAYLOAD_TOO_LARGE` | Frame over 1 MiB. Use a call, or split the payload. |
-| `6` | `WT_HANDSHAKE_INCOMPLETE` | A call arrived before the handshake. Await connect. |
-| `7` | `WT_UNKNOWN_EVENT` | Event ID absent from the contract. Check the fingerprint. |
-| `8` | `WT_VALIDATION_FAILED` | Payload failed schema validation. Fix the payload. |
-| `9` | `WT_TOO_MANY_STREAMS` | Over 256 concurrent call streams on this session. Reduce concurrency and retry; the session stays open. |
-| `10`–`255` | reserved | — |
+| `9` | `WT_TOO_MANY_STREAMS` | Over 256 concurrent call streams on this session. The receiver resets the excess stream **without reading it**; the session stays open. Reduce concurrency and retry. |
+| `2`–`8`, `10`–`255` | reserved | — |
 
 ### 10.2 Session close codes
 

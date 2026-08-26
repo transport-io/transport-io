@@ -1440,3 +1440,40 @@ supply-chain problem is its own supply-chain problem.
 **Reconsider when:** never for the `run:` rule. The `permissions:` rule relaxes only if a
 job genuinely needs to write, and then it states the wider scope on that job alone rather
 than at the top.
+
+### D75. A code that nothing sends is deleted, not documented harder
+Eleven of the codes defined in `protocol.ts` and tabulated in `PROTOCOL.md` §10 were
+transmitted by no code path at all. `CloseCode` appeared in **zero** test files. Four of
+them were also restated as normative promises in an ADR and in `AGENTS.md`, and three had a
+test whose *name* was the promise and whose body asserted something cheaper to reach.
+
+Each one was decided separately, because "the docs are ahead of the code" has two opposite
+remedies and defaulting to either is how the gap got here.
+
+**Built, because a second implementation genuinely needs them.**
+
+| code | why it had to exist |
+|---|---|
+| `1000` `WT_PROTOCOL_VERSION_MISMATCH` | Every refusal closed with `1004` = "unrecoverable framing violation". A peer told that debugs a framing bug that is not there, and one that retries on `1004` retries forever against a disagreement that will never resolve. |
+| `1001` `WT_CONTRACT_MISMATCH` | Same, and the remedy differs: redeploy both sides, not fix your framing. |
+| `1006` `WT_RELIABILITY_REFUSED` | The client threw and left without closing, so the peer held a session this side had already abandoned with nothing on the wire to say why. |
+| `9` `WT_TOO_MANY_STREAMS` | `#openCalls` counted only *our* opens. The cap protected the peer from us and did nothing about a peer opening 10,000 — which is the case a cap is for. Now refused **before the request is read**, since the cost being bounded is the decoder, the handler and the 16 MiB the decoder will buffer. |
+
+**Deleted, because the implementation was right and the table was fiction.** Reset codes
+`2`–`8` — handler error, protocol error, unsupported codec, payload too large, handshake
+incomplete, unknown event, validation failed. Every one of these is a *call* failure, and
+this implementation already reports call failures as a `CALL_ERROR` frame carrying a code
+**and a message**, on the stream the call already owns. A reset carries one byte. Keeping
+the table would have meant implementing a strictly worse channel to satisfy a document.
+The names survive as `TransportErrorCode`s, which is what they always actually were.
+
+**The mechanism, which is the part that matters.** A promise nobody can observe failing is
+not a promise, so `protocol-promises.test.ts` asserts each of these **on the wire** — the
+close code a peer receives, not the `TransportError` this side raised — and a scan there
+fails if any defined code is named by no non-test code path. Its exemption list may only
+shrink, and it is honest about its limit: it proves a code is *referenced*, not that the
+reference is reachable. `WT_PEER_TOO_SLOW` is referenced and its branch is dead, which is
+D76's problem and needs a behavioural test rather than a scan.
+
+**Reconsider when:** a call failure needs to be signalled where no stream is left to write
+on. That is the only thing a reset buys, and it is why code `9` survived.

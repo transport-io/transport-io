@@ -76,13 +76,6 @@ export const CLOSE_REASON_MAX_BYTES = 1024
 export const ResetCode = {
   WT_NO_ERROR: 0,
   WT_ABORTED: 1,
-  WT_HANDLER_ERROR: 2,
-  WT_PROTOCOL_ERROR: 3,
-  WT_UNSUPPORTED_CODEC: 4,
-  WT_PAYLOAD_TOO_LARGE: 5,
-  WT_HANDSHAKE_INCOMPLETE: 6,
-  WT_UNKNOWN_EVENT: 7,
-  WT_VALIDATION_FAILED: 8,
   WT_TOO_MANY_STREAMS: 9,
 } as const
 export type ResetCode = (typeof ResetCode)[keyof typeof ResetCode]
