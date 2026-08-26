@@ -356,6 +356,12 @@ export class Session {
       return
     }
 
+    // The request is fully read at this point, so nothing is watching the stream any
+    // more — which is why an abort never reached the handler. The initiator's abort
+    // resets its send side AND cancels its read side, and that STOP_SENDING surfaces here
+    // as a rejection on our writer. Watch it, or `ctx.signal` is decoration.
+    void writer.closed.catch(() => controller.abort())
+
     if (request === undefined || request.type !== FrameType.CALL_REQUEST) {
       await this.#failCall(writer, 'WT_PROTOCOL_ERROR', 'expected a CALL_REQUEST frame')
       return

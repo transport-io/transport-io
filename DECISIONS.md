@@ -1217,3 +1217,63 @@ the guarantee, including when the guarantee is bad.
 
 **This condition is currently NOT met** — `@moq/web-transport` is flat — so this decision
 is on the shelf rather than in force.
+
+### D68. moq is not adoptable yet, and the reason is not memory
+The byte count in D66 established one property. Running the existing suite against it
+behind the seam established the rest, and the rest is where the answer changed.
+
+**What works.** Verified by hand under plain `node`, full transport-io stack over moq:
+session establishment, the handshake, both lanes, `call()` with half-close and response,
+and caller-side abort. `maxDatagramSize` reports 1413, higher than the reference binding's
+1211. Both bindings import and bind in the same process.
+
+**Quirk diff, which is what the exercise was for:**
+
+| behaviour | fails-components | moq |
+|---|---|---|
+| per-stream heap | 5.95 KB server / 5.88 KB client | **0.01 KB, flat** |
+| `maxDatagramSize` | 1211 | 1413 |
+| reset code recovery | message-string parsing only | **explicit `reset(code)` / `stop(code)`** |
+| abort reaches `ctx.signal` | yes, after the fix below | **no** |
+| oversized datagram | accepted, discarded, reports success | our layer refuses first either way |
+| reliability attribute | present | absent — correct, it is HTTP/3 only |
+| entry point | normal | **raw TypeScript, unimportable from Node** |
+
+`resetCodeFromError` becomes unnecessary on moq: `reset` and `stop` take a numeric code
+directly, so the message parsing that exists only to work around a dropped
+`streamErrorCode` has nothing to do. It stays for the reference transport.
+
+**Three blockers, in order:**
+
+1. **The file-path import.** Reaching past a dependency's `exports` map to an internal
+   file means a patch release can move it and break consumers with no semver signal. That
+   is not a supply chain to put under v1, however flat the memory profile is. Filed as
+   moq-dev/web-transport#388 with all three failure modes verified before posting.
+2. **Abort does not reach the responder.** moq surfaces STOP_SENDING only on the next
+   write, and a long-running handler never makes one, so `ctx.signal` never fires. The
+   caller still rejects, so the API is not broken — but the work carries on, which is half
+   of what abort is for.
+3. **An unresolved hang under `node --test`.** The identical flow passes under plain
+   `node`, and the module loads and binds fine under the runner, so the cause is somewhere
+   in the session flow in that context. Not root-caused. The parity test is `skip`ped with
+   this reason attached rather than deleted or left to hang.
+
+**So: not adopted, not rejected.** The memory result is necessary and not sufficient, and
+saying otherwise would be treating one measurement as the whole decision.
+
+### D69. A bug the parity work found in our own code
+`ctx.signal` never fired on the responder, on either transport. `#serveCall` reads the
+request to completion and then invokes the handler, at which point nothing is watching the
+stream, so a peer reset arriving afterwards reached nobody.
+
+This matters beyond the bug: ADR 0002, the README and API.md all claim the responder's
+signal fires without the client sending anything. That claim was false for as long as it
+has been written down, and every test passed because none of them asserted the responder
+side of an abort — they asserted the caller rejected, which it always did.
+
+Fixed by watching `writer.closed`, which rejects when the peer sends STOP_SENDING. Now
+true on the reference transport, and asserted in both directions in the parity suite so it
+cannot silently regress.
+
+**The lesson is about the test, not the fix.** A test that checks the initiator of a
+two-sided interaction is not a test of the interaction.

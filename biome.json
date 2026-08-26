@@ -43,7 +43,8 @@
               "options": {
                 "paths": {
                   "@fails-components/webtransport": "The transport may only be imported from *.node.ts or *.node.test.ts. It loads a native addon that segfaults Bun on exit (DECISIONS.md D14, ADR 0006).",
-                  "@fails-components/webtransport-transport-http3-quiche": "The transport may only be imported from *.node.ts or *.node.test.ts. See DECISIONS.md D14."
+                  "@fails-components/webtransport-transport-http3-quiche": "The transport may only be imported from *.node.ts or *.node.test.ts. See DECISIONS.md D14.",
+                  "@moq/web-transport": "The transport may only be imported from *.node.ts or *.node.test.ts. See DECISIONS.md D14."
                 }
               }
             }

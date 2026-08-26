@@ -14,6 +14,7 @@
  *     recoverable only by parsing a message string
  */
 import { Http3Server, quicheLoaded, WebTransport } from '@fails-components/webtransport'
+import { TransportError } from '../errors.ts'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
 
@@ -214,6 +215,22 @@ export async function connectHttp3(opts: Http3ClientOptions): Promise<Connection
     // server-side refusal above is the guarantee.
     requireUnreliable: true,
   } as never) as unknown as AnySession
-  await wt.ready
+
+  // `closed` rejects independently of `ready`. If the handshake fails, nothing has
+  // attached to it yet and Node sees an unhandled rejection — which terminates a server
+  // by default. Claim it before awaiting `ready`; FailsConnection re-reads the same
+  // settled promise, so nothing is lost.
+  const closedGuard = wt.closed.catch(() => undefined)
+
+  try {
+    await wt.ready
+  } catch (cause) {
+    await closedGuard
+    throw new TransportError(
+      'WT_SESSION_CLOSED',
+      `could not open a session to ${opts.url}: ${(cause as Error).message}`,
+      'Check the server is listening, that UDP reaches it, and that the certificate hash matches.',
+    )
+  }
   return new FailsConnection(wt)
 }
