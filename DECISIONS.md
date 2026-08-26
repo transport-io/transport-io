@@ -1277,3 +1277,88 @@ cannot silently regress.
 
 **The lesson is about the test, not the fix.** A test that checks the initiator of a
 two-sided interaction is not a test of the interaction.
+
+### D70. moq's native packages are a legitimate dependency; the entry point is not
+Path (b) evaluated. All five per-platform NAPI packages are published independently on
+npm at 0.1.4, each with `main` pointing at its own `.node` binary and matching `os`/`cpu`
+fields:
+
+```
+@moq/web-transport-darwin-arm64      0.1.4    main: web-transport.darwin-arm64.node
+@moq/web-transport-darwin-x64        0.1.4
+@moq/web-transport-linux-x64-gnu     0.1.4
+@moq/web-transport-linux-arm64-gnu   0.1.4
+@moq/web-transport-win32-x64-msvc    0.1.4
+```
+
+`require('@moq/web-transport-darwin-arm64')` returns all seven NAPI classes. That is a
+package's **declared entry point**, not a reach past someone's `exports` map into internal
+layout, so the objection in D68 does not apply and no upstream cooperation is needed.
+
+Declared as `optionalDependencies`, pinned exactly; npm installs only the matching
+platform. The adapter selects by `${process.platform}-${process.arch}` and raises
+`WT_NO_SUPPORT` naming the package for anything else.
+
+**Wrapper size: 290 lines**, against 236 for the reference adapter. A wrapper, not a
+project. Verified working through it: stream lane, datagram lane, and `call()`.
+
+This resolves the packaging blocker. It does not resolve D71 or the abort question.
+
+### D71. moq's server cannot be shut down: `close()` deadlocks
+Root-caused, not worked around. Minimal reproduction with no transport-io involved, kept
+at `packages/core/src/bench/moq-close-deadlock.node.ts`:
+
+```
+bind -> close()                      -> close() returns, process exits
+bind -> accept() pending -> close()  -> close() NEVER RETURNS
+```
+
+`NapiServer.close()` blocks forever when an `accept()` is outstanding. A server that
+accepts connections always has one outstanding, so **a moq server has no graceful
+shutdown**. It must be killed.
+
+This is what the `node --test` hang was. The suite reaches teardown and blocks on
+`listener.stop()`. Every standalone probe missed it by ending with `process.exit(0)`
+rather than stopping the listener — the bug lived exactly in the path the quick tests
+skipped.
+
+No workaround is available here: a pending native promise cannot be cancelled, and the
+deadlock is in a synchronous native call, so no JavaScript watchdog can rescue it.
+
+### D72. `ctx.signal` stays a guarantee, so moq is not adoptable
+The question was: drop the guarantee from the documentation, make it per-transport and
+state it, or hold moq until it propagates. **Hold moq.**
+
+Per-transport was the tempting answer and it is wrong. This library's entire thesis is that
+a guarantee is a property of the contract rather than of the deployment — D1 puts the lane
+in the contract precisely so that what a message promises does not vary with how it is
+carried. A capability that silently depends on which transport an operator chose is the
+same failure in a new place, and D69 exists because this exact guarantee was documented and
+false once already. Making it conditionally false is not a repair.
+
+Dropping it from the documentation is worse: it removes a real, working capability on the
+transport actually shipped, to accommodate one that is not.
+
+So `ctx.signal` remains an unconditional guarantee, and a transport that cannot deliver a
+peer reset to the responder does not qualify. moq currently cannot.
+
+### D73. Transport decision: stay on the reference binding, D67 in force
+Three paths were on the table. (b) removed the packaging blocker and the memory result is
+genuinely much better — flat against 5.95 KB per stream server-side. It is still not
+adoptable, for two reasons that are about correctness rather than performance:
+
+- **No graceful shutdown** (D71). A server that must be killed cannot drain connections.
+- **Abort does not reach the responder** (D72). Cancelling a call leaves the work running.
+
+Against that, the reference binding leaks 5.95 KB per server-side stream (D65, reported
+upstream) but shuts down cleanly and propagates aborts correctly.
+
+**So D67 goes into force:** ship with `call()` present and the leak documented in the
+README above the install instructions, with the measured number and the transport it
+applies to. The moq adapter stays in the tree behind the seam, with its two blockers
+recorded and reproductions committed, because the moment either is fixed this becomes a
+config change rather than a migration. That is what the seam was for, and it has already
+paid for itself by making this a comparison rather than a guess.
+
+**Reconsider when:** `NapiServer.close()` returns with an accept pending, and a peer reset
+reaches the responder. Both are checkable by running the committed benches.

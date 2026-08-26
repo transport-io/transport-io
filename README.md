@@ -76,6 +76,20 @@ streams and separate packets — but emits to one peer are serialised across eve
 peer belongs to. Per-room lanes are reserved as a negotiated feature and are not in this
 version. Do not read "independent streams" as a promise about emits.
 
+### Each call leaks memory, upstream
+
+Every `call()` opens its own bidirectional stream, and the QUIC binding this library ships
+against leaks roughly **5.95 KB of server memory per stream**, unbounded. At ten calls per
+second that is about 209 MB an hour. It is not this library's leak — the same code over an
+in-memory transport costs 0.045 KB per call, and the binding leaks the same amount with
+none of this library's code present — but it is what you get if you deploy this today.
+
+It is reported upstream. An alternative transport measures flat on the same benchmark and
+is wired up behind an internal seam, but it cannot shut a server down gracefully and does
+not deliver call cancellation to the responder, so it is not the default yet.
+
+If your workload is mostly `emit` and datagrams, this does not affect you: both are flat.
+
 ### Protocol versioning
 
 The handshake carries a version. **A major mismatch refuses the session; the minor surface

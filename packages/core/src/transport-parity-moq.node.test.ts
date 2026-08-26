@@ -15,6 +15,20 @@ import { randomPort, runParity } from './transport/parity-suite.ts'
 //
 // Un-skip when that is understood. Leaving it enabled would make the suite hang, and
 // deleting it would hide a gap that blocks adoption.
+// SKIPPED for a now-understood reason: `NapiServer.close()` deadlocks.
+//
+// Root-caused, not guessed. Minimal reproduction with no transport-io involved, kept at
+// bench/moq-close-deadlock.node.ts:
+//
+//   bind -> close()                      -> close() returns, process exits
+//   bind -> accept() pending -> close()  -> close() NEVER RETURNS
+//
+// The suite reaches teardown and hangs on `listener.stop()`, because the sessions loop
+// always has an `accept()` outstanding. Every standalone probe missed it by ending with
+// `process.exit(0)` instead of stopping the listener.
+//
+// No clean workaround here: a pending native promise cannot be cancelled, and a server
+// that accepts always has one pending. It means no graceful shutdown. See D71.
 test.skip('moq: both lanes, a call, an abort and an oversized datagram', {
   timeout: 60_000,
 }, async () => {

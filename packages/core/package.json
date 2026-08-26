@@ -35,5 +35,12 @@
   "dependencies": {
     "@fails-components/webtransport": "1.6.7",
     "@standard-schema/spec": "^1.1.0"
+  },
+  "optionalDependencies": {
+    "@moq/web-transport-darwin-arm64": "0.1.4",
+    "@moq/web-transport-darwin-x64": "0.1.4",
+    "@moq/web-transport-linux-arm64-gnu": "0.1.4",
+    "@moq/web-transport-linux-x64-gnu": "0.1.4",
+    "@moq/web-transport-win32-x64-msvc": "0.1.4"
   }
 }

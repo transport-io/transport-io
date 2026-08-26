@@ -9,15 +9,13 @@
  * Its surface is promise-and-method based rather than WHATWG streams, so the wrapping
  * here is thicker than in `fails.node.ts`. That is the seam doing its job.
  *
- * KNOWN ADOPTION BLOCKER: the package declares `exports: { ".": "./src/index.ts" }` — raw
- * TypeScript, no compiled JavaScript — and Node refuses to strip types inside
- * `node_modules`. The native binding is reachable only by file path, which means reaching
- * past the `exports` map to an implementation detail that a patch release may move. This
- * is not adoptable as a default until upstream ships a JavaScript entry point or exports
- * the binding. See D66.
+ * It depends on the per-platform NAPI packages directly rather than on
+ * `@moq/web-transport`, whose only entry point is raw TypeScript that Node refuses to
+ * strip inside `node_modules`. Those platform packages are published independently, each
+ * declaring `main` at its own `.node` binary, so this is an ordinary dependency and needs
+ * no cooperation from upstream. See D70.
  */
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
 import { TransportError } from '../errors.ts'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
@@ -61,18 +59,43 @@ interface MoqNative {
   }
 }
 
+/**
+ * The per-platform NAPI packages, each of which declares `main` pointing at its own
+ * `.node` binary and carries matching `os`/`cpu` fields.
+ *
+ * This is a normal dependency on a published package's declared entry point. It is NOT
+ * the file-path import that made this transport unadoptable: that reached past
+ * `@moq/web-transport`'s `exports` map into its internal layout, which a patch release
+ * could move without a semver signal. These packages are the interface.
+ */
+const PLATFORM_PACKAGES: Readonly<Record<string, string>> = {
+  'darwin-arm64': '@moq/web-transport-darwin-arm64',
+  'darwin-x64': '@moq/web-transport-darwin-x64',
+  'linux-x64': '@moq/web-transport-linux-x64-gnu',
+  'linux-arm64': '@moq/web-transport-linux-arm64-gnu',
+  'win32-x64': '@moq/web-transport-win32-x64-msvc',
+}
+
 let cached: MoqNative | undefined
 function native(): MoqNative {
   if (cached !== undefined) return cached
+  const key = `${process.platform}-${process.arch}`
+  const pkg = PLATFORM_PACKAGES[key]
+  if (pkg === undefined) {
+    throw new TransportError(
+      'WT_NO_SUPPORT',
+      `no prebuilt QUIC binding for ${key}`,
+      `Supported: ${Object.keys(PLATFORM_PACKAGES).join(', ')}.`,
+    )
+  }
   try {
-    const req = createRequire(import.meta.url)
-    cached = req(join(process.cwd(), 'node_modules/@moq/web-transport/napi.cjs')) as MoqNative
+    cached = createRequire(import.meta.url)(pkg) as MoqNative
     return cached
   } catch (cause) {
     throw new TransportError(
       'WT_NO_SUPPORT',
-      `could not load @moq/web-transport: ${(cause as Error).message}`,
-      'Install @moq/web-transport. Note it is reached by file path because its exports map has no JavaScript entry.',
+      `could not load ${pkg}: ${(cause as Error).message}`,
+      `Install it: npm install ${pkg}`,
     )
   }
 }
