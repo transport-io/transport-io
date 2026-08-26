@@ -82,6 +82,21 @@ function closeReason(e: unknown): string {
   return out
 }
 
+function isAbort(e: unknown): boolean {
+  const name = (e as { readonly name?: string } | null | undefined)?.name
+  return name === 'AbortError' || name === 'TimeoutError'
+}
+
+function abortToTransportError(cause: unknown): TransportError {
+  const timedOut =
+    (cause as { readonly name?: string } | null | undefined)?.name === 'TimeoutError'
+  return new TransportError(
+    'WT_ABORTED',
+    timedOut ? 'the call timed out before the responder answered' : 'the call was aborted',
+    'The stream was reset, so the responder was told. Retry if the work is idempotent, or raise the deadline.',
+  )
+}
+
 export class Session {
   readonly #conn: Connection
   readonly #table: EventTable
@@ -145,33 +160,51 @@ export class Session {
     this.#conn.onBidi((stream) => this.#acceptCall(stream))
     this.#conn.onDatagram((bytes) => this.#onDatagram(bytes))
 
-    const writable = await this.#conn.openEmitStream()
+    /**
+     * Armed before the stream is opened, and raced against every await that follows.
+     *
+     * It used to be armed *after* `openEmitStream()` and after our own handshake write, so
+     * if either never settled — precisely the stalled-peer case this deadline exists for —
+     * no timer was ever armed and `connect()` hung for ever. Racing `ready` instead would
+     * not work: a peer whose handshake arrives before we have opened our own stream
+     * resolves `ready` early, and the race would fire on success.
+     */
+    let onDeadline!: (e: unknown) => void
+    const deadline = new Promise<never>((_, reject) => {
+      onDeadline = reject
+    })
+    void deadline.catch(() => undefined) // observed, so it can never be an unhandled rejection
+
+    const timer = setTimeout(() => {
+      const e = new TransportError(
+        'WT_HANDSHAKE_TIMEOUT',
+        `no handshake within ${this.#deadlineMs}ms`,
+        'The session opened but no application bytes arrived. Some browsers establish a WebTransport session and then never transmit; that combination is unsupported.',
+      )
+      this.#handshakeReject(e)
+      this.#conn.close(CloseCode.WT_HANDSHAKE_TIMEOUT, 'handshake deadline')
+      onDeadline(e)
+    }, this.#deadlineMs)
+
+    const writable = await Promise.race([this.#conn.openEmitStream(), deadline])
     const writer = writable.getWriter()
     this.#writer = writer
 
     // Frame 0 of the emit stream. In-order delivery within a stream makes early traffic
     // impossible by construction, so there is no race to guard.
-    await writer.write(
-      encodeFrame({
-        type: FrameType.HANDSHAKE,
-        codec: Codec.JSON,
-        eventId: EVENT_ID_NOT_APPLICABLE,
-        payload: encodePayload(buildHandshake(this.#table)),
-      }),
-    )
+    await Promise.race([
+      writer.write(
+        encodeFrame({
+          type: FrameType.HANDSHAKE,
+          codec: Codec.JSON,
+          eventId: EVENT_ID_NOT_APPLICABLE,
+          payload: encodePayload(buildHandshake(this.#table)),
+        }),
+      ),
+      deadline,
+    ])
     this.#handshakeSent = true
     this.#flushEmits()
-
-    const timer = setTimeout(() => {
-      this.#handshakeReject(
-        new TransportError(
-          'WT_HANDSHAKE_TIMEOUT',
-          `no handshake within ${this.#deadlineMs}ms`,
-          'The session opened but no application bytes arrived. Some browsers establish a WebTransport session and then never transmit; that combination is unsupported.',
-        ),
-      )
-      this.#conn.close(CloseCode.WT_HANDSHAKE_TIMEOUT, 'handshake deadline')
-    }, this.#deadlineMs)
 
     try {
       const n = await this.ready
@@ -260,6 +293,16 @@ export class Session {
     }
   }
 
+  /** Revoke a responder on this session. `Server.handle`'s disposer needs it. */
+  unhandle(event: string): void {
+    this.#callHandlers.delete(event)
+  }
+
+  /** True once the connection has closed and everything it held has been released. */
+  get disposed(): boolean {
+    return this.#disposed
+  }
+
   /**
    * Each call opens its own bidirectional stream, so the stream IS the correlation: no
    * identifiers, no pending map, and a stalled call blocks nothing else.
@@ -282,6 +325,8 @@ export class Session {
         'Add it to the contract, or check the spelling.',
       )
     }
+    // An already-aborted signal must not open a stream just to tear it down.
+    if (opts?.signal?.aborted === true) throw abortToTransportError(opts.signal.reason)
     if (entry.lane === 'datagram') {
       throw new TransportError(
         'WT_PROTOCOL_ERROR',
@@ -289,8 +334,6 @@ export class Session {
         'A datagram may be dropped, so there is no response to await. Use emit(), or move the event to the stream lane.',
       )
     }
-    opts?.signal?.throwIfAborted()
-
     if (this.#openCalls >= MAX_CONCURRENT_CALL_STREAMS) {
       throw new TransportError(
         'WT_TOO_MANY_STREAMS',
@@ -301,6 +344,15 @@ export class Session {
     this.#openCalls++
     try {
       return await this.#doCall(entry.id, encodePayload(payload), opts?.signal)
+    } catch (e) {
+      // D18 removes the default call timeout on the grounds that `AbortSignal.timeout(ms)`
+      // is the documented substitute, so aborting is the most-documented failure this
+      // library has — and it rejected with a raw DOMException carrying no code and no
+      // remedy, which the error helper printed in API.md reports as 'unknown'.
+      // Read through a call so narrowing from the pre-check above does not apply: the
+      // signal can abort at any point during the call, which is the whole reason it exists.
+      const abortedNow = (): boolean => opts?.signal?.aborted ?? false
+      throw isAbort(e) || abortedNow() ? abortToTransportError(e) : e
     } finally {
       this.#openCalls--
     }

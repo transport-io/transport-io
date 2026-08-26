@@ -86,6 +86,11 @@ export class Server<M extends AnyMap = AnyMap> {
     }
     return () => {
       this.#callHandlers.delete(event)
+      // Sweeping current peers rather than the ones present at registration: a session
+      // accepted in between picked the handler up from `#callHandlers`, so it has to be
+      // revoked too. Deleting from the map alone left every already-connected peer still
+      // being answered — revoking a privileged responder did nothing for anyone connected.
+      for (const { session } of this.#peers.values()) session.unhandle(event)
     }
   }
 

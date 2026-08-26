@@ -21,6 +21,13 @@ export interface ClientState {
 }
 
 export interface ClientOptions<C extends Contract = Contract> {
+  /**
+   * How long to wait for the peer's handshake before giving up. The deadline covers
+   * opening the emit stream as well as the exchange, so a transport that never opens one
+   * fails here rather than hanging.
+   */
+  readonly handshakeDeadlineMs?: number
+
   readonly contract: C
   /** Supplied by the transport seam, so this class never imports a transport. */
   readonly connect: () => Promise<Connection>
@@ -151,6 +158,9 @@ export class Client<M extends AnyMap = AnyMap> {
         ...(this.#opts.validateInbound === undefined
           ? {}
           : { validateInbound: this.#opts.validateInbound }),
+        ...(this.#opts.handshakeDeadlineMs === undefined
+          ? {}
+          : { handshakeDeadlineMs: this.#opts.handshakeDeadlineMs }),
         ...(this.#opts.scheduleFlush === undefined
           ? {}
           : { scheduleFlush: this.#opts.scheduleFlush }),

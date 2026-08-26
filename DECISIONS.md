@@ -1617,3 +1617,38 @@ initiated it.
 
 **Reconsider when:** never. If an event needs a response it belongs on the stream lane, and
 moving it there is a contract change that `negotiate()` already refuses to paper over.
+
+### D79. Four API promises that had no code behind them
+Small individually, and the same failure each time: the documented behaviour is what a
+caller reads, and nothing asserted the documented behaviour.
+
+**`handle()`'s disposer did not revoke anything.** It deleted from the server's own map
+while the per-session registrations it made at accept time stayed live, so revoking a
+privileged responder did nothing for any peer that was already connected. The disposer now
+sweeps current peers — current, not the ones present at registration, because a session
+accepted in between picked the handler up from the map.
+
+**`join()` after teardown succeeded and was retained for ever.** `onSession(async peer => {
+await lookup(); await peer.join(room) })` is the pattern the README teaches, so a client
+dropping mid-lookup lands here routinely. The JOIN notify write died inside the emit path's
+swallowing catch, so nothing surfaced, and the teardown that would have removed the entry
+had already run. A disposed session now refuses to join, with `WT_SESSION_CLOSED`.
+
+**The handshake deadline did not cover the handshake.** It was armed *after*
+`openEmitStream()` and after writing our own handshake — so if either never settled, which
+is precisely the stalled-peer case the deadline exists for, no timer was ever armed and
+`connect()` hung for ever. Armed first now, and raced against both awaits. Racing `ready`
+instead would be wrong: a peer whose handshake arrives before we have opened our own stream
+resolves `ready` early and the race would fire on success. `handshakeDeadlineMs` also
+reached `SessionOptions` from nowhere — neither Client nor Server passed it — so the only
+test seam for the whole path was inert. It is now a `ClientOptions` field.
+
+**An aborted call rejected with the platform's error, not ours.** A raw `DOMException`:
+`name: 'TimeoutError'`, `code: 23`, no `remedy`. D18 removes the default call timeout on the
+explicit grounds that `AbortSignal.timeout(ms)` is the documented substitute, which makes
+abort the most-documented failure path this library has — and `WT_ABORTED` was in the
+exported code union while being constructed nowhere, so the error-handling function printed
+verbatim in `API.md` reported `'unknown'` for it. Now a `TransportError` with a remedy.
+
+**Reconsider when:** nothing here is a trade-off, so nothing here has a trigger. It is a
+list of things that were simply absent.

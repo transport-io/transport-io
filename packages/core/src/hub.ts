@@ -50,6 +50,18 @@ export class Hub {
   }
 
   async join(room: string, id: PeerId, session: Session): Promise<void> {
+    // `onSession(async peer => { await lookup(); await peer.join(room) })` is the pattern
+    // the README teaches, so a client dropping during the lookup lands here routinely.
+    // Such a join used to succeed and be retained for ever: the JOIN notify write died in
+    // the emit path's swallowing catch, so nothing surfaced, and the teardown that would
+    // have removed it had already run.
+    if (session.disposed) {
+      throw new TransportError(
+        'WT_SESSION_CLOSED',
+        `peer ${id} disconnected before it could join '${room}'`,
+        'Check the peer is still connected after any await, or ignore this — it is routine.',
+      )
+    }
     let members = this.#rooms.get(room)
     if (members === undefined) {
       members = new Map()
