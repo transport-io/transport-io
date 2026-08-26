@@ -33,6 +33,37 @@ title — written by whoever opens the PR — is arbitrary code on the runner un
 bound through `env:` and read as `"$NAME"`. See D74; the repository shipped exactly that
 defect. Line-based, no YAML dependency.
 
+## `check-norms.ts` — normative prose names the test that proves it
+
+Every `MUST` in `PROTOCOL.md` and every bold guarantee in `API.md` carries an identifier
+naming a test file, and that file must mention the identifier back. Checked from both ends,
+so a marker cannot name an unrelated file.
+
+Deliberately shallow: it does not verify the test is any good. It makes an unimplemented
+promise impossible to write down *silently*, which is the failure that recurred five times
+in one day. `-> UNPROVEN: <reason>` records an honest gap and is counted against a ceiling
+that may only go down. See D82.
+
+## `check-boundaries.ts` — D14's runtime split
+
+Fails if a module that is not `*.node.ts` reaches the transport, by package name **or by a
+relative import**. The Biome rule it replaces matched three package specifiers, so
+`from './transport/fails.node.ts'` inside a plain `*.test.ts` passed cleanly — measured, 0
+diagnostics.
+
+## `run-node-tests.sh` — the integration job must actually run something
+
+Asserts the reported test count. `node --test` exits 0 when its glob matches nothing, and CI
+wrapped it in `--if-present`, which exits 0 when the script is missing: two ways for the only
+required check that loads the native transport to be green while testing nothing.
+
+## `check-node.test.sh` — the version guard, against stub versions
+
+The guard compares `major.minor`. It used to compare majors while its own error text named
+22.18, so every Node 22.0–22.17 passed and then died with the exact error it exists to
+convert. Tested with stub `node` binaries, because the versions under test cannot run a
+TypeScript test.
+
 ## `soak-churn.node.ts` — what a dead session leaves behind
 
 `npm run soak:churn`. Connects and disconnects over the in-memory loopback transport and

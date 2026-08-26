@@ -21,6 +21,7 @@ integers of 8, 16 and 32 bits.
 "MUST", "MUST NOT", "SHOULD" and "MAY" carry their usual specification force.
 
 A **protocol error** means the receiver MUST NOT process the offending data. Whether it
+<!-- norm: protocol-error-not-processed -> packages/core/src/framer.test.ts -->
 resets a stream or closes the session is specified per case in §10.
 
 ---
@@ -38,6 +39,7 @@ Servers MUST refuse HTTP/2 WebTransport sessions rather than downgrading. This i
 enforcement point: a server that never offers the HTTP/2 mapping cannot be negotiated into
 it, regardless of client behaviour. Clients SHOULD additionally request unreliable-capable
 sessions where the platform exposes that control, and MUST refuse a session it can observe
+<!-- norm: reliable-only-refused -> packages/core/src/protocol-promises.test.ts -->
 to be reliable-only.
 
 There is no fallback to WebSocket or any other transport, under any condition.
@@ -87,6 +89,7 @@ call therefore cannot block another call: QUIC flow control applies per stream.
 
 **The response is a sequence of frames terminated by stream close, not a single frame with
 a length.** Version 0 senders emit exactly one `CALL_RESPONSE` frame, but receivers MUST
+<!-- norm: receiver-accepts-multi-frame-response -> UNPROVEN: no test sends more than one CALL_RESPONSE on a stream; D7 reserves the shape for token streaming and nothing produces it yet -->
 accept any number, so that incremental responses can be added later without a protocol
 break.
 
@@ -110,9 +113,11 @@ on session establishment. The payload is a JSON object:
 | `events` | array | Event table, §4.3. |
 
 A peer MUST send its handshake without waiting for the other side's.
+<!-- norm: handshake-sent-without-waiting -> packages/core/src/protocol-promises.test.ts -->
 
 **Deadline: 5000 ms.** If a peer has not received a valid handshake frame within 5000 ms
 of session establishment, it MUST close the session with `WT_HANDSHAKE_TIMEOUT` (§10.2).
+<!-- norm: handshake-deadline-closes-session -> packages/core/src/api-hardening.test.ts -->
 
 A peer that never opens its emit stream is indistinguishable from one that opens it and
 never writes, so the same deadline covers both. This matters in practice: some clients
@@ -136,6 +141,7 @@ Feature tokens are short lowercase ASCII. Reserved and unimplemented in version 
 | `session-resume` | Resumption of a prior session's identity and membership. |
 
 An unrecognised token MUST be ignored, not treated as an error.
+<!-- norm: unknown-feature-token-ignored -> packages/core/src/protocol-layers.test.ts -->
 
 ### 4.3 Contract identity
 
@@ -161,6 +167,7 @@ Each peer compares the two tables entry by entry:
 | Name known to one peer only | **Proceed.** Sending it yields a per-message `WT_UNKNOWN_EVENT`. |
 
 A refusal MUST name the offending event in the close reason, for example
+<!-- norm: refusal-names-the-event -> packages/core/src/protocol-promises.test.ts -->
 `event 'cursor' is 'datagram' here and 'stream' at the peer`.
 
 **Property worth knowing before you deploy: the server sends its event table to every peer
@@ -226,16 +233,19 @@ frame boundaries.
 | Type | 1 | §5.2 |
 | Codec | 1 | §5.3 |
 | Reserved | 2 | MUST be zero. Rejected as a protocol error otherwise. |
+<!-- norm: reserved-field-zero -> packages/core/src/framer.test.ts -->
 | Event ID | 4 | §5.4 |
 | **Fixed overhead** | **12** | 4 length + 8 header |
 | Payload | 1 to 1 048 576 | |
 
 `Length` MUST be at least **9** — eight header bytes plus at least one payload byte.
+<!-- norm: length-minimum-nine -> packages/core/src/framer.test.ts -->
 
 **A `Length` of 0 is a protocol error.** So is a payload of zero bytes. Stream close is the
 terminator for a call response (§3.2), so no zero-length sentinel is needed anywhere in
 this protocol, and permitting one is actively harmful: at least one widely used QUIC stack
 halts on a zero-length application write. Receivers MUST reject such a frame rather than
+<!-- norm: zero-length-payload-rejected -> packages/core/src/framer.test.ts -->
 forward it.
 
 `Length` exceeding `1048584` (1 MiB payload plus the 8 header bytes it counts) is a
@@ -249,6 +259,7 @@ at 1 MiB**, including `EMIT` and the control frames, which are orders of magnitu
 in practice.
 
 A receiver MUST decide the cap from the frame type rather than applying the largest one
+<!-- norm: cap-decided-by-frame-type -> packages/core/src/inbound-guards.test.ts -->
 universally. The type byte is at a fixed offset inside the header, so it is readable before
 any payload has to be buffered; applying the call cap to an `EMIT` frame lets a peer make a
 receiver hold sixteen times what this section permits.
@@ -294,6 +305,7 @@ Receiving a reserved or contextually invalid type is a protocol error.
 | `0x02`–`0xFF` | reserved |
 
 Version 0 peers MUST send `0x01` and MUST reject any other value with
+<!-- norm: codec-must-be-json -> packages/core/src/framer.test.ts -->
 `WT_UNSUPPORTED_CODEC`.
 
 `0x00` is permanently reserved as invalid so that a zero-filled buffer can never parse as a
@@ -342,6 +354,7 @@ response payload. Event ID is `0x0000`.
 
 A version 0 responder MUST write **exactly one** `CALL_RESPONSE`, or one `CALL_ERROR`, and
 never zero of both. A receiver MUST nonetheless accept a sequence of any length, so that
+<!-- norm: call-response-sequence-any-length -> packages/core/src/call.test.ts -->
 incremental responses can be added later without a protocol break — that asymmetry is
 deliberate and is what keeps the door open for streaming responses.
 
@@ -421,6 +434,7 @@ The normative requirements are:
 1. **Who assigns it.** The session host that accepts the peer, at session establishment,
    before any datagram is sent.
 2. **Uniqueness scope.** An origin MUST be unique among all peers concurrently connected to
+<!-- norm: origin-unique-and-quarantined -> packages/core/src/protocol-layers.test.ts -->
    the same deployment — not merely to the same process. Uniqueness within one process is
    not uniqueness across a bus.
 3. **Reuse, via quarantine.** An origin MUST NOT be reissued while any peer that observed
@@ -436,6 +450,7 @@ The normative requirements are:
    values this protocol sets:
 
    - **Receiver sequence-state retention.** A receiver MUST discard its
+<!-- norm: sequence-state-retention -> packages/core/src/protocol-layers.test.ts -->
      `(origin, event)` sequence state after `60` seconds with no datagram for that pair.
    - **Maximum in-flight datagram lifetime.** A datagram older than the send-queue TTL
      (§9, 150 ms) is never transmitted, so an in-flight datagram cannot outlive that TTL
@@ -450,6 +465,7 @@ The normative requirements are:
    million, 57%. Exhaustion becomes a genuine **limit on concurrency**, roughly 4.2 million
    live-plus-quarantined sessions per host, and never a function of how long the host has
    been up. A host that actually reaches it MUST refuse new sessions with
+<!-- norm: host-ordinal-exhaustion-refuses -> UNPROVEN: needs a host that has genuinely exhausted its ordinal space; the allocator branch is covered, the refusal of new sessions is not -->
    `WT_TOO_MANY_STREAMS`-style clarity rather than wrap, because at that point the limit is
    real.
 4. **Across processes.** A single-process deployment MAY use a plain monotonic counter
@@ -463,6 +479,7 @@ The normative requirements are:
 
    Allocating the host ordinal is the adapter's responsibility. `MemoryAdapter` is a single
    host and uses ordinal `0`. A cross-process adapter MUST provide a distinct ordinal per
+<!-- norm: host-ordinal-partitioned -> packages/core/src/protocol-layers.test.ts -->
    host and MUST NOT hand the same ordinal to two live hosts.
 
    **Ordinals are recycled under the same rule**, because autoscaling churns hosts and a
@@ -474,6 +491,7 @@ The normative requirements are:
    close, and because ordinal churn is slow enough that the extra margin costs nothing.
 
 `0x00000000` is reserved and MUST NOT be allocated, so a zero-filled buffer cannot parse as
+<!-- norm: origin-zero-reserved -> packages/core/src/protocol-layers.test.ts -->
 a valid datagram from a real peer.
 
 **Sequence** is a `u32` counter, monotonically increasing per `(origin, event)`, starting
@@ -522,6 +540,7 @@ The usable datagram size is a **runtime property of the path, not a constant.** 
 with path MTU, and some hosting platforms reduce it further — Fly.io, for example,
 documents taking roughly two dozen bytes off the MTU for its UDP routing. Implementations
 MUST query the transport at send time rather than assuming a fixed value.
+<!-- norm: datagram-max-queried-at-send-time -> packages/core/src/protocol-layers.test.ts -->
 
 The maximum payload is:
 
@@ -535,6 +554,7 @@ because at least one major browser hardcodes exactly that value regardless of th
 MTU. The corresponding conservative payload maximum is **1011 bytes**.
 
 A sender MUST check the payload against this limit **before** writing. It MUST NOT rely on
+<!-- norm: sender-checks-datagram-size-first -> packages/core/src/datagram-lane.test.ts -->
 the transport to report an oversized datagram, because at least one widely used
 implementation accepts the write, discards the datagram, and reports success. Exceeding the
 limit raises `WT_DATAGRAM_TOO_LARGE` locally and transmits nothing.
@@ -556,6 +576,7 @@ On the datagram lane:
   consistent with every point above and is not an error condition.
 
 Applications requiring any of these properties MUST declare the event on the stream lane
+<!-- norm: datagram-guarantees-need-stream-lane -> packages/core/src/lane-integrity.test.ts -->
 instead. The lane is declared in the contract precisely so this choice is explicit and
 visible in the type system.
 
@@ -574,6 +595,7 @@ SHOULD abandon the work.
 not an implementation limit: the WebTransport specification's browser API clamps stream
 error codes to a single octet, so any wider code space would be untransmittable from a
 browser peer. Implementations MUST NOT define reset codes outside this range.
+<!-- norm: reset-codes-one-byte -> packages/core/src/protocol-promises.test.ts -->
 
 ---
 
@@ -601,6 +623,7 @@ handles a stall. Without TTL, a peer that stalls for two seconds and resumes rec
 backlog of stale positions and renders history, which is worse than receiving nothing.
 
 The two causes MUST be counted separately, as `overflowDropped` and `staleDropped`, so an
+<!-- norm: drop-causes-counted-separately -> packages/core/src/datagram-lane.test.ts -->
 operator can distinguish a slow network from a slow consumer.
 
 ---
@@ -628,6 +651,7 @@ is why this table is three rows rather than ten.
 ### 10.2 Session close codes
 
 `u32`, sent in the WebTransport session close. The accompanying reason string MUST NOT
+<!-- norm: close-reason-1024-bytes -> packages/core/src/protocol-promises.test.ts -->
 exceed **1024 bytes**, per the HTTP/3 WebTransport draft.
 
 | code | name | meaning and remedy |
@@ -665,3 +689,4 @@ this.
 
 When a session closes, all its streams are closed and all pending calls reject. A peer that
 detects its counterpart has gone MUST NOT attempt to reuse any stream from that session.
+<!-- norm: session-streams-not-reused -> UNPROVEN: no test drives stream reuse after a peer-detected close; the transport rejects it, and asserting that asserts the transport -->

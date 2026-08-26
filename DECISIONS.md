@@ -1770,3 +1770,53 @@ title, so such a footer was never linted *and* never landed. The same entry offe
 
 **Nothing was deferred, so nothing carries a trigger.** If an item here needs revisiting it
 will be because a gate started failing, which is the outcome all of them were rebuilt for.
+
+### D82. Normative prose has a gate now, and it is deliberately shallow
+Numeric constants are asserted against `protocol.ts`. Code blocks are compiled. Sentences
+saying what an implementation MUST do were checked by nobody — which is how four promises
+lived in three documents and no code, and how ADR 0010 went on claiming a `u16` event id
+against a wire that had been `u32` for weeks. Every other kind of drift in this project has
+been caught by a gate; this kind kept getting through review instead.
+
+**The rule.** Every normative statement in `PROTOCOL.md` and `API.md` carries an identifier
+naming a test file, and that file must mention the identifier back:
+
+```
+A peer MUST send its handshake without waiting for the other side's.
+<!-- norm: handshake-sent-without-waiting -> packages/core/src/protocol-promises.test.ts -->
+```
+
+The link is checked from both ends, so a marker cannot name an unrelated file and a test
+cannot claim coverage the document does not acknowledge. Markers are HTML comments:
+invisible when rendered, trivial to grep, and they survive copy-paste into a Go
+implementation's notes.
+
+**What it does not do, on purpose.** It does not verify the test is any good, or that it
+runs, or that it asserts the statement rather than something adjacent. Building that would
+mean a proof system, and this had to be finished in an afternoon. What it does is make an
+unimplemented promise impossible to write down *silently* — writing `MUST` now costs either
+a test or an explicit, counted admission that there is none.
+
+**The admission has a ratchet.** `-> UNPROVEN: <reason>` records an honest gap, and the
+count is printed on every run against a ceiling of 8 that may only go down. Same idiom as
+the `ignore` block ceiling in `check-docs.ts`, for the same reason: an exemption without a
+ratchet becomes permanent on the first busy afternoon. Three statements are unproven today,
+and writing them down found the third — no test sends more than one `CALL_RESPONSE`, so D7's
+multi-frame shape is reserved and unexercised. That was going to be discovered by whoever
+implemented token streaming against it.
+
+**Coverage rules that make it usable rather than resented.** One marker covers a run of
+consecutive normative lines within 40 lines, so a table of MUSTs takes one marker and not
+twelve. `API.md` states guarantees as bold lead-ins rather than RFC-2119 keywords, so a bold
+opener containing "never" or "always" counts too — "**The lane lives in the contract, never
+at the call site.**" is exactly as binding as a MUST and would otherwise have slipped past.
+
+**Verified by breaking it**, three ways: a new `MUST` with no marker, a marker naming a file
+that never mentions it, and a duplicated id so two statements appear to be one. Each fails
+the gate. `scripts/check-norms.test.ts` also asserts the real documents parse into more than
+twenty statements and twenty markers, so a change to the marker syntax cannot quietly turn
+the whole thing into a no-op that reports nothing and exits 0.
+
+**Reconsider when:** the unproven ceiling cannot be lowered because a statement is genuinely
+untestable at this layer. That is an argument for deleting the statement, not for raising the
+ceiling.

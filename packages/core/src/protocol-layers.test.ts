@@ -1,4 +1,15 @@
 import { describe, expect, test } from 'bun:test'
+/**
+ * Proves these normative statements, which name this file back. The link is checked
+ * from both ends by `scripts/check-norms.ts`; see D82.
+ *
+ *   unknown-feature-token-ignored
+ *   origin-unique-and-quarantined
+ *   sequence-state-retention
+ *   host-ordinal-partitioned
+ *   origin-zero-reserved
+ *   datagram-max-queried-at-send-time
+ */
 import fc from 'fast-check'
 import type { Publisher } from './adapter.ts'
 import { MemoryAdapter } from './adapter.ts'

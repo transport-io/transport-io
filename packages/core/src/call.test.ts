@@ -1,4 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+/**
+ * Proves these normative statements, which name this file back. The link is checked
+ * from both ends by `scripts/check-norms.ts`; see D82.
+ *
+ *   call-response-sequence-any-length
+ */
 import { Client } from './client.ts'
 import { defineContract, type MapOf, type$ } from './contract.ts'
 import { TransportError } from './errors.ts'

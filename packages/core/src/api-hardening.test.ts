@@ -4,6 +4,13 @@
  * Each is small on its own. Together they are the same failure as D69 at the API layer:
  * the documented thing is what a caller reads, and nothing asserted the documented thing.
  */
+/**
+ * Proves these normative statements, which name this file back. The link is checked
+ * from both ends by `scripts/check-norms.ts`; see D82.
+ *
+ *   handshake-deadline-closes-session
+ *   no-bare-typeerror
+ */
 import { describe, expect, test } from 'bun:test'
 import { Client } from './client.ts'
 import { defineContract, type MapOf, type$ } from './contract.ts'

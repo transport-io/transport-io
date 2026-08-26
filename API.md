@@ -34,6 +34,7 @@ names in hover but expands type-alias instantiations, so no library-side trick r
 need for the line.
 
 **The lane lives in the contract, never at the call site.** The guarantee belongs to the
+<!-- norm: lane-lives-in-the-contract -> packages/core/src/lane-integrity.test.ts -->
 message type, so client and server cannot disagree about it.
 
 ### 1.1 Validation is bring-your-own
@@ -282,6 +283,7 @@ export function describe(e: unknown): string {
 
 Every error carries a stable code and a `remedy` sentence saying what to do about it. A
 bare `TypeError` is never thrown from this library's own surface. Codes and their numeric
+<!-- norm: no-bare-typeerror -> packages/core/src/api-hardening.test.ts -->
 wire values are specified in `PROTOCOL.md` §10, and a test asserts the two agree.
 
 Two worth knowing:

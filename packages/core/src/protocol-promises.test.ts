@@ -18,6 +18,16 @@
  * So: assert what a second implementation would see. A `TransportError` raised locally is
  * not evidence that anything was transmitted.
  */
+/**
+ * Proves these normative statements, which name this file back. The link is checked
+ * from both ends by `scripts/check-norms.ts`; see D82.
+ *
+ *   reliable-only-refused
+ *   handshake-sent-without-waiting
+ *   refusal-names-the-event
+ *   reset-codes-one-byte
+ *   close-reason-1024-bytes
+ */
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'

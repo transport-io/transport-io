@@ -6,6 +6,12 @@
  * what we accept is wider than what we document — which is the direction that costs
  * somebody memory or a surprise, rather than merely failing a strict peer.
  */
+/**
+ * Proves these normative statements, which name this file back. The link is checked
+ * from both ends by `scripts/check-norms.ts`; see D82.
+ *
+ *   cap-decided-by-frame-type
+ */
 import { describe, expect, test } from 'bun:test'
 import { encodePayload } from './codec.ts'
 import { buildEventTable, defineContract, type MapOf, type$ } from './contract.ts'

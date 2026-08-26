@@ -1,4 +1,14 @@
 import { describe, expect, test } from 'bun:test'
+/**
+ * Proves these normative statements, which name this file back. The link is checked
+ * from both ends by `scripts/check-norms.ts`; see D82.
+ *
+ *   protocol-error-not-processed
+ *   reserved-field-zero
+ *   length-minimum-nine
+ *   zero-length-payload-rejected
+ *   codec-must-be-json
+ */
 import fc from 'fast-check'
 import { TransportError } from './errors.ts'
 import { encodeFrame, type Frame, FrameDecoder } from './framer.ts'

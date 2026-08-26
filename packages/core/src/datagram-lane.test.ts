@@ -6,6 +6,13 @@
  * dedupe and reordering were all unexercised. Waiting for a real network to produce them
  * is waiting for a flaky test to explain a bug.
  */
+/**
+ * Proves these normative statements, which name this file back. The link is checked
+ * from both ends by `scripts/check-norms.ts`; see D82.
+ *
+ *   sender-checks-datagram-size-first
+ *   drop-causes-counted-separately
+ */
 import { describe, expect, test } from 'bun:test'
 import { Client } from './client.ts'
 import { defineContract, type MapOf, type$ } from './contract.ts'

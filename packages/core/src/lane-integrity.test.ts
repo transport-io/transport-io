@@ -15,6 +15,13 @@
  * PROTOCOL.md, or any caller reaching the wire directly, can open a bidirectional stream
  * for a datagram event whenever it likes.
  */
+/**
+ * Proves these normative statements, which name this file back. The link is checked
+ * from both ends by `scripts/check-norms.ts`; see D82.
+ *
+ *   datagram-guarantees-need-stream-lane
+ *   lane-lives-in-the-contract
+ */
 import { describe, expect, test } from 'bun:test'
 import { Client } from './client.ts'
 import { encodePayload } from './codec.ts'

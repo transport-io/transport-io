@@ -15,6 +15,7 @@
     "build": "tsc --build",
     "check:boundaries": "bun run scripts/check-boundaries.ts",
     "check:node": "./scripts/check-node.sh",
+    "check:norms": "bun run scripts/check-norms.ts",
     "check:workflows": "bun run scripts/check-workflows.ts",
     "commitlint": "commitlint",
     "deadcode": "knip",
