@@ -5,7 +5,7 @@
  * scope, so importing this on a server — which Next.js will do — is safe. Feature
  * detection happens inside connect().
  */
-import { type AnyMap, buildEventTable, type Contract } from './contract.ts'
+import { type AnyMap, buildEventTable, type CallableOf, type Contract } from './contract.ts'
 import { TransportError } from './errors.ts'
 import { CloseCode, FrameType } from './protocol.ts'
 import { Session, type SessionStats } from './session.ts'
@@ -27,6 +27,10 @@ export interface ClientOptions<C extends Contract = Contract> {
   readonly validateInbound?: boolean
   /** Clients stamp their own origin on outbound datagrams. */
   readonly origin?: number
+  /** Test seam: how a queued datagram flush is deferred. Defaults to a microtask. */
+  readonly scheduleFlush?: (flush: () => void) => void
+  /** Test seam: the clock the TTL is measured against. Defaults to `Date.now`. */
+  readonly now?: () => number
 }
 
 export class Client<M extends AnyMap = AnyMap> {
@@ -108,6 +112,15 @@ export class Client<M extends AnyMap = AnyMap> {
     }
   }
 
+  /** Available only on events declaring `returns`. Aborting resets the QUIC stream. */
+  async call<K extends CallableOf<M> & string>(
+    event: K,
+    payload: M[K]['payload'],
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<M[K]['returns']> {
+    return (await this.#requireSession().call(event, payload, options)) as M[K]['returns']
+  }
+
   stats(): SessionStats | undefined {
     return this.#session?.stats()
   }
@@ -135,6 +148,10 @@ export class Client<M extends AnyMap = AnyMap> {
         ...(this.#opts.validateInbound === undefined
           ? {}
           : { validateInbound: this.#opts.validateInbound }),
+        ...(this.#opts.scheduleFlush === undefined
+          ? {}
+          : { scheduleFlush: this.#opts.scheduleFlush }),
+        ...(this.#opts.now === undefined ? {} : { now: this.#opts.now }),
       })
       this.#session = session
 

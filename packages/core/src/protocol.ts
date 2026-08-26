@@ -53,6 +53,8 @@ export const DATAGRAM_CONSERVATIVE_PAYLOAD_MAX: number =
 /** PROTOCOL.md §9 — per-peer bounds. Numbers, not adjectives. */
 export const DATAGRAM_QUEUE_MAX = 64
 export const EMIT_QUEUE_MAX = 256
+/** PROTOCOL.md §10.1 code 9 — a rejected open resets that stream, never the session. */
+export const MAX_CONCURRENT_CALL_STREAMS = 256
 /** Checked at dequeue, not enqueue: overflow handles a burst, TTL handles a stall. */
 export const DATAGRAM_TTL_MS = 150
 

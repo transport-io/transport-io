@@ -1,6 +1,12 @@
 /** Server surface. Transport-agnostic: it accepts a Connection from the seam. */
 import { type Adapter, MemoryAdapter, type PeerId } from './adapter.ts'
-import { type AnyMap, buildEventTable, type Contract, type EventTable } from './contract.ts'
+import {
+  type AnyMap,
+  buildEventTable,
+  type CallableOf,
+  type Contract,
+  type EventTable,
+} from './contract.ts'
 import { Hub } from './hub.ts'
 import { OriginAllocator } from './origin.ts'
 import { CloseCode } from './protocol.ts'
@@ -20,6 +26,11 @@ export interface ServerPeer<M extends AnyMap = AnyMap> {
   emit<K extends keyof M & string>(event: K, payload: M[K]['payload']): void
   stats(): SessionStats
   close(code?: number, reason?: string): void
+}
+
+export interface CallContext {
+  /** Fires when the initiator resets the stream. Immediate, and free on this transport. */
+  readonly signal: AbortSignal
 }
 
 export interface ServerOptions {
@@ -46,6 +57,7 @@ export class Server<M extends AnyMap = AnyMap> {
   #adapter: Adapter | undefined
   #nextPeer = 0
   #serverOrigin = 0
+  readonly #callHandlers = new Map<string, (p: unknown, c: CallContext) => Promise<unknown>>()
 
   constructor(opts: ServerOptions) {
     this.#opts = opts
@@ -61,6 +73,20 @@ export class Server<M extends AnyMap = AnyMap> {
     // The server broadcasts on the datagram lane too, so it needs its own origin.
     // Origin 0 is reserved, so it cannot simply be left unset.
     this.#serverOrigin = this.#origins.allocate(Date.now())
+  }
+
+  /** Register a responder for a callable event. */
+  handle<K extends CallableOf<M> & string>(
+    event: K,
+    handler: (payload: M[K]['payload'], ctx: CallContext) => Promise<M[K]['returns']>,
+  ): () => void {
+    this.#callHandlers.set(event, handler as never)
+    for (const { session } of this.#peers.values()) {
+      session.handle(event, handler as never)
+    }
+    return () => {
+      this.#callHandlers.delete(event)
+    }
   }
 
   onSession(cb: (peer: ServerPeer<M>) => void): () => void {
@@ -103,6 +129,7 @@ export class Server<M extends AnyMap = AnyMap> {
       close: (code = CloseCode.WT_NO_ERROR, reason = '') => session.close(code, reason),
     }
 
+    for (const [event, handler] of this.#callHandlers) session.handle(event, handler as never)
     this.#peers.set(id, { peer, session })
     void conn.closed.then(async () => {
       this.#peers.delete(id)

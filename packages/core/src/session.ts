@@ -14,16 +14,22 @@ import {
   EVENT_ID_NOT_APPLICABLE,
   FrameType,
   HANDSHAKE_DEADLINE_MS,
+  MAX_CONCURRENT_CALL_STREAMS,
+  ResetCode,
   SEQUENCE_STATE_RETENTION_MS,
 } from './protocol.ts'
 import { DatagramQueue, EmitQueue, PeerTooSlowError, type QueueStats } from './queue.ts'
-import type { Connection } from './transport/types.ts'
+import type { BidiStream, Connection } from './transport/types.ts'
 
 export interface SessionStats extends QueueStats {
   readonly staleReceived: number
 }
 
 export type EventHandler = (payload: unknown, meta: { readonly from: number }) => void
+export type CallHandler = (
+  payload: unknown,
+  ctx: { readonly signal: AbortSignal },
+) => Promise<unknown>
 
 export interface SessionOptions {
   readonly table: EventTable
@@ -31,6 +37,13 @@ export interface SessionOptions {
   readonly validateInbound?: boolean
   readonly now?: () => number
   readonly handshakeDeadlineMs?: number
+  /**
+   * How a queued datagram flush is deferred. Defaults to a microtask, which is what makes
+   * the bounded ring and the TTL reachable at all: a synchronous drain on every push
+   * would mean a burst never queues and neither policy ever applies. Tests inject a
+   * manual scheduler to exercise both deterministically.
+   */
+  readonly scheduleFlush?: (flush: () => void) => void
 }
 
 export class Session {
@@ -40,6 +53,8 @@ export class Session {
   readonly #validateInbound: boolean
   readonly #now: () => number
   readonly #deadlineMs: number
+  readonly #schedule: (flush: () => void) => void
+  #flushScheduled = false
 
   readonly #handlers = new Map<string, Set<EventHandler>>()
   readonly #gate = new SequenceGate()
@@ -47,6 +62,8 @@ export class Session {
   readonly #emitQueue = new EmitQueue<Uint8Array>()
   readonly #sequences = new Map<number, number>()
   readonly #controlHandlers = new Set<(type: number, body: unknown) => void>()
+  readonly #callHandlers = new Map<string, CallHandler>()
+  #openCalls = 0
 
   #writer: WritableStreamDefaultWriter<Uint8Array> | undefined
   #writeChain: Promise<void> = Promise.resolve()
@@ -65,6 +82,7 @@ export class Session {
     this.#validateInbound = opts.validateInbound ?? true
     this.#now = opts.now ?? (() => Date.now())
     this.#deadlineMs = opts.handshakeDeadlineMs ?? HANDSHAKE_DEADLINE_MS
+    this.#schedule = opts.scheduleFlush ?? ((flush) => queueMicrotask(flush))
     this.ready = new Promise<Negotiated>((res, rej) => {
       this.#handshakeResolve = res
       this.#handshakeReject = rej
@@ -77,6 +95,7 @@ export class Session {
 
   async start(): Promise<Negotiated> {
     this.#conn.onEmitStream((readable) => void this.#readEmitStream(readable))
+    this.#conn.onBidi((stream) => void this.#serveCall(stream))
     this.#conn.onDatagram((bytes) => this.#onDatagram(bytes))
 
     const writable = await this.#conn.openEmitStream()
@@ -171,6 +190,57 @@ export class Session {
     })
   }
 
+  /** Register a responder. Only events declaring `returns` are callable. */
+  handle(event: string, handler: CallHandler): () => void {
+    this.#callHandlers.set(event, handler)
+    return () => {
+      this.#callHandlers.delete(event)
+    }
+  }
+
+  /**
+   * Each call opens its own bidirectional stream, so the stream IS the correlation: no
+   * identifiers, no pending map, and a stalled call blocks nothing else.
+   *
+   * There is no default timeout. A dead peer is detected by the QUIC idle timeout, which
+   * closes the session and rejects every pending call — the case a timeout is usually
+   * reached for is already handled. Pass `AbortSignal.timeout(ms)` for a slow but live
+   * responder.
+   */
+  async call(
+    event: string,
+    payload: unknown,
+    opts?: { readonly signal?: AbortSignal },
+  ): Promise<unknown> {
+    const entry = this.#table.byName(event)
+    if (entry === undefined) {
+      throw new TransportError(
+        'WT_UNKNOWN_EVENT',
+        `'${event}' is not in the contract`,
+        'Add it to the contract, or check the spelling.',
+      )
+    }
+    opts?.signal?.throwIfAborted()
+
+    if (this.#openCalls >= MAX_CONCURRENT_CALL_STREAMS) {
+      throw new TransportError(
+        'WT_TOO_MANY_STREAMS',
+        `${this.#openCalls} call streams are already open on this session`,
+        `Reduce concurrency below ${MAX_CONCURRENT_CALL_STREAMS} and retry; the session stays open.`,
+      )
+    }
+    this.#openCalls++
+    try {
+      return await this.#doCall(entry.id, encodePayload(payload), opts?.signal)
+    } finally {
+      this.#openCalls--
+    }
+  }
+
+  get openCalls(): number {
+    return this.#openCalls
+  }
+
   /** Used by the hub to forward an already-encoded frame without re-encoding per peer. */
   sendFrame(frame: Frame): void {
     this.sendEncodedFrame(encodeFrame(frame))
@@ -204,6 +274,155 @@ export class Session {
     this.#conn.close(code, reason)
   }
 
+  // ------------------------------------------------------------------ calls
+
+  async #doCall(eventId: number, body: Uint8Array, signal?: AbortSignal): Promise<unknown> {
+    const stream = await this.#conn.openBidi()
+    const writer = stream.writable.getWriter()
+    const reader = stream.readable.getReader()
+
+    // Abort maps to a QUIC stream reset: immediate, and costing no application message.
+    // On a WebSocket this would need an app-level protocol and the peer would keep
+    // sending until it heard us.
+    const onAbort = (): void => {
+      void writer.abort(new Error(`code:${ResetCode.WT_ABORTED}`)).catch(() => undefined)
+      void reader.cancel(new Error(`code:${ResetCode.WT_ABORTED}`)).catch(() => undefined)
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+
+    try {
+      await writer.write(
+        encodeFrame({
+          type: FrameType.CALL_REQUEST,
+          codec: Codec.JSON,
+          eventId,
+          payload: body,
+        }),
+      )
+      // Half-close: FIN ends the request while the read side stays open.
+      await writer.close()
+
+      const decoder = new FrameDecoder()
+      const responses: Frame[] = []
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) break
+        if (value === undefined) continue
+        for (const f of decoder.push(value)) responses.push(f)
+      }
+
+      signal?.throwIfAborted()
+
+      const error = responses.find((f) => f.type === FrameType.CALL_ERROR)
+      if (error !== undefined) {
+        const body_ = decodePayload(error.payload) as { code?: string; message?: string }
+        throw new TransportError(
+          (body_.code ?? 'WT_HANDLER_ERROR') as TransportError['code'],
+          body_.message ?? 'the responder returned an error',
+          'Inspect the responder. The code is the one it chose.',
+        )
+      }
+      const first = responses.find((f) => f.type === FrameType.CALL_RESPONSE)
+      if (first === undefined) {
+        throw new TransportError(
+          'WT_PROTOCOL_ERROR',
+          'the responder closed the stream without a response frame',
+          'A responder must write exactly one CALL_RESPONSE or one CALL_ERROR.',
+        )
+      }
+      return decodePayload(first.payload)
+    } finally {
+      signal?.removeEventListener('abort', onAbort)
+    }
+  }
+
+  async #serveCall(stream: BidiStream): Promise<void> {
+    const reader = stream.readable.getReader()
+    const writer = stream.writable.getWriter()
+    const controller = new AbortController()
+    const decoder = new FrameDecoder()
+    let request: Frame | undefined
+
+    try {
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) break // the initiator half-closed: the request is complete
+        if (value === undefined) continue
+        for (const f of decoder.push(value)) if (request === undefined) request = f
+      }
+    } catch {
+      // A reset before the request completed is a cancellation, not a fault.
+      controller.abort()
+      return
+    }
+
+    if (request === undefined || request.type !== FrameType.CALL_REQUEST) {
+      await this.#failCall(writer, 'WT_PROTOCOL_ERROR', 'expected a CALL_REQUEST frame')
+      return
+    }
+    if (this.#negotiated === undefined) {
+      // A call racing the handshake resets its own stream, not the session.
+      await this.#failCall(writer, 'WT_HANDSHAKE_INCOMPLETE', 'the handshake has not completed')
+      return
+    }
+    const entry = this.#table.byId(request.eventId)
+    if (entry === undefined) {
+      await this.#failCall(
+        writer,
+        'WT_UNKNOWN_EVENT',
+        `event id ${request.eventId} is not in the contract`,
+      )
+      return
+    }
+    const handler = this.#callHandlers.get(entry.name)
+    if (handler === undefined) {
+      await this.#failCall(
+        writer,
+        'WT_UNKNOWN_EVENT',
+        `no handler registered for '${entry.name}'`,
+      )
+      return
+    }
+
+    try {
+      let value = decodePayload(request.payload)
+      if (this.#validateInbound) value = await validate(entry.def.payload, value)
+      const result = await handler(value, { signal: controller.signal })
+      await writer.write(
+        encodeFrame({
+          type: FrameType.CALL_RESPONSE,
+          codec: Codec.JSON,
+          eventId: EVENT_ID_NOT_APPLICABLE,
+          payload: encodePayload(result),
+        }),
+      )
+      await writer.close()
+    } catch (e) {
+      const code = e instanceof TransportError ? e.code : 'WT_HANDLER_ERROR'
+      await this.#failCall(writer, code, e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async #failCall(
+    writer: WritableStreamDefaultWriter<Uint8Array>,
+    code: string,
+    message: string,
+  ): Promise<void> {
+    try {
+      await writer.write(
+        encodeFrame({
+          type: FrameType.CALL_ERROR,
+          codec: Codec.JSON,
+          eventId: EVENT_ID_NOT_APPLICABLE,
+          payload: encodePayload({ code, message: message.slice(0, 1024) }),
+        }),
+      )
+      await writer.close()
+    } catch {
+      // The peer already went away; nothing left to report to.
+    }
+  }
+
   // ------------------------------------------------------------------ internals
 
   #flushEmits(): void {
@@ -214,8 +433,18 @@ export class Session {
     }
   }
 
+  /**
+   * Coalesced, never synchronous. A burst of emits inside one turn accumulates in the
+   * bounded ring, so drop-oldest applies; and because the TTL is checked at drain, a
+   * flush delayed past it discards what has gone stale rather than delivering history.
+   */
   #flushDatagrams(): void {
-    for (const dg of this.#dgQueue.drain(this.#now())) this.#conn.sendDatagram(dg)
+    if (this.#flushScheduled) return
+    this.#flushScheduled = true
+    this.#schedule(() => {
+      this.#flushScheduled = false
+      for (const dg of this.#dgQueue.drain(this.#now())) this.#conn.sendDatagram(dg)
+    })
   }
 
   #write(bytes: Uint8Array): Promise<void> {
