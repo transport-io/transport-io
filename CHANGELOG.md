@@ -62,6 +62,11 @@ hand-written notes for the pre-release period.
 - **A contract fingerprint in `PROTOCOL.md` was fabricated**, in a document that promises
   every snippet runs. Every external constant is now computed in the same commit it is
   written.
+- **Three separate total failures of a documented guarantee survived a green suite**, each
+  hiding in the half of a two-sided interaction the tests skipped for convenience: the
+  responder never saw an abort, a standalone client never awaited its native transport, and
+  a server could not be shut down. Recorded together in D69 rather than as three unrelated
+  bugs.
 
 ### Tooling
 

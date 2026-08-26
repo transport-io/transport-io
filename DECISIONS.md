@@ -1295,8 +1295,28 @@ Fixed by watching `writer.closed`, which rejects when the peer sends STOP_SENDIN
 true on the reference transport, and asserted in both directions in the parity suite so it
 cannot silently regress.
 
-**The lesson is about the test, not the fix.** A test that checks the initiator of a
-two-sided interaction is not a test of the interaction.
+**The lesson is about the test, not the fix**, and it has now cost us twice.
+
+A bug lives in the path the quick test skips. Both times, every test passed and the missing
+coverage was invisible because the tests that existed looked thorough:
+
+| bug | what every test did | what none of them did |
+|---|---|---|
+| `ctx.signal` never fired on the responder | asserted the **caller** rejected | asserted the **responder** observed it |
+| `NapiServer.close()` deadlocks (D71) | ended with `process.exit(0)` | called `stop()` and waited |
+| `connectHttp3` never awaited the native load | ran a client **beside a server** | ran a client **alone** in a process |
+
+The shape is identical in all three: the suite exercised the convenient half of a two-sided
+interaction — the initiating half, the exiting half, the co-located half — and the defect
+sat in the half that was skipped for convenience. Not one of them was a subtle bug. Each was
+a total failure of a documented guarantee, surviving a green suite.
+
+**The standing rule.** For anything two-sided — caller and responder, startup and shutdown,
+client process and server process — a test asserts *both* sides or it tests neither. When a
+test takes a shortcut at the end (`process.exit`, a shared process, a skipped teardown),
+that shortcut is the specification of what it does not cover, and it is worth writing down
+next to the shortcut. `client-standalone.node.test.ts` carries exactly such a note, because
+the moment someone adds a server to that file it silently stops testing anything.
 
 ### D70. moq's native packages are a legitimate dependency; the entry point is not
 Path (b) evaluated. All five per-platform NAPI packages are published independently on
@@ -1338,9 +1358,9 @@ accepts connections always has one outstanding, so **a moq server has no gracefu
 shutdown**. It must be killed.
 
 This is what the `node --test` hang was. The suite reaches teardown and blocks on
-`listener.stop()`. Every standalone probe missed it by ending with `process.exit(0)`
-rather than stopping the listener — the bug lived exactly in the path the quick tests
-skipped.
+`listener.stop()`. Every standalone probe missed it by ending with `process.exit(0)` rather
+than stopping the listener. That is not a fact about moq — it is the third instance of the
+pattern recorded in D69, and it belongs there.
 
 No workaround is available here: a pending native promise cannot be cancelled, and the
 deadlock is in a synchronous native call, so no JavaScript watchdog can rescue it.
