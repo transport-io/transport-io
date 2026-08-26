@@ -31,20 +31,21 @@ export interface BroadcastArgs {
 
 export class Hub {
   readonly #adapter: Adapter
-  readonly #nodeId: string
   readonly #table: EventTable
   readonly #rooms = new Map<string, Map<PeerId, Member>>()
   readonly #peerRooms = new Map<PeerId, Set<string>>()
   readonly #seqs = new Map<number, number>()
 
-  constructor(adapter: Adapter, nodeId: string, table: EventTable) {
+  constructor(adapter: Adapter, table: EventTable) {
     this.#adapter = adapter
-    this.#nodeId = nodeId
     this.#table = table
     // A node receiving its own publish back is normal, so core dedupes by origin node
-    // rather than relying on the adapter to suppress it.
+    // rather than relying on the adapter to suppress it — and dedupes against the
+    // *adapter's* id, which is the one stamped into the envelope. It used to compare
+    // against the Server's separate `nodeId`, so any deployment where those differed
+    // delivered every local broadcast twice, in silence.
     this.#adapter.onRemote((e) => {
-      if (e.nodeId === this.#nodeId) return
+      if (e.nodeId === this.#adapter.nodeId) return
       this.#deliverLocal(e.room, e.frame, e.lane, e.except ?? [])
     })
   }

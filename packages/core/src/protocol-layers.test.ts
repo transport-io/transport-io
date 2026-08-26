@@ -19,7 +19,13 @@ import {
   type WireEvent,
 } from './handshake.ts'
 import { OriginAllocator } from './origin.ts'
-import { DATAGRAM_HEADER_BYTES, MAX_SESSION_HOSTS, ORIGIN_QUARANTINE_MS } from './protocol.ts'
+import {
+  DATAGRAM_HEADER_BYTES,
+  DATAGRAM_TTL_MS,
+  MAX_SESSION_HOSTS,
+  ORIGIN_QUARANTINE_MS,
+  SEQUENCE_STATE_RETENTION_MS,
+} from './protocol.ts'
 import { DatagramQueue, EmitQueue, PeerTooSlowError } from './queue.ts'
 
 describe('event identity', () => {
@@ -277,9 +283,11 @@ describe('origin allocation', () => {
   })
 
   test('the quarantine exceeds both windows it must outlast', () => {
-    // Sequence-state retention (60s) and the datagram TTL (150ms) plus transit.
-    expect(ORIGIN_QUARANTINE_MS).toBeGreaterThan(60_000)
-    expect(ORIGIN_QUARANTINE_MS).toBeGreaterThan(150)
+    // Against the constants, not against 60_000 and 150. With literals the assertion held
+    // while the invariant broke: raise SEQUENCE_STATE_RETENTION_MS to 180s and a reissued
+    // origin has every datagram discarded as stale, with this test still green.
+    expect(ORIGIN_QUARANTINE_MS).toBeGreaterThan(SEQUENCE_STATE_RETENTION_MS)
+    expect(ORIGIN_QUARANTINE_MS).toBeGreaterThan(DATAGRAM_TTL_MS)
   })
 
   test('host ordinals partition the space', () => {

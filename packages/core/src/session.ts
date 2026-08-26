@@ -327,6 +327,18 @@ export class Session {
     }
     // An already-aborted signal must not open a stream just to tear it down.
     if (opts?.signal?.aborted === true) throw abortToTransportError(opts.signal.reason)
+    // An event that declares no `returns` has no response to wait for. The type system
+    // already excludes it from `CallableOf`; this is the same refusal for a caller that
+    // reached the wire without the types — and it names the actual problem instead of
+    // travelling to the responder to come back as "no handler registered", which is a
+    // different fault with a different remedy.
+    if (entry.lane === 'stream' && entry.def.returns === undefined) {
+      throw new TransportError(
+        'WT_UNKNOWN_EVENT',
+        `'${event}' declares no \`returns\`, so there is nothing to await`,
+        'Add `returns` to the event in the contract, or use emit() if it is fire-and-forget.',
+      )
+    }
     if (entry.lane === 'datagram') {
       throw new TransportError(
         'WT_PROTOCOL_ERROR',

@@ -495,8 +495,13 @@ We squash merge, which changes where enforcement matters.
 
 - **PR title is the squashed commit subject**, so the PR title lint gate is load-bearing.
   It is the thing that protects the changelog.
-- **PR body becomes the commit body.** `BREAKING CHANGE:` footers are authored there —
-  document this, it is the part people get wrong.
+- **The PR body does NOT become the commit body.** An earlier draft of this entry said it
+  did and told authors to write `BREAKING CHANGE:` footers there. Three things contradict
+  it: `body-empty` and `footer-empty` in `commitlint.config.ts`, D29's subject-only rule,
+  and `squash_merge_commit_message=BLANK` in `scripts/protect-branch.sh`, which discards the
+  body at merge. The `pr-title` job pipes only the title, so a footer written in the body
+  was never linted *and* never landed. Breaking changes use the `!` marker in the subject,
+  which is the only part that survives; the rationale goes in the changeset or the ADR.
 - The pre-commit hook stays, but its real job is fast local feedback and keeping the
   branch readable during review. Individual commits are squashed away, so the hook is a
   nicety and the PR title gate is the guarantee. The hook does not make the PR gate
@@ -504,7 +509,10 @@ We squash merge, which changes where enforcement matters.
 - Same commitlint config for both so they cannot drift.
 - Repository settings: squash merge only, linear history required, both gates required.
 
-**Scopes are required, not optional:** `feat(core):`, `fix(react):`, `chore(ci):`.
+**Scopes are required, not optional:** `feat(core):`, `fix(ci):`, `chore(repo):` — validated
+against the workspace list in `commitlint.config.ts`, which is `core`, `ci`, `docs`, `deps`,
+`repo`. (`fix(react):` appeared here as an example for a package that does not exist, and
+would have been rejected by the gate this very entry describes.)
 transport-io gets its own commitlint config; the global `^[A-Za-z0-9 ,:]{4,72}$` subject
 rule from another of this author's projects does not travel here. Parentheses are allowed, and the scope is validated
 against the actual workspace package list so `feat(cor):` fails.
@@ -1702,3 +1710,63 @@ D29. It was a scope leak the earlier cleanup missed.
 and not the *gate*. Prose has no such gate, which is why the stale prose survived three
 rounds of review. Where a document states behaviour, prefer a test whose name is the
 statement — see D75 and D78.
+
+### D81. The thirteen deferred items, none of which was deferred
+Every CAN WAIT finding was acted on. Two of them turned out not to be cosmetic at all, and
+that is the entry's point: "can wait" was a judgement made from the outside, and two of
+those judgements were wrong.
+
+**Gates that could not fail.**
+
+- `test:node` ran through `--if-present` and a glob that exits 0 on zero matches — two
+  independent ways for the only required check that exercises the native transport to be
+  green while testing nothing. `scripts/run-node-tests.sh` asserts the reported test count
+  instead. Verified both ways: 7 tests on the real glob, exit 1 on a glob that matches
+  nothing.
+- The D14 import boundary was a Biome rule listing three package specifiers, so
+  `import … from './transport/fails.node.ts'` inside a plain `*.test.ts` passed `biome ci`
+  cleanly — measured, 0 diagnostics. That is the *more likely* of the two mistakes: nobody
+  reaches for the raw package name when the wrapper is next door. Replaced by
+  `scripts/check-boundaries.ts`, which checks the property rather than a list of names.
+- `check-node.sh` compared majors while its own error text named 22.18, so every Node
+  22.0–22.17 passed and then died with the exact error the script exists to convert.
+  `scripts/check-node.test.sh` runs it against stub versions, because the versions being
+  tested cannot run a TypeScript test.
+- `pull_request:` had no `types:`, so `edited` fired nothing: a PR retitled after the title
+  check went green kept the green check, and the squash subject comes from the title.
+
+**Assertions that could not fail.** The e2e cursor check matched `translate(\d+px, \d+px)`,
+which all twelve positions satisfy including the first — a sign error freezing the cursor
+after one datagram passed it. It now asserts the exact distance travelled. The quarantine
+invariant compared against literals rather than the constants it is an invariant *between*.
+`call.test.ts` had two tests on one code path; `call()` now refuses a `returns`-less event
+by name, so the two faults have distinct messages matching their distinct remedies.
+
+**The one that was not cosmetic.** `Hub`'s remote-delivery branch had never executed a line,
+and writing the first test for it found a real defect: **the Hub deduped against the
+`Server`'s `nodeId` while the envelope carries the *adapter*'s.** Where those differ — which
+is any deployment configuring them separately — a node delivered every local broadcast
+twice, once locally and once back off the bus. `nodeId` is now part of the `Adapter`
+interface and the dedup reads it from there, so the two cannot diverge.
+
+Writing that test also required making the adapters able to model more than one node at all:
+both `MemoryAdapter` and `HostileAdapter` were per-instance islands, which is *why* the path
+was never tested. They now accept a shared `memoryBus()`.
+
+**The documentation gate was blind in both directions.** Blocks were concatenated per
+document, and TypeScript hoists imports — so a block could use a name imported by a *later*
+block. That is how the README's flagship "the whole surface, in one file" snippet called
+`defineContract` without importing it. Fixing the snippet then failed as a duplicate
+identifier, which is the same blindness from the other side. Blocks now compile against
+their prefix with imports deduped per binding, and a block that claims to be a whole file is
+tagged ```ts standalone and must compile with nothing before it. Verified by removing the
+import again: the gate fails.
+
+**Documents contradicting their own tooling.** D29 told authors to write `BREAKING CHANGE:`
+footers in the PR body, which `body-empty`, `footer-empty` and
+`squash_merge_commit_message=BLANK` all discard — and the `pr-title` job pipes only the
+title, so such a footer was never linted *and* never landed. The same entry offered
+`fix(react):` as an example scope, which the gate it was describing rejects.
+
+**Nothing was deferred, so nothing carries a trigger.** If an item here needs revisiting it
+will be because a gate started failing, which is the outcome all of them were rebuilt for.

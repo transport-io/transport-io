@@ -27,6 +27,16 @@ export interface BroadcastOptions {
 }
 
 export interface Adapter {
+  /**
+   * The node this adapter publishes as. It is the identity stamped into every
+   * `RemoteEnvelope`, and therefore the identity core dedupes against.
+   *
+   * Declared here rather than left to implementations because `Server` also has a
+   * `nodeId`, and when the two diverged the dedup guard silently never fired: a node
+   * delivered its own broadcast twice, once locally and once back off the bus. Reading
+   * both from one place makes that impossible rather than merely unlikely.
+   */
+  readonly nodeId: string
   join(room: string, peer: PeerId): Promise<void>
   leave(room: string, peer: PeerId): Promise<void>
   broadcast(room: string, frame: Frame, opts: BroadcastOptions): Promise<void>
@@ -43,13 +53,27 @@ export interface Publisher {
 }
 
 /** Ships in core and is the default, so installing this library needs no infrastructure. */
+/**
+ * A bus two or more `MemoryAdapter`s can share, so a single process can model several
+ * nodes. Without it `MemoryAdapter` is per-instance and two of them cannot hear each
+ * other, which is precisely why the cross-node delivery path had never executed a line.
+ */
+export function memoryBus(): MemoryBus {
+  return { listeners: [] }
+}
+
+export interface MemoryBus {
+  readonly listeners: ((e: RemoteEnvelope) => void)[]
+}
+
 export class MemoryAdapter implements Adapter {
   readonly #rooms = new Map<string, Set<PeerId>>()
-  readonly #listeners: ((e: RemoteEnvelope) => void)[] = []
+  readonly #bus: MemoryBus
   readonly nodeId: string
 
-  constructor(nodeId: string) {
+  constructor(nodeId: string, bus: MemoryBus = memoryBus()) {
     this.nodeId = nodeId
+    this.#bus = bus
   }
 
   async join(room: string, peer: PeerId): Promise<void> {
@@ -78,10 +102,10 @@ export class MemoryAdapter implements Adapter {
       nodeId: this.nodeId,
       ...(opts.except === undefined ? {} : { except: opts.except }),
     }
-    for (const l of this.#listeners) l(envelope)
+    for (const l of this.#bus.listeners) l(envelope)
   }
 
   onRemote(cb: (e: RemoteEnvelope) => void): void {
-    this.#listeners.push(cb)
+    this.#bus.listeners.push(cb)
   }
 }

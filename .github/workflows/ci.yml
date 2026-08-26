@@ -1,7 +1,12 @@
 name: CI
 
 on:
+  # `types` stated explicitly: the default set does not include `edited`, so a PR retitled
+  # after the title check went green kept the green check — and the squash subject is taken
+  # from the title, so an unvalidated subject landed on main. Same hole for the
+  # docs-freshness job, which reads DOCS_ACK out of the PR body.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -55,6 +60,8 @@ jobs:
         run: bun run scripts/check-docs.ts
       - name: workflows
         run: bun run scripts/check-workflows.ts
+      - name: import boundaries
+        run: bun run scripts/check-boundaries.ts
 
   unit:
     name: unit tests (bun — never loads the transport)
@@ -81,7 +88,8 @@ jobs:
           echo "glibc $V"
           [ "$(printf '%s\n2.38\n' "$V" | sort -V | head -1)" = "2.38" ] || {
             echo "glibc $V is below 2.38; the transport prebuild will not load"; exit 1; }
-      - run: npm run test:node --if-present
+      # No `--if-present`: a missing script must fail, not pass silently.
+      - run: npm run test:node
 
   e2e:
     name: e2e (playwright, real chrome and real quic)

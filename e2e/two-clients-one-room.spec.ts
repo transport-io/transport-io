@@ -43,17 +43,40 @@ test('two clients in one room exchange a message on each lane', async ({ browser
   expect(box).not.toBeNull()
   if (box === null) return
 
-  // Several moves, because the lane is allowed to drop any individual one.
-  for (let i = 0; i < 12; i++) {
-    await alice.mouse.move(box.x + 60 + i * 12, box.y + 50 + i * 6)
+  const STEP_X = 12
+  const STEPS = 12
+
+  const cursor = bob.locator('#surface .cursor')
+
+  // One move first, so the dot exists and its starting position can be read. Reading the
+  // position rather than computing it keeps this independent of how the page maps a
+  // pointer event onto the surface.
+  await alice.mouse.move(box.x + 60, box.y + 50)
+  await expect(cursor).toHaveCount(1, { timeout: 10_000 })
+  const positionOf = async (): Promise<readonly [number, number]> => {
+    const style = await cursor.getAttribute('style')
+    const m = /translate\((-?\d+(?:\.\d+)?)px, (-?\d+(?:\.\d+)?)px\)/.exec(style ?? '')
+    expect(m).not.toBeNull()
+    return [Number(m?.[1]), Number(m?.[2])]
+  }
+  const [firstX] = await positionOf()
+
+  // Several more moves, because the lane is allowed to drop any individual one.
+  for (let i = 1; i < STEPS; i++) {
+    await alice.mouse.move(box.x + 60 + i * STEP_X, box.y + 50 + i * 6)
     await alice.waitForTimeout(30)
   }
 
-  const cursor = bob.locator('#surface .cursor')
-  await expect(cursor).toHaveCount(1, { timeout: 10_000 })
-  // Last-write-wins: the dot ends near the final position, not the first.
-  const transform = await cursor.getAttribute('style')
-  expect(transform).toMatch(/translate\(\d+px, \d+px\)/)
+  // Last-write-wins: the dot ends at the FINAL position, not the first.
+  //
+  // The old assertion was `toMatch(/translate\(\d+px, \d+px\)/)`, which every one of the
+  // twelve positions satisfies — including the first. A sign error in `SequenceGate.accept`
+  // that froze the cursor after one datagram passed it went straight through. Movement is
+  // the only thing that distinguishes last-write-wins from first-write-wins, so movement is
+  // what is asserted, and by the exact distance travelled rather than merely "more".
+  await expect
+    .poll(async () => (await positionOf())[0], { timeout: 5_000 })
+    .toBe(firstX + (STEPS - 1) * STEP_X)
 
   // Alice does not receive her own cursor — the server excludes the sender.
   await expect(alice.locator('#surface .cursor')).toHaveCount(0)

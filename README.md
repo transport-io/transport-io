@@ -147,9 +147,9 @@ use WSL.
 
 ## Use
 
-```ts
+```ts standalone
 // contract.ts — the whole surface, in one file
-import { type MapOf, type$ } from 'transport-io'
+import { defineContract, type MapOf, type$ } from 'transport-io'
 
 export const contract = defineContract({
   chat:   { lane: 'stream',   payload: type$<{ from: string; body: string }>() },

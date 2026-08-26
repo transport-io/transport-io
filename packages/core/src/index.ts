@@ -3,6 +3,8 @@ export {
   type BroadcastOptions,
   type Frame as AdapterFrame,
   MemoryAdapter,
+  type MemoryBus,
+  memoryBus,
   type PeerId,
   // `Adapter.onRemote` is typed in terms of this, so anyone writing a Redis adapter needs
   // it. Without it their only options were `unknown` or retyping the interface by hand —

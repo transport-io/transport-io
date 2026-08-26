@@ -6,16 +6,12 @@ import { test } from 'node:test'
 import { connectMoq, listenMoq } from './transport/moq.node.ts'
 import { randomPort, runParity } from './transport/parity-suite.ts'
 
-// SKIPPED, with the reason, rather than deleted or left to hang.
+// SKIPPED for a now-understood reason: `NapiServer.close()` deadlocks. See D71.
 //
-// The identical flow passes under plain `node` — sessions, both lanes, call(), and the
-// caller-side abort all work, verified by hand. Under `node --test` it hangs after
-// binding, and the module loads and binds fine there, so the cause is somewhere in the
-// session flow under the test runner and is not yet root-caused.
-//
-// Un-skip when that is understood. Leaving it enabled would make the suite hang, and
-// deleting it would hide a gap that blocks adoption.
-// SKIPPED for a now-understood reason: `NapiServer.close()` deadlocks.
+// This comment used to be stacked on top of an earlier, stale one that ended "un-skip when
+// that is understood". It *is* understood, and following that instruction would hang the
+// required integration job for its full timeout on every pull request. A skip reason that
+// outlives its own investigation is worse than none: it invites exactly the wrong action.
 //
 // Root-caused, not guessed. Minimal reproduction with no transport-io involved, kept at
 // bench/moq-close-deadlock.node.ts:

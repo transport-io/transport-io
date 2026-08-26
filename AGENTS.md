@@ -198,6 +198,11 @@ import type {
 } from 'transport-io'
 
 class MyAdapter implements Adapter {
+  // The identity stamped into every envelope you publish, and the one core dedupes
+  // against. One per node — sharing an adapter instance between two servers gives them
+  // one identity and breaks the dedup in both directions.
+  readonly nodeId = 'node-a'
+
   async join(room: string, peer: PeerId): Promise<void> {}
   async leave(room: string, peer: PeerId): Promise<void> {}
   async broadcast(room: string, frame: AdapterFrame, opts: BroadcastOptions): Promise<void> {}

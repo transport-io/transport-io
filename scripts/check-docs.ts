@@ -44,17 +44,36 @@ const fail = (msg: string): void => {
 
 // ---------------------------------------------------------------- doc snippets
 let ignoredBlocks = 0
-function extractBlocks(file: string): { line: number; body: string }[] {
+interface Block {
+  readonly line: number
+  readonly body: string
+  /**
+   * Tagged ```ts standalone: this block must compile with nothing before it.
+   *
+   * Prefix concatenation lets a block inherit imports from earlier blocks, which is right
+   * for a document read top to bottom — but wrong for a block a reader copies whole. The
+   * README's contract snippet says "the whole surface, in one file" and called
+   * `defineContract` without importing it; an earlier block three screens up had the
+   * import, so every form of concatenation accepted it and the reader got a broken file.
+   */
+  readonly standalone: boolean
+}
+
+function extractBlocks(file: string): Block[] {
   if (!existsSync(file)) return []
   const text = readFileSync(file, 'utf8')
-  const out: { line: number; body: string }[] = []
+  const out: Block[] = []
   for (const m of text.matchAll(/^```(?:ts|typescript)([^\n]*)\n([\s\S]*?)^```/gm)) {
     const info = (m[1] ?? '').trim()
     if (info.includes('ignore') || info.includes('no-check')) {
       ignoredBlocks++
       continue
     }
-    out.push({ line: text.slice(0, m.index).split('\n').length, body: m[2] ?? '' })
+    out.push({
+      line: text.slice(0, m.index).split('\n').length,
+      body: m[2] ?? '',
+      standalone: info.includes('standalone'),
+    })
   }
   return out
 }
@@ -75,12 +94,66 @@ let fileCount = 0
 for (const doc of ['API.md', 'README.md', 'AGENTS.md']) {
   const blocks = extractBlocks(doc)
   if (blocks.length === 0) continue
-  // Blocks from one document are fragments of one surface, so they are concatenated in
-  // source order. Compiling each alone would fail on cross-references, not on defects.
-  const body = blocks.map((b) => `// ${doc}:${b.line}\n${b.body}`).join('\n')
-  writeFileSync(join(OUT, `${doc.replace(/\W/g, '_')}.ts`), `// generated from ${doc}\n${body}`)
+
+  /**
+   * Block N compiles against blocks 1..N, in source order — a *prefix*, not the whole
+   * document.
+   *
+   * The difference is the whole gate. Concatenating every block into one module made this
+   * blind: TypeScript hoists imports, so a block could use a name that a *later* block
+   * imported. That is exactly how the README's flagship snippet called `defineContract`
+   * without importing it and still compiled — the import was three blocks further down the
+   * page, where no reader copying the first block would ever see it.
+   *
+   * A prefix keeps the narrative working, because a later block legitimately builds on the
+   * `contract` and `AppMap` an earlier one defined, and that is how the documents are meant
+   * to be read. It just refuses to let a block borrow from its own future.
+   *
+   * Import *bindings* already in scope are dropped, per module — a document re-stating an
+   * import so a snippet reads correctly on its own must not then fail as a duplicate
+   * identifier. Dropping whole duplicate lines is not enough: README imports
+   * `defineContract` alone in one block and alongside `MapOf` and `type$` in another, so
+   * the lines differ while the binding collides. A block that imports nothing still has
+   * nothing, which is the case this gate exists to catch.
+   */
+  const prefix: string[] = []
+  for (const b of blocks) {
+    prefix.push(`// ${doc}:${b.line}\n${b.body}`)
+    const scope = b.standalone ? [`// ${doc}:${b.line}\n${b.body}`] : prefix
+    const seen = new Map<string, Set<string>>()
+    const source = scope
+      .join('\n')
+      .split('\n')
+      .map((line) => {
+        const m = /^(\s*import\s+\{)([^}]*)(\}\s+from\s+['"])([^'"]+)(['"].*)$/.exec(line)
+        if (m === null) return line
+        const [, head, names, mid, module_, tail] = m
+        const already = seen.get(module_ as string) ?? new Set<string>()
+        const kept = (names as string)
+          .split(',')
+          .map((n) => n.trim())
+          .filter((n) => n.length > 0)
+          .filter((n) => {
+            const binding = n
+              .replace(/^type\s+/, '')
+              .split(/\s+as\s+/)
+              .pop() as string
+            if (already.has(binding)) return false
+            already.add(binding)
+            return true
+          })
+        seen.set(module_ as string, already)
+        return kept.length === 0 ? '' : `${head} ${kept.join(', ')} ${mid}${module_}${tail}`
+      })
+      .join('\n')
+    const name = `${doc.replace(/\W/g, '_')}__${String(b.line).padStart(4, '0')}.ts`
+    writeFileSync(
+      join(OUT, name),
+      `// generated from ${doc}, blocks up to line ${b.line}\n${source}`,
+    )
+    fileCount++
+  }
   blockCount += blocks.length
-  fileCount++
 }
 console.log(
   `docs: ${blockCount} block(s) checked, ${ignoredBlocks} awaiting implementation (ceiling ${MAX_IGNORED_BLOCKS})`,

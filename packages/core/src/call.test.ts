@@ -84,10 +84,14 @@ describe('call: the stream is the correlation', () => {
     await expect(client.call('nope', {})).rejects.toThrow(TransportError)
   })
 
-  test('emit-only events are not callable', async () => {
+  test('an event declaring no `returns` is refused by name, not as a missing handler', async () => {
     const { client } = await wire()
+    // Was a bare `.rejects.toThrow()` on the same WT_UNKNOWN_EVENT path as the test above,
+    // so it asserted nothing the neighbour did not. The two faults have different remedies
+    // — add `returns` to the contract, versus register a handler — so the message has to
+    // say which one this is.
     // @ts-expect-error 'chat' declares no `returns`
-    await expect(client.call('chat', { body: 'x' })).rejects.toThrow()
+    await expect(client.call('chat', { body: 'x' })).rejects.toThrow(/declares no/)
   })
 })
 

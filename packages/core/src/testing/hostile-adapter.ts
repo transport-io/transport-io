@@ -11,7 +11,15 @@
  * fails on command. If core passes against this, the boundary should survive a real
  * broker. No network and no Redis: hostility is cheaper than infrastructure.
  */
-import type { Adapter, BroadcastOptions, Frame, PeerId, RemoteEnvelope } from '../adapter.ts'
+import {
+  type Adapter,
+  type BroadcastOptions,
+  type Frame,
+  type MemoryBus,
+  memoryBus,
+  type PeerId,
+  type RemoteEnvelope,
+} from '../adapter.ts'
 
 export interface HostileOptions {
   /** Delivery is deferred by this many milliseconds. Real buses are not synchronous. */
@@ -24,7 +32,7 @@ export interface HostileOptions {
 
 export class HostileAdapter implements Adapter {
   readonly #rooms = new Map<string, Set<PeerId>>()
-  readonly #listeners: ((e: RemoteEnvelope) => void)[] = []
+  readonly #bus: MemoryBus
   readonly #opts: HostileOptions
   readonly nodeId: string
 
@@ -36,9 +44,15 @@ export class HostileAdapter implements Adapter {
   #pending: RemoteEnvelope[] = []
   #timer: ReturnType<typeof setTimeout> | undefined
 
-  constructor(nodeId: string, opts: HostileOptions = {}) {
+  /**
+   * `bus` lets several of these model several nodes on one broker. Without it each
+   * instance is its own island, which is why the cross-node path went untested against the
+   * adapter written specifically to stress the adapter boundary.
+   */
+  constructor(nodeId: string, opts: HostileOptions = {}, bus: MemoryBus = memoryBus()) {
     this.nodeId = nodeId
     this.#opts = opts
+    this.#bus = bus
   }
 
   async join(room: string, peer: PeerId): Promise<void> {
@@ -103,7 +117,7 @@ export class HostileAdapter implements Adapter {
   }
 
   onRemote(cb: (e: RemoteEnvelope) => void): void {
-    this.#listeners.push(cb)
+    this.#bus.listeners.push(cb)
   }
 
   /** Deliberately NOT exposed to core: no node may assume it knows full membership. */
@@ -123,7 +137,7 @@ export class HostileAdapter implements Adapter {
       const batch = this.#pending
       this.#pending = []
       if (this.#opts.reorder === true) batch.reverse()
-      for (const e of batch) for (const l of this.#listeners) l(e)
+      for (const e of batch) for (const l of this.#bus.listeners) l(e)
     }, this.#opts.latencyMs ?? 1)
   }
 

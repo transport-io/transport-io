@@ -184,7 +184,7 @@ fast feedback, CI is the guarantee. See D61.
 ## Commits
 
 Conventional Commits, scope required and validated against the workspace package list:
-`feat(core):`, `fix(react):`, `chore(ci):`.
+`feat(core):`, `fix(ci):`, `chore(repo):`.
 
 **Subject only, never a body.** commitlint enforces an empty body. Breaking changes use
 the `!` marker, because a `BREAKING CHANGE:` footer would require one:
