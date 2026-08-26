@@ -1,3 +1,25 @@
+export {
+  type Adapter,
+  type BroadcastOptions,
+  type Frame as AdapterFrame,
+  MemoryAdapter,
+  type PeerId,
+} from './adapter.ts'
+export { Client, type ClientOptions, type ClientState, type Status } from './client.ts'
+export {
+  type AnyMap,
+  type CallableOf,
+  type Contract,
+  defineContract,
+  type EventDef,
+  type EventShape,
+  type Infer,
+  type Lane,
+  type MapOf,
+  type Schema,
+  type$,
+} from './contract.ts'
+export { maxDatagramPayload } from './datagram.ts'
 export { TransportError, type TransportErrorCode } from './errors.ts'
 export { encodeFrame, type Frame, FrameDecoder, maxPayloadFor } from './framer.ts'
 export {
@@ -9,8 +31,17 @@ export {
   FrameType,
   MAX_CALL_PAYLOAD_BYTES,
   MAX_EMIT_PAYLOAD_BYTES,
+  PROTOCOL_VERSION,
   ResetCode,
   STREAM_FRAME_OVERHEAD_BYTES,
 } from './protocol.ts'
+export {
+  createServer,
+  type RoomTarget,
+  Server,
+  type ServerOptions,
+  type ServerPeer,
+} from './server.ts'
+export type { SessionStats } from './session.ts'
 
 export const VERSION: string = '0.0.0'

@@ -30,8 +30,10 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: '24' }
       - run: npm ci
-      - name: typecheck
+      - name: typecheck (library, isolatedDeclarations on)
         run: npx tsc --build
+      - name: typecheck (tests and type-level tests)
+        run: npx tsc -p tsconfig.test.json
       - name: biome
         run: npx biome ci .
       - name: dead code

@@ -6,6 +6,9 @@
  * build fails until you change the other.
  */
 
+/** PROTOCOL.md §4.2 — Stage 0 requires exact equality and refuses otherwise. */
+export const PROTOCOL_VERSION = 0
+
 /** PROTOCOL.md §5.2 */
 export const FrameType = {
   HANDSHAKE: 0x01,
@@ -46,6 +49,12 @@ export const DATAGRAM_HEADER_BYTES = 13
 export const DATAGRAM_CONSERVATIVE_FLOOR = 1024
 export const DATAGRAM_CONSERVATIVE_PAYLOAD_MAX: number =
   DATAGRAM_CONSERVATIVE_FLOOR - DATAGRAM_HEADER_BYTES
+
+/** PROTOCOL.md §9 — per-peer bounds. Numbers, not adjectives. */
+export const DATAGRAM_QUEUE_MAX = 64
+export const EMIT_QUEUE_MAX = 256
+/** Checked at dequeue, not enqueue: overflow handles a burst, TTL handles a stall. */
+export const DATAGRAM_TTL_MS = 150
 
 /** PROTOCOL.md §7.3 — a receiver discards (origin, event) sequence state after this idle. */
 export const SEQUENCE_STATE_RETENTION_MS = 60_000

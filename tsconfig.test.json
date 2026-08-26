@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "isolatedDeclarations": false,
+    "declaration": false,
+    "composite": false,
+    "types": ["bun"],
+    "declarationMap": false
+  },
+  "include": ["packages/*/src/**/*.test.ts", "packages/*/src/**/*.test-d.ts", "scripts/**/*.ts"]
+}

@@ -63,7 +63,7 @@ function extractBlocks(file: string): { line: number; body: string }[] {
  * A block tagged `ignore` is a promise to come back. The count is printed on every run
  * and must only ever go down, so the exemption cannot quietly become permanent.
  */
-const MAX_IGNORED_BLOCKS = 22
+const MAX_IGNORED_BLOCKS = 1
 
 rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })

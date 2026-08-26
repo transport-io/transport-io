@@ -6,6 +6,7 @@
       "project": ["scripts/**/*.ts"]
     },
     "packages/core": {
+      "entry": ["src/**/*.test.ts", "src/**/*.test-d.ts", "src/**/*.node.test.ts"],
       "project": ["src/**/*.ts"]
     }
   }

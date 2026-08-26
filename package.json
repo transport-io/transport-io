@@ -20,7 +20,7 @@
     "prepare": "lefthook install",
     "test:node": "node --test packages/*/src/**/*.node.test.ts",
     "test:unit": "bun test",
-    "typecheck": "tsc --build",
+    "typecheck": "tsc --build && tsc -p tsconfig.test.json",
     "verify:pack": "npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core"
   },
   "devDependencies": {
@@ -31,6 +31,7 @@
     "@commitlint/config-conventional": "^21.2.2",
     "@commitlint/types": "^21.2.0",
     "@types/bun": "^1.4.0",
+    "expect-type": "^1.4.0",
     "fast-check": "^4.9.0",
     "knip": "^6.32.2",
     "lefthook": "^2.1.10",
