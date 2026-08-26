@@ -1,0 +1,16 @@
+# Fast local feedback. The PR-title gate in CI is the guarantee (DECISIONS.md D29).
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: '*.{ts,json}'
+      run: npx biome check --no-errors-on-unmatched {staged_files}
+    typecheck:
+      run: npx tsc --build
+    docs-freshness:
+      run: bun run scripts/docs-freshness.ts
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx commitlint --edit {1}

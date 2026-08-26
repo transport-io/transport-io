@@ -1,0 +1,36 @@
+{
+  "name": "transport-io-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --build",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "deadcode": "knip",
+    "test:unit": "bun test",
+    "test:node": "node --test packages/*/src/**/*.node.test.ts",
+    "docs:check": "bun run scripts/check-docs.ts",
+    "build": "tsc --build",
+    "verify:pack": "npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@biomejs/biome": "^2.5.10",
+    "@changesets/cli": "^3.0.1",
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "@commitlint/types": "^21.2.0",
+    "@types/bun": "^1.4.0",
+    "knip": "^6.32.2",
+    "lefthook": "^2.1.10",
+    "publint": "^0.3.24",
+    "typescript": "^7.0.2"
+  }
+}

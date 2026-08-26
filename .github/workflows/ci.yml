@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Fast checks first. All are required to merge.
+jobs:
+  pr-title:
+    name: PR title (the squashed commit subject)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v5
+        with: { node-version: '24' }
+      - run: npm ci
+      # The PR title becomes the commit subject under squash merge, so this gate —
+      # not the local hook — is what protects the changelog. Same config as the hook.
+      - run: echo "${{ github.event.pull_request.title }}" | npx commitlint
+
+  static:
+    name: typecheck / lint / dead code / docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v5
+        with: { node-version: '24' }
+      - run: npm ci
+      - name: typecheck
+        run: npx tsc --build
+      - name: biome
+        run: npx biome ci .
+      - name: dead code
+        run: npx knip
+      - name: documentation
+        run: bun run scripts/check-docs.ts
+
+  unit:
+    name: unit tests (bun — never loads the transport)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: npm ci
+      - run: bun test
+
+  integration:
+    name: integration tests (node — loads the transport)
+    # glibc image. The linux prebuild needs GLIBC_2.38, so not Alpine and not a
+    # default -slim tag, which are byte-identical to bookworm (glibc 2.36).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '24' }
+      - run: npm ci
+      - name: assert glibc >= 2.38
+        run: |
+          V=$(ldd --version | head -1 | grep -oE '[0-9]+\.[0-9]+$')
+          echo "glibc $V"
+          [ "$(printf '%s\n2.38\n' "$V" | sort -V | head -1)" = "2.38" ] || {
+            echo "glibc $V is below 2.38; the transport prebuild will not load"; exit 1; }
+      - run: npm run test:node --if-present
+
+  publish-shape:
+    name: pack validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '24' }
+      - run: npm ci
+      - run: npx tsc --build
+      - run: npx attw --pack packages/core --profile esm-only
+      - run: npx publint packages/core
+      # The emitted .d.ts must be consumable by the oldest TypeScript we claim.
+      # Floor measured, not assumed: 4.9 fails on `const` type parameters, 5.0 passes.
+      - name: consumer TypeScript floor (5.0)
+        run: |
+          npm i --no-save --no-audit --no-fund typescript@5.0.4
+          ./node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck \
+            --module esnext --moduleResolution bundler --target es2022 \
+            packages/core/dist/index.d.ts
+
+  changeset:
+    name: changeset present
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v5
+        with: { node-version: '24' }
+      - run: npm ci
+      - name: a package changed without a changeset
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          if echo "$CHANGED" | grep -qE '^packages/[^/]+/src/'; then
+            echo "$CHANGED" | grep -qE '^\.changeset/.+\.md$' || {
+              echo "A package changed with no changeset."
+              echo "Tooling and CI PRs take an empty one: npx changeset --empty"
+              exit 1; }
+          fi
+
+  docs-freshness:
+    name: source changed without documentation
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: oven-sh/setup-bun@v2
+      - run: git fetch origin ${{ github.base_ref }} --depth=1
+      # Recorded in CI rather than clicked past locally.
+      - run: bun run scripts/docs-freshness.ts --base origin/${{ github.base_ref }}
+        env:
+          DOCS_ACK: ${{ contains(github.event.pull_request.body, 'DOCS_ACK') && '1' || '0' }}
