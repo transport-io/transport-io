@@ -12,8 +12,7 @@ that declare `returns`**. Everything else follows from those.
 ## Install
 
 ```
-# not on npm yet, and a git install gets the private monorepo root:
-#   git clone https://github.com/v0id-user/transport-io && npm install && npm run build
+npm install transport-io
 npm install @fails-components/webtransport-transport-http3-quiche   # server only
 ```
 

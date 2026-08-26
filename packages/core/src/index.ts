@@ -51,4 +51,12 @@ export {
 } from './server.ts'
 export type { SessionStats } from './session.ts'
 
-export const VERSION: string = '0.0.0'
+/**
+ * Hand-maintained and asserted against `package.json` by `index.test.ts`, because
+ * `isolatedDeclarations` forbids inferring it from an import and a version that drifts from
+ * its manifest is a lie in the one place a user checks first.
+ *
+ * `changeset version` moves the manifest, so this moves in the same commit — which the test
+ * enforces rather than trusting anyone to remember.
+ */
+export const VERSION: string = '0.1.0'
