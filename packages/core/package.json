@@ -21,6 +21,7 @@
     "build": "tsc --build"
   },
   "dependencies": {
+    "@fails-components/webtransport": "1.6.7",
     "@standard-schema/spec": "^1.1.0"
   }
 }

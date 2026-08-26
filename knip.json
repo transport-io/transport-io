@@ -1,5 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreDependencies": ["@fails-components/webtransport-transport-http3-quiche"],
+  "ignoreBinaries": ["openssl"],
   "workspaces": {
     ".": {
       "entry": ["scripts/*.ts"],
