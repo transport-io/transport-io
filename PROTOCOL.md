@@ -229,9 +229,16 @@ forward it.
 protocol error. `Length` counts only bytes *after* itself, so the four bytes of the Length
 field are not included — the same convention its minimum of 9 already reflects.
 
-The 1 MiB payload cap applies to **`EMIT` frames only**. `CALL_REQUEST` and
-`CALL_RESPONSE` frames are capped at 16 MiB, because a call is the documented home for
-payloads too large to emit and inheriting the emit cap would leave them nowhere to go.
+The 16 MiB cap applies to the **call frames** — `CALL_REQUEST`, `CALL_RESPONSE` and
+`CALL_ERROR` — because a call is the documented home for payloads too large to emit and
+inheriting the emit cap would leave them nowhere to go. **Every other frame type is capped
+at 1 MiB**, including `EMIT` and the control frames, which are orders of magnitude smaller
+in practice.
+
+A receiver MUST decide the cap from the frame type rather than applying the largest one
+universally. The type byte is at a fixed offset inside the header, so it is readable before
+any payload has to be buffered; applying the call cap to an `EMIT` frame lets a peer make a
+receiver hold sixteen times what this section permits.
 Exceeding either cap is a protocol error raised by the decoder as
 `WT_PAYLOAD_TOO_LARGE` — not a §10.1 reset code, which is a distinction this document
 previously got wrong. On a call stream the receiver abandons the stream, and the

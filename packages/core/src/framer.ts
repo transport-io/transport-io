@@ -97,11 +97,26 @@ export class FrameDecoder {
         )
       }
       const payloadLength = length - STREAM_HEADER_BYTES
-      if (payloadLength > MAX_CALL_PAYLOAD_BYTES) {
+      // §5.3 gives calls 16 MiB and everything else 1 MiB. This enforced the call cap for
+      // every frame type, so a peer could declare 16 MiB on the emit lane — sixteen times
+      // its documented cap — and the decoder would buffer toward it.
+      //
+      // The type byte is at offset 4, so it is readable as soon as five bytes are, which is
+      // before any payload has to be held. Until then the universal cap applies, which
+      // bounds the wait rather than assuming the generous case.
+      const type_ = this.#buf.byteLength > 4 ? view.getUint8(4) : undefined
+      const cap =
+        type_ === undefined ||
+        type_ === FrameType.CALL_REQUEST ||
+        type_ === FrameType.CALL_RESPONSE ||
+        type_ === FrameType.CALL_ERROR
+          ? MAX_CALL_PAYLOAD_BYTES
+          : MAX_EMIT_PAYLOAD_BYTES
+      if (payloadLength > cap) {
         throw new TransportError(
           'WT_PAYLOAD_TOO_LARGE',
-          `frame declares a ${payloadLength}-byte payload, above every cap`,
-          'Split the payload. See PROTOCOL.md §5.1.',
+          `frame declares a ${payloadLength}-byte payload, above the ${cap}-byte cap for its type`,
+          'Split the payload, or use a call. See PROTOCOL.md §5.3.',
         )
       }
 

@@ -661,6 +661,11 @@ export class Session {
   }
 
   #onDatagram(bytes: Uint8Array): void {
+    // PROTOCOL.md §7 and ADR 0009: a datagram before the handshake is discarded silently.
+    // The stream lane has had this guard all along; the datagram lane had none, so an
+    // early packet was decoded and handed to the application for a session whose contract
+    // had not been agreed. A second implementation drops it, and this one rendered it.
+    if (this.#negotiated === undefined) return
     void (async () => {
       try {
         const dg = decodeDatagram(bytes)
