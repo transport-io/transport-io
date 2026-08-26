@@ -14,6 +14,8 @@
     "bench:stream-churn": "./scripts/check-node.sh && node --expose-gc packages/core/src/bench/stream-churn.node.ts",
     "build": "tsc --build",
     "check:boundaries": "bun run scripts/check-boundaries.ts",
+    "check:gate-inputs": "bun run scripts/check-gate-inputs.ts",
+    "check:install": "bun run scripts/check-install-line.ts",
     "check:node": "./scripts/check-node.sh",
     "check:norms": "bun run scripts/check-norms.ts",
     "check:workflows": "bun run scripts/check-workflows.ts",
@@ -25,6 +27,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:staged": "biome check --no-errors-on-unmatched",
+    "preflight": "bun run scripts/check-gate-inputs.ts && bun run scripts/check-install-line.ts && npm run verify:pack",
     "prepare": "lefthook install",
     "soak": "./scripts/check-node.sh && node --expose-gc scripts/soak.node.ts",
     "soak:churn": "./scripts/check-node.sh && node --expose-gc scripts/soak-churn.node.ts",
@@ -32,7 +35,7 @@
     "test:node": "./scripts/run-node-tests.sh",
     "test:unit": "bun test --path-ignore-patterns=\"**/*.node.test.ts\" --path-ignore-patterns=\"e2e/**\"",
     "typecheck": "tsc --build && tsc -p tsconfig.test.json",
-    "verify:pack": "npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core"
+    "verify:pack": "bun run scripts/check-gate-inputs.ts && npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

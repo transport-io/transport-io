@@ -88,8 +88,17 @@ There are no correlation identifiers, because the stream **is** the correlation.
 call therefore cannot block another call: QUIC flow control applies per stream.
 
 **The response is a sequence of frames terminated by stream close, not a single frame with
-a length.** Version 0 senders emit exactly one `CALL_RESPONSE` frame, but receivers MUST
-<!-- norm: receiver-accepts-multi-frame-response -> UNPROVEN: no test sends more than one CALL_RESPONSE on a stream; D7 reserves the shape for token streaming and nothing produces it yet -->
+a length.**
+
+> **Reserved, not implemented.** No version 0 sender emits more than one `CALL_RESPONSE`,
+> and nothing in this implementation produces the multi-frame shape. It exists so that
+> token streaming can be added without a protocol break (D7). Do not build a receive loop
+> expecting a second frame from a version 0 peer — it will not arrive. Do build one that
+> *tolerates* a second frame, because that tolerance is what keeps the future addition from
+> being a break, and it is required below.
+
+Version 0 senders emit exactly one `CALL_RESPONSE` frame, but receivers MUST
+<!-- norm: receiver-accepts-multi-frame-response -> packages/core/src/reserved-and-limits.test.ts -->
 accept any number, so that incremental responses can be added later without a protocol
 break.
 
@@ -465,7 +474,7 @@ The normative requirements are:
    million, 57%. Exhaustion becomes a genuine **limit on concurrency**, roughly 4.2 million
    live-plus-quarantined sessions per host, and never a function of how long the host has
    been up. A host that actually reaches it MUST refuse new sessions with
-<!-- norm: host-ordinal-exhaustion-refuses -> UNPROVEN: needs a host that has genuinely exhausted its ordinal space; the allocator branch is covered, the refusal of new sessions is not -->
+<!-- norm: host-ordinal-exhaustion-refuses -> packages/core/src/reserved-and-limits.test.ts -->
    `WT_TOO_MANY_STREAMS`-style clarity rather than wrap, because at that point the limit is
    real.
 4. **Across processes.** A single-process deployment MAY use a plain monotonic counter
@@ -689,4 +698,4 @@ this.
 
 When a session closes, all its streams are closed and all pending calls reject. A peer that
 detects its counterpart has gone MUST NOT attempt to reuse any stream from that session.
-<!-- norm: session-streams-not-reused -> UNPROVEN: no test drives stream reuse after a peer-detected close; the transport rejects it, and asserting that asserts the transport -->
+<!-- norm: session-streams-not-reused -> packages/core/src/reserved-and-limits.test.ts -->

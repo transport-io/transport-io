@@ -44,6 +44,18 @@ const NOT_NORMATIVE = [
  */
 const MAX_UNPROVEN = 8
 
+/**
+ * A floor, because finding nothing is far more often a broken glob than a clean repository.
+ *
+ * An aggregate over an empty collection compared against a bound *passes*: zero violations
+ * is zero, which is under every threshold. That is how the lane soak reported
+ * `peak RSS -Infinity  bound < 600  PASS` having sampled nothing, and how `test:node` was
+ * green twice over while running no tests. A gate that cannot tell "clean" from "looked at
+ * nothing" is not a gate.
+ */
+const MIN_STATEMENTS = 20
+const MIN_MARKERS = 15
+
 export interface Statement {
   readonly doc: string
   readonly line: number
@@ -156,6 +168,20 @@ function main(): void {
           `    Reference the id in that file, e.g. in the test name or a comment.`,
       )
     }
+  }
+
+  if (statements.length < MIN_STATEMENTS) {
+    problems.push(
+      `only ${statements.length} normative statement(s) found, expected at least ` +
+        `${MIN_STATEMENTS}. The documents did not lose their MUSTs; the pattern or the ` +
+        'file list changed. Fix that before trusting a green run.',
+    )
+  }
+  if (markers.length < MIN_MARKERS) {
+    problems.push(
+      `only ${markers.length} marker(s) parsed, expected at least ${MIN_MARKERS}. ` +
+        'A marker-syntax change turns this whole gate into a no-op that exits 0.',
+    )
   }
 
   const unproven = markers.filter((m) => m.unproven)

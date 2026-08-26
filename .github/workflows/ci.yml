@@ -64,6 +64,8 @@ jobs:
         run: bun run scripts/check-boundaries.ts
       - name: normative statements
         run: bun run scripts/check-norms.ts
+      - name: gate inputs are not empty
+        run: bun run scripts/check-gate-inputs.ts
 
   unit:
     name: unit tests (bun — never loads the transport)

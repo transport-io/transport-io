@@ -90,10 +90,28 @@ function flag(out: Violation[], file: string, index: number, script: string): vo
   })
 }
 
+/**
+ * A floor, because finding nothing is far more often a broken glob than a clean repository.
+ *
+ * An aggregate over an empty collection compared against a bound *passes*: zero violations
+ * is zero, which is under every threshold. That is how the lane soak reported
+ * `peak RSS -Infinity  bound < 600  PASS` having sampled nothing, and how `test:node` was
+ * green twice over while running no tests. A gate that cannot tell "clean" from "looked at
+ * nothing" is not a gate.
+ */
+const MIN_WORKFLOWS = 1
+
 export function scanWorkflowDir(dir = WORKFLOW_DIR): Violation[] {
-  return readdirSync(dir)
-    .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
-    .flatMap((f) => findWorkflowViolations(join(dir, f), readFileSync(join(dir, f), 'utf8')))
+  const files = readdirSync(dir).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
+  if (files.length < MIN_WORKFLOWS) {
+    throw new Error(
+      `${dir} contains ${files.length} workflow file(s), expected at least ${MIN_WORKFLOWS}. ` +
+        'Zero workflows scanned is a broken path, not a clean repository.',
+    )
+  }
+  return files.flatMap((f) =>
+    findWorkflowViolations(join(dir, f), readFileSync(join(dir, f), 'utf8')),
+  )
 }
 
 if (import.meta.main) {

@@ -1934,3 +1934,80 @@ clone and build, which is the only sequence that has been run end to end.
 `npm install transport-io` in the same commit as the publish, and not before — an install
 line pointing at a name nobody owns is how a reader installs a stranger's package on this
 project's authority.
+
+### D87. Green on empty is a class, not a bug
+Every gate in this repository was fed an input set with nothing in it. Six passed.
+
+An aggregate over an empty collection, compared against a bound, **passes**. Zero violations
+is zero. `Math.max()` of nothing is `-Infinity`. A least-squares denominator of zero returns
+a slope of 0. Every one of those is inside every threshold, so the gate reports success
+having examined nothing — and finding nothing is far more often a broken glob than a clean
+repository.
+
+| gate | fed nothing, before | after |
+|---|---|---|
+| `check-norms` | **passed** — 0 statements, 0 markers | fails: floors of 20 and 15 |
+| `check-workflows` | **passed** — glob matched no files | fails: floor of 1 |
+| `check-boundaries` | **passed** — glob matched no source | fails: floor of 40 |
+| `check-docs`, snippets | **passed** — 0 blocks compiled cleanly | fails: floor of 15 |
+| `check-docs`, constants | half — an empty parse agrees with an empty enum | fails: floor of 3 rows per table |
+| `knip` | **passed** — no entry files, `{"issues":[]}` | fails via `check-gate-inputs` |
+| `attw` | **passed** — empty `dist` | fails via `check-gate-inputs` |
+| `publint` | already failed | unchanged |
+| `bun test` | already failed on zero matches | unchanged |
+| `test:node` | already fixed in D81 | unchanged |
+| `soak:lanes` | already fixed in D85 | unchanged |
+| `soak:churn` | already guarded | unchanged |
+| `check-node.sh` | passes, **correctly** — it checks one value, not an aggregate | unchanged |
+
+`knip` and `attw` are third-party and cannot be taught this from the inside; "no issues" is a
+truthful answer to "look at nothing". The floor has to come from the caller, which is
+`scripts/check-gate-inputs.ts`: every knip workspace must exist and hold source, and every
+target named by the package's `exports` map must be present in the packed tarball.
+
+**One thing this exercise cost, worth recording.** The first draft of the knip floor
+translated its glob patterns by hand and reported three false negatives against patterns that
+do match. A second, subtly different glob matcher in the repository is a liability, so it was
+replaced with a floor on files under each workspace root — which catches the failure that
+actually happens (a config pointing at a renamed directory) without pretending to
+reimplement anything.
+
+**The rule.** A gate must distinguish "found nothing wrong" from "found nothing". Any check
+that reduces a collection to a verdict states a minimum size, and that minimum is part of the
+check rather than a detail of it.
+
+**Reconsider when:** a floor starts failing because the repository legitimately shrank. Lower
+it deliberately, in a commit that says why — the same ratchet as every other ceiling here.
+
+### D88. The three unproven norms are zero
+D82 shipped with three `UNPROVEN` markers against a ceiling of eight. A ratchet is the right
+mechanism and an unproven normative statement is still documentation ahead of implementation
+with a number attached, so each was either proved or the promise was corrected. All three
+turned out to be provable, two of them only after the implementation grew what the statement
+already claimed.
+
+**`receiver-accepts-multi-frame-response` — proved, and the document corrected too.** The
+receiver genuinely does tolerate a sequence; it was untestable only because no sender in this
+library produces one. Writing the sequence by hand from a raw stream proves the tolerance.
+But §6 read as though multi-frame responses happen, and a Go implementer would have built a
+receive loop for something that never arrives. The section now says **reserved, not
+implemented** in a block that cannot be skimmed past, while still requiring tolerance —
+because that tolerance is what keeps token streaming from being a protocol break later.
+
+**`host-ordinal-exhaustion-refuses` — proved, via a seam.** Reaching the branch meant
+4,194,304 allocations. `OriginAllocator` now takes a counter-space parameter, used by the
+test and by nothing else, and the exhaustion path is exercised at size 8. An unreachable
+branch in an allocator is exactly the code that is wrong the first time it runs, and this one
+also had to prove the right *remedy*: the error says concurrency limit, not clock, so an
+operator does not restart the host expecting it to help.
+
+**`session-streams-not-reused` — the implementation did not do it.** Nothing stopped `call()`
+opening a stream on a closed session. The transport may well accept the open, in which case
+the call hangs for ever rather than failing. `call()` now refuses with `WT_SESSION_CLOSED`.
+
+Three honest "reserved" lines would have been acceptable. Three proved statements and one
+corrected section are better, and the third was a real defect that the marker had recorded
+as merely untested.
+
+**Reconsider when:** the ceiling of 8 is still the mechanism. It is at zero now, and a future
+`UNPROVEN` should be argued for rather than budgeted.

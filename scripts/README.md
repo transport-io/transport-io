@@ -64,6 +64,20 @@ npm -w packages/core publish # deliberate, from your machine
 points at a name nobody owns is how a reader ends up installing a stranger's package on this
 project's authority.
 
+## `check-gate-inputs.ts` — the gates we do not own must have something to look at
+
+`knip` reports no dead code when it finds no code, and `attw` reports no problems for an
+empty `dist`. Both are truthful answers to "look at nothing" and both exit 0. This asserts
+every knip workspace exists and holds source, and every `exports` target is present in the
+packed tarball. See D87.
+
+## `check-install-line.ts` — run the install command, do not reason about it
+
+Executes every `npm install` line the READMEs give a reader, in a temporary directory, and
+checks that what lands is the library. The line has been wrong twice — once naming an
+unpublished package, once naming a git URL that resolves to the private monorepo root — and
+the second was written in the commit fixing the first. Part of `npm run preflight`.
+
 ## `check-norms.ts` — normative prose names the test that proves it
 
 Every `MUST` in `PROTOCOL.md` and every bold guarantee in `API.md` carries an identifier

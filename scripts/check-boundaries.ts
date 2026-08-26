@@ -77,13 +77,27 @@ function sourceFiles(dir: string): string[] {
  */
 const SELF_TEST = 'check-boundaries.test.ts'
 
+/**
+ * A floor, because finding nothing is far more often a broken glob than a clean repository.
+ *
+ * An aggregate over an empty collection compared against a bound *passes*: zero violations
+ * is zero, which is under every threshold. That is how the lane soak reported
+ * `peak RSS -Infinity  bound < 600  PASS` having sampled nothing. A gate that cannot tell
+ * "clean" from "looked at nothing" is not a gate.
+ */
+const MIN_FILES = 40
+
 export function scan(
   roots: readonly string[] = ['packages', 'examples', 'scripts'],
 ): Violation[] {
-  return roots
-    .flatMap((r) => sourceFiles(r))
-    .filter((f) => !f.endsWith(SELF_TEST))
-    .flatMap((f) => findBoundaryViolations(f, readFileSync(f, 'utf8')))
+  const files = roots.flatMap((r) => sourceFiles(r)).filter((f) => !f.endsWith(SELF_TEST))
+  if (files.length < MIN_FILES) {
+    throw new Error(
+      `scanned ${files.length} source file(s), expected at least ${MIN_FILES}. ` +
+        'Zero violations across nothing is not the same as zero violations.',
+    )
+  }
+  return files.flatMap((f) => findBoundaryViolations(f, readFileSync(f, 'utf8')))
 }
 
 if (import.meta.main) {

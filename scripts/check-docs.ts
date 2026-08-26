@@ -84,6 +84,15 @@ function extractBlocks(file: string): Block[] {
  */
 const MAX_IGNORED_BLOCKS = 1
 
+/**
+ * Floors, because finding nothing is far more often a broken glob than a clean repository.
+ * Zero snippets compiled cleanly, and zero constants disagreed with zero constants — both
+ * are green, and both mean the gate looked at nothing. Same class as the lane soak passing
+ * on an empty sample set.
+ */
+const MIN_BLOCKS = 15
+const MIN_CONSTANT_ROWS = 3
+
 rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
 
@@ -158,6 +167,12 @@ for (const doc of ['API.md', 'README.md', 'AGENTS.md']) {
 console.log(
   `docs: ${blockCount} block(s) checked, ${ignoredBlocks} awaiting implementation (ceiling ${MAX_IGNORED_BLOCKS})`,
 )
+if (blockCount < MIN_BLOCKS) {
+  fail(
+    `only ${blockCount} documentation block(s) found, expected at least ${MIN_BLOCKS}. ` +
+      'The documents did not lose their examples; the extractor or the file list changed.',
+  )
+}
 if (ignoredBlocks > MAX_IGNORED_BLOCKS) {
   fail(
     `${ignoredBlocks} documentation blocks are tagged \`ignore\`, above the ceiling of ` +
@@ -215,6 +230,23 @@ function compare(label: string, doc: Map<number, string>, code: Record<string, n
     if (!doc.has(num)) fail(`${label} ${num} (${name}) is in protocol.ts but undocumented`)
   }
 }
+// Each table must have parsed something. Comparing an empty parse against an empty enum
+// agrees perfectly, and comparing an empty parse against a populated enum only fails in one
+// direction — so a parser that silently stopped matching rows would be caught by luck, or
+// not at all.
+for (const [name, rows] of [
+  ['reset code', resetCodes],
+  ['close code', closeCodes],
+  ['frame type', frameTypesDoc],
+] as const) {
+  if (rows.size < MIN_CONSTANT_ROWS) {
+    fail(
+      `${name} table parsed ${rows.size} row(s), expected at least ${MIN_CONSTANT_ROWS}. ` +
+        'A table that parses as empty agrees with everything.',
+    )
+  }
+}
+
 compare('reset code', resetCodes, ResetCode)
 compare('close code', closeCodes, CloseCode)
 compare('frame type', frameTypesDoc, FrameType)

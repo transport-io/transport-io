@@ -22,7 +22,19 @@ export class OriginAllocator {
   readonly #quarantined: { value: number; until: number }[] = []
   #next = 0
 
-  constructor(hostOrdinal = 0, quarantineMs: number = ORIGIN_QUARANTINE_MS) {
+  readonly #space: number
+
+  /**
+   * `counterSpace` exists so the exhaustion branch can be reached in a test. Exhausting the
+   * real space means 4,194,304 allocations, which is why §7.3's "MUST refuse new sessions"
+   * went unproven — and an unreachable branch in an allocator is exactly the kind of code
+   * that is wrong the first time it runs. Production never passes it.
+   */
+  constructor(
+    hostOrdinal = 0,
+    quarantineMs: number = ORIGIN_QUARANTINE_MS,
+    counterSpace: number = COUNTER_SPACE,
+  ) {
     if (!Number.isInteger(hostOrdinal) || hostOrdinal < 0 || hostOrdinal >= MAX_SESSION_HOSTS) {
       throw new TransportError(
         'WT_PROTOCOL_ERROR',
@@ -32,24 +44,25 @@ export class OriginAllocator {
     }
     this.#ordinal = hostOrdinal
     this.#quarantineMs = quarantineMs
+    this.#space = counterSpace
   }
 
   allocate(now: number): number {
     this.#release(now)
-    for (let i = 0; i < COUNTER_SPACE; i++) {
-      const counter = (this.#next + i) % COUNTER_SPACE
+    for (let i = 0; i < this.#space; i++) {
+      const counter = (this.#next + i) % this.#space
       // 0 is reserved so a zero-filled buffer cannot parse as a real peer.
       if (this.#ordinal === 0 && counter === 0) continue
       const value = (this.#ordinal << COUNTER_BITS) | counter
       if (this.#live.has(value)) continue
       if (this.#quarantined.some((q) => q.value === value)) continue
-      this.#next = (counter + 1) % COUNTER_SPACE
+      this.#next = (counter + 1) % this.#space
       this.#live.add(value)
       return value
     }
     throw new TransportError(
       'WT_TOO_MANY_STREAMS',
-      `this host has no free origin identifiers (${COUNTER_SPACE} live plus quarantined)`,
+      `this host has no free origin identifiers (${this.#space} live plus quarantined)`,
       'This is a concurrency limit, not a clock. Add another session host, or reduce concurrent sessions.',
     )
   }

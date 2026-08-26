@@ -326,6 +326,16 @@ export class Session {
       )
     }
     // An already-aborted signal must not open a stream just to tear it down.
+    // §11: a peer that has detected its counterpart is gone MUST NOT reuse a stream from
+    // that session. Opening a new one on a dead session is the same mistake wearing a
+    // different hat — the transport may even accept it, and the call then hangs.
+    if (this.#disposed) {
+      throw new TransportError(
+        'WT_SESSION_CLOSED',
+        'the session is closed, so no call stream can be opened on it',
+        'Reconnect. A reconnect is a new session and does not restore room membership (D4).',
+      )
+    }
     if (opts?.signal?.aborted === true) throw abortToTransportError(opts.signal.reason)
     // An event that declares no `returns` has no response to wait for. The type system
     // already excludes it from `CallableOf`; this is the same refusal for a caller that
