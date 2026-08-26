@@ -14,14 +14,20 @@ OUT="$(mktemp)"
 node --test "packages/*/src/**/*.node.test.ts" 2>&1 | tee "$OUT"
 STATUS=${PIPESTATUS[0]}
 
-COUNT="$(grep -Eo '^# tests [0-9]+' "$OUT" | tail -1 | grep -Eo '[0-9]+' || echo 0)"
+# Both reporters, because they differ by environment and this guard turned a fully passing
+# CI run red by only knowing one of them. A local, non-TTY run prints `# tests 7`; the
+# runner prints `ℹ tests 7`. Matching on the word rather than the prefix covers both, and
+# `pass` is cross-checked so a summary line that changes shape again cannot pass silently.
+COUNT="$(grep -Eo '(#|ℹ)[[:space:]]*tests[[:space:]]+[0-9]+' "$OUT" | tail -1 | grep -Eo '[0-9]+$' || echo 0)"
+PASSED="$(grep -Eo '(#|ℹ)[[:space:]]*pass[[:space:]]+[0-9]+' "$OUT" | tail -1 | grep -Eo '[0-9]+$' || echo 0)"
 rm -f "$OUT"
 
 if [ "$COUNT" -lt 1 ]; then
   echo "" >&2
-  echo "  node --test matched no tests. The glob is wrong, or the files were renamed." >&2
-  echo "  A green integration job that ran nothing is worse than a red one." >&2
+  echo "  node --test matched no tests, or its summary line could not be parsed." >&2
+  echo "  Either is a failure: a green integration job that ran nothing is worse than a" >&2
+  echo "  red one, and a guard that cannot read the summary is not guarding anything." >&2
   exit 1
 fi
-echo "  integration: ${COUNT} test(s) ran"
+echo "  integration: ${COUNT} test(s) ran, ${PASSED} passed"
 exit "$STATUS"

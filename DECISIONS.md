@@ -2016,3 +2016,27 @@ as merely untested.
 
 **Reconsider when:** the ceiling of 8 is still the mechanism. It is at zero now, and a future
 `UNPROVEN` should be argued for rather than budgeted.
+
+### D89. The guard against a silent pass caused a silent-looking failure
+D81 wrapped `node --test` so the integration job could not report success while running
+nothing. The wrapper parses the summary line for a test count. It matched `# tests 7`.
+
+The GitHub runner's reporter prints `ℹ tests 7`.
+
+So the first CI run after that change went red on a job where all seven tests passed —
+`pass 6, fail 0, skipped 1` — because the guard could not read the summary and treated an
+unparseable count as zero. Locally it was invisible: a non-TTY local run emits the `#` form,
+which is the one the guard knew.
+
+Two things to keep from it. **A guard that cannot parse its input must say so** rather than
+defaulting to the failure it was written to detect — the message now distinguishes "matched
+no tests" from "could not read the summary", because those need different fixes. And
+**anything that parses another tool's human-readable output is environment-dependent by
+construction**: the count and the pass total are now both extracted, matched on the word
+rather than the prefix, so a third reporter shape fails loudly instead of silently
+re-reading as zero.
+
+The wrapper still exits 1 on an empty glob. Verified in both directions.
+
+**Reconsider when:** `node --test` grows a machine-readable summary that does not depend on
+the reporter. Until then this parses prose, and parsing prose is what this was.
