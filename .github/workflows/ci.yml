@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
 
+# Stated, not inherited. Nothing here writes to the repository: every job checks out,
+# installs and runs checks. `contents: read` is the whole requirement, and saying so caps
+# what a compromised step could reach. Artifact upload uses the Actions runtime token and
+# needs no scope here.
+permissions:
+  contents: read
+
 # Fast checks first. All are required to merge.
 jobs:
   pr-title:
@@ -19,7 +26,13 @@ jobs:
       - run: npm ci
       # The PR title becomes the commit subject under squash merge, so this gate —
       # not the local hook — is what protects the changelog. Same config as the hook.
-      - run: echo "${{ github.event.pull_request.title }}" | npx commitlint
+      #
+      # Through `env:`, never interpolated. The title is written by whoever opens the PR;
+      # substituted into the script text it is arbitrary code on a runner that already has
+      # the repository and the dependency tree, before any human has read the PR.
+      - run: printf '%s\n' "$PR_TITLE" | npx commitlint
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
 
   static:
     name: typecheck / lint / dead code / docs
@@ -40,6 +53,8 @@ jobs:
         run: npx knip
       - name: documentation
         run: bun run scripts/check-docs.ts
+      - name: workflows
+        run: bun run scripts/check-workflows.ts
 
   unit:
     name: unit tests (bun — never loads the transport)
@@ -122,9 +137,11 @@ jobs:
         with: { node-version: '24' }
       - run: npm ci
       - name: a package changed without a changeset
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch origin ${{ github.base_ref }} --depth=1
-          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          git fetch origin "$BASE_REF" --depth=1
+          CHANGED=$(git diff --name-only "origin/$BASE_REF...HEAD")
           if echo "$CHANGED" | grep -qE '^packages/[^/]+/src/'; then
             echo "$CHANGED" | grep -qE '^\.changeset/.+\.md$' || {
               echo "A package changed with no changeset."
@@ -140,8 +157,11 @@ jobs:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: oven-sh/setup-bun@v2
-      - run: git fetch origin ${{ github.base_ref }} --depth=1
-      # Recorded in CI rather than clicked past locally.
-      - run: bun run scripts/docs-freshness.ts --base origin/${{ github.base_ref }}
+      - run: git fetch origin "$BASE_REF" --depth=1
         env:
+          BASE_REF: ${{ github.base_ref }}
+      # Recorded in CI rather than clicked past locally.
+      - run: bun run scripts/docs-freshness.ts --base "origin/$BASE_REF"
+        env:
+          BASE_REF: ${{ github.base_ref }}
           DOCS_ACK: ${{ contains(github.event.pull_request.body, 'DOCS_ACK') && '1' || '0' }}

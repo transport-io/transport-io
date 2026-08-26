@@ -14,6 +14,7 @@
     "bench:stream-churn": "./scripts/check-node.sh && node --expose-gc packages/core/src/bench/stream-churn.node.ts",
     "build": "tsc --build",
     "check:node": "./scripts/check-node.sh",
+    "check:workflows": "bun run scripts/check-workflows.ts",
     "commitlint": "commitlint",
     "deadcode": "knip",
     "docs:check": "bun run scripts/check-docs.ts",

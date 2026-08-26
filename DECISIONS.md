@@ -1402,3 +1402,41 @@ paid for itself by making this a comparison rather than a guess.
 
 **Reconsider when:** `NapiServer.close()` returns with an accept pending, and a peer reset
 reaches the responder. Both are checkable by running the committed benches.
+
+### D74. Nothing outsider-controlled is ever interpolated into a `run:` block
+`${{ ... }}` in a workflow is not a shell variable. GitHub substitutes it into the script
+*text* before any shell parses it, so an expansion whose value an outsider writes is
+arbitrary code on the runner.
+
+The repository shipped one:
+
+```yaml
+- run: echo "${{ github.event.pull_request.title }}" | npx commitlint
+```
+
+A pull request title is written by whoever opens the pull request. A title containing
+`"; <command>; echo "` closes the string and runs the command on a runner that already has
+the repository checked out, the dependency tree installed and network egress — before a
+human has read the PR. The workflow also declared no `permissions:`, so that command
+inherited whatever the repository default grants.
+
+**Every context expansion goes through `env:` and is referenced as `"$NAME"`**, and every
+workflow states its minimum `permissions:` at the top. `contents: read` is the whole
+requirement here; nothing in CI writes to the repository.
+
+The rule is absolute rather than an allowlist of contexts believed safe, and that is the
+decision rather than an accident of strictness. `github.base_ref` is safe today only
+because branch protection fixes the base branch — a setting somebody can change, not a
+property of the expression. `env:` is safe for a reason nobody can revoke: the shell
+receives the value as data and never re-parses it as script. An allowlist would have to be
+re-audited every time GitHub adds a context or the repository changes a setting; this does
+not.
+
+Enforced by `scripts/check-workflows.ts` in the `static` job, which fails on any `${{` in a
+`run:` block (inline or block scalar) and on any workflow with no top-level `permissions:`.
+It is line-based and takes no YAML dependency on purpose: adding a parser to catch a
+supply-chain problem is its own supply-chain problem.
+
+**Reconsider when:** never for the `run:` rule. The `permissions:` rule relaxes only if a
+job genuinely needs to write, and then it states the wider scope on that job alone rather
+than at the top.
