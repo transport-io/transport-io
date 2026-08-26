@@ -23,6 +23,7 @@ gh api -X PUT "repos/${REPO}/branches/main/protection" \
       "unit tests (bun — never loads the transport)",
       "integration tests (node — loads the transport)",
       "pack validation",
+      "e2e (playwright, real chrome and real quic)",
       "changeset present",
       "source changed without documentation"
     ]

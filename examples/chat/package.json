@@ -6,10 +6,10 @@
   "scripts": {
     "cert": "bun run scripts/gen-cert.ts",
     "build:web": "bun build web/main.ts --outdir web/dist --target browser",
-    "dev": "bun run cert && bun run build:web && node --experimental-strip-types server.node.ts",
-    "start": "node --experimental-strip-types server.node.ts"
+    "dev": "bun run cert && bun run build:web && node server.node.ts",
+    "start": "node server.node.ts"
   },
   "dependencies": {
-    "transport-io": "workspace:*"
+    "transport-io": "*"
   }
 }

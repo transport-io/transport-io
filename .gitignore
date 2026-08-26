@@ -3,3 +3,7 @@ dist/
 *.tsbuildinfo
 .DS_Store
 *.log
+examples/chat/.cert/
+examples/chat/web/dist/
+test-results/
+playwright-report/

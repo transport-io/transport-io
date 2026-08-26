@@ -236,11 +236,16 @@ Enforced two ways so it is mechanical rather than remembered:
    scripts, CI runs both. A test importing quiche must never be reachable from the Bun
    test task.
 
-   A convention only means something if the runner honours it, and Bun's default glob
-   matches `*.node.test.ts` — verified: `bun test` picked up 9 files where it should have
-   seen 8, loading the native addon in the runtime that segfaults on it. The unit script
-   therefore passes `--path-ignore-patterns="**/*.node.test.ts"`, and the exclusion is
-   checked by comparing file counts rather than assumed.
+   A convention only means something if the runner honours it, and Bun's default glob is
+   wider than it looks. It matched `*.node.test.ts` — `bun test` picked up 9 files where
+   it should have seen 8, loading the native addon in the runtime that segfaults on it —
+   and it later matched the Playwright `*.spec.ts` suite too, which failed with
+   `Playwright Test did not expect test() to be called here`.
+
+   The unit script therefore excludes both explicitly, and the exclusion is checked by
+   comparing file counts rather than assumed: 14 files unfiltered, 11 filtered. Both
+   escapes were the same mistake — assuming a runner's default matches the intent of a
+   filename — and a third would be a reason to stop relying on globs entirely.
 2. **An import-boundary lint rule** forbidding `@fails-components/*` imports from any
    file not matching `*.node.*`. This fails at typecheck instead of as a segfault that
    looks like flaky CI.
