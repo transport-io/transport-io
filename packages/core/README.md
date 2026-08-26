@@ -19,10 +19,12 @@ hidden. Reliability is not: an event declares `stream` or `datagram` in the cont
   this library. `emit` and datagrams are flat.
 - **The protocol is v0 and unstable.** Both sides currently require an exact match.
 
-Not published to npm yet:
+Not published to npm yet, and a git install does not work — the repository root is a
+private monorepo package. Clone and build:
 
 ```bash
-npm install github:v0id-user/transport-io
+git clone https://github.com/v0id-user/transport-io
+cd transport-io && npm install && npm run build
 ```
 
 MIT © #V0ID

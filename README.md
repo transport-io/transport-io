@@ -119,12 +119,20 @@ That is not an API anyone should treat as settled yet. See D83.
 
 ## Install
 
-**Not published yet.** There is no `transport-io` on npm, and the name is unclaimed — so
+**Not published yet.** There is no `transport-io` on npm — the name is unclaimed, so
 `npm install transport-io` will either 404 or, worse, fetch a stranger's package on this
-document's authority. Until the first release, install from the repository:
+document's authority.
+
+A git install does not work either, and it is worth saying why rather than letting you find
+out: this is a monorepo whose root package is `transport-io-monorepo` and is `private`, so
+`npm install github:v0id-user/transport-io` installs that root and `import … from
+'transport-io'` then fails. Verified, not assumed.
+
+Until the first release, clone and build:
 
 ```bash
-npm install github:v0id-user/transport-io
+git clone https://github.com/v0id-user/transport-io
+cd transport-io && npm install && npm run build
 ```
 
 The server also needs the native QUIC transport, which is a **separate, deliberate

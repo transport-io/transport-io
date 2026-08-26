@@ -1906,3 +1906,31 @@ already had the guard, which is why it was the one that produced trustworthy num
 
 **Reconsider when:** never. If a run is too short to sample, the correct result is a failure
 that names the reason, which is what it now prints.
+
+### D86. Two packaging defects only a fresh clone could find
+Both were invisible in the working repository, because a working repository has already
+built and already installed. This is the whole argument for the clone-install-run check.
+
+**`npm run e2e` did not work from a clean clone.** The example imports the library through
+its `exports` map, which points into `dist`, which does not exist until `tsc --build` runs.
+Every local run passed because `dist` was already there from some earlier command. A
+contributor's first `npm run e2e` failed with `Could not resolve: "transport-io/browser-transport"`.
+`e2e:server` now builds the library first.
+
+**The install line was wrong, and it was wrong in the commit that fixed the install line.**
+The README said `npm install github:v0id-user/transport-io`. That resolves the repository
+root, whose package is `transport-io-monorepo` and is `private`, so what a consumer actually
+installs is the monorepo root and `import … from 'transport-io'` fails. Verified by running
+it into a scratch directory: `node_modules/transport-io-monorepo`, no `transport-io`.
+
+The sequence is the point. The original defect was an install line naming an unpublished npm
+package. It was replaced with a git install that does not work either — corrected in the
+same afternoon, by the same person, in a document about not fabricating things. An
+instruction that has not been executed is a guess about how a tool behaves, and monorepo git
+installs are exactly where that guess goes wrong. Until the first publish the documents say
+clone and build, which is the only sequence that has been run end to end.
+
+**Reconsider when:** the package is published. At that point both READMEs change to
+`npm install transport-io` in the same commit as the publish, and not before — an install
+line pointing at a name nobody owns is how a reader installs a stranger's package on this
+project's authority.
