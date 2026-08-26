@@ -34,7 +34,11 @@ hand-written notes for the pre-release period.
 - **The soak criterion certified the leak it was written to catch.** It measured 5% growth
   between two point samples; against the upstream leak's own 16.7 MB/h that is ~13.9 MB
   over the window, under 5% at any plausible baseline. Replaced with an absolute slope by
-  linear fit against a 4 MB/h bound. Two point samples are not a slope.
+  linear fit against a 4 MB/h bound. Two point samples are not a slope. The criterion is
+  now also per lane: `emit` and datagrams are bound by it and pass; `call()` is exempt with
+  the upstream defect named, its per-stream cost pinned by a committed bench, and the
+  exemption lifting automatically when that bench comes back flat. A criterion that ships
+  contradicted by a known limitation is not a criterion.
 - **The datagram ring and TTL were unreachable.** `emit` drained the queue synchronously on
   every push, so a burst never queued and neither policy ever applied — the whole
   backpressure design was dead code in the session path. The flush is coalesced now, and

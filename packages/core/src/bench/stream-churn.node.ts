@@ -24,6 +24,13 @@ import { Http3Server, WebTransport } from '@fails-components/webtransport'
 /** Measured 2026-08-26 on darwin-arm64, Node 22.23.2, over 16,000 streams. */
 const OBSERVED_KB_PER_STREAM = 11.6
 
+/**
+ * D13 exempts the `call()` lane from the memory-soak slope bound because of this leak, and
+ * says the exemption lifts automatically when this bench comes back under 1 KB per stream.
+ * That trigger is only mechanical if something checks it, so this bench does.
+ */
+const EXEMPTION_LIFTS_BELOW_KB = 1
+
 const dir = mkdtempSync(join(tmpdir(), 'bind-'))
 execFileSync('openssl', [
   'ecparam',
@@ -138,10 +145,15 @@ const perStream = (end.heapUsed - base.heapUsed) / ROUNDS / 1024
 console.log(
   `  = ${perStream.toFixed(2)} KB per stream  (pinned observation: ${OBSERVED_KB_PER_STREAM})`,
 )
-if (perStream < OBSERVED_KB_PER_STREAM / 2) {
+if (perStream < EXEMPTION_LIFTS_BELOW_KB) {
   console.log('')
-  console.log('  This is far below the pinned observation. Upstream may have fixed it —')
-  console.log('  re-run the soak and revisit D65 before assuming so.')
+  console.log(`  Below ${EXEMPTION_LIFTS_BELOW_KB} KB per stream. This is D13's trigger:`)
+  console.log("  the call() lane's soak exemption lifts, and the full soak now has to pass.")
+  console.log('  Run: npm run soak     (not just npm run soak:lanes)')
+} else if (perStream < OBSERVED_KB_PER_STREAM / 2) {
+  console.log('')
+  console.log("  Well below the pinned observation, but not yet under D13's")
+  console.log(`  ${EXEMPTION_LIFTS_BELOW_KB} KB trigger. Update the pin in D65 and re-measure.`)
 }
 server.stopServer()
 rmSync(dir, { recursive: true, force: true })

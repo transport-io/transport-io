@@ -88,7 +88,9 @@ It is reported upstream. An alternative transport measures flat on the same benc
 is wired up behind an internal seam, but it cannot shut a server down gracefully and does
 not deliver call cancellation to the responder, so it is not the default yet.
 
-If your workload is mostly `emit` and datagrams, this does not affect you: both are flat.
+If your workload is mostly `emit` and datagrams, this does not affect you: both are flat,
+and you can check that yourself rather than taking it on trust — `npm run soak:lanes` runs
+the memory soak over those two lanes only, and it is expected to pass.
 
 ### Protocol versioning
 

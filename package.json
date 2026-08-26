@@ -24,6 +24,7 @@
     "lint:staged": "biome check --no-errors-on-unmatched",
     "prepare": "lefthook install",
     "soak": "./scripts/check-node.sh && node --expose-gc scripts/soak.node.ts",
+    "soak:lanes": "./scripts/check-node.sh && node --expose-gc scripts/soak.node.ts --lanes emit,datagram",
     "test:node": "node --test \"packages/*/src/**/*.node.test.ts\"",
     "test:unit": "bun test --path-ignore-patterns=\"**/*.node.test.ts\" --path-ignore-patterns=\"e2e/**\"",
     "typecheck": "tsc --build && tsc -p tsconfig.test.json",

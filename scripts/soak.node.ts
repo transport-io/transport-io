@@ -22,11 +22,23 @@ import { defineContract, type MapOf, type$ } from '../packages/core/src/contract
 import { createServer } from '../packages/core/src/server.ts'
 import { connectHttp3, listenHttp3 } from '../packages/core/src/transport/fails.node.ts'
 
+const argStr = (name: string, fallback: string): string => {
+  const i = process.argv.indexOf(`--${name}`)
+  return i > 0 ? (process.argv[i + 1] ?? fallback) : fallback
+}
+
 const arg = (name: string, fallback: number): number => {
   const i = process.argv.indexOf(`--${name}`)
   return i > 0 ? Number(process.argv[i + 1]) : fallback
 }
 
+/**
+ * `--lanes emit,datagram` measures only the lanes bound by D13's slope criterion.
+ * `--lanes call` measures the exempted lane, whose number is recorded rather than gated.
+ * Default is all three, which will fail until the upstream leak is fixed — that is the
+ * exemption being visible rather than silent.
+ */
+const LANES = argStr('lanes', 'emit,datagram,call').split(',')
 const MINUTES = arg('minutes', 60)
 const SESSIONS = arg('sessions', 500)
 const PORT = arg('port', 34500)
@@ -39,6 +51,7 @@ const TARGET_CALLS = 50_000
 const contract = defineContract({
   ping: { lane: 'stream', payload: type$<{ n: number }>(), returns: type$<{ n: number }>() },
   tick: { lane: 'datagram', payload: type$<{ n: number }>() },
+  note: { lane: 'stream', payload: type$<{ n: number }>() },
 })
 interface SoakMap extends MapOf<typeof contract> {}
 
@@ -83,7 +96,10 @@ void (async () => {
   for await (const conn of listener.sessions()) void server.accept(conn).catch(() => undefined)
 })()
 
-console.log(`soak: ${SESSIONS} sessions, ${MINUTES} min, target ${TARGET_CALLS} call streams`)
+console.log(`soak: ${SESSIONS} sessions, ${MINUTES} min, lanes: ${LANES.join(', ')}`)
+if (!LANES.includes('call')) {
+  console.log('note: the call lane is excluded — this run measures the D13-bound lanes only')
+}
 console.log(`platform: ${process.platform}-${process.arch}, node ${process.version}`)
 console.log('')
 
@@ -115,13 +131,16 @@ let running = true
 const churn = async (): Promise<void> => {
   while (running) {
     const batch = clients.map(async (c, i) => {
-      try {
-        await c.call('ping', { n: i })
-        calls++
-      } catch {
-        callErrors++
+      if (LANES.includes('call')) {
+        try {
+          await c.call('ping', { n: i })
+          calls++
+        } catch {
+          callErrors++
+        }
       }
-      c.emit('tick', { n: i })
+      if (LANES.includes('datagram')) c.emit('tick', { n: i })
+      if (LANES.includes('emit')) c.emit('note', { n: i })
     })
     await Promise.all(batch)
     await new Promise((r) => setTimeout(r, 5))
@@ -171,7 +190,7 @@ const slope = slopeMbPerHour(samples)
 const peak = Math.max(...samples.map((s) => s.rssMb))
 const slopeOk = slope < SLOPE_BOUND_MB_PER_H
 const ceilingOk = peak < RSS_CEILING_MB
-const callsOk = calls >= TARGET_CALLS
+const callsOk = !LANES.includes('call') || calls >= TARGET_CALLS
 
 console.log('')
 console.log('─'.repeat(64))
