@@ -33,6 +33,16 @@ title — written by whoever opens the PR — is arbitrary code on the runner un
 bound through `env:` and read as `"$NAME"`. See D74; the repository shipped exactly that
 defect. Line-based, no YAML dependency.
 
+## `soak-churn.node.ts` — what a dead session leaves behind
+
+`npm run soak:churn`. Connects and disconnects over the in-memory loopback transport and
+fits a line through heap-after-GC, bounded at 2048 bytes retained per session churned.
+
+It exists because `soak.node.ts` opens 500 sessions and closes none, so every
+per-disconnect defect is invisible to it — three were found by inspection while it was
+green. Warmup is in **seconds**, not cycles, because `ORIGIN_QUARANTINE_MS` is 120 s and a
+shorter run measures deliberate quarantine retention as though it were a leak. See D76.
+
 ## `docs-freshness.ts` — source changed without documentation
 
 Run by the pre-commit hook against staged files and by CI against the PR diff. Set

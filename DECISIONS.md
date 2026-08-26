@@ -225,6 +225,13 @@ samples are not a slope.
 | datagram | slope under 4 MB/h | must pass — measured flat, 20,000 sends plateau at 112 MB |
 | `call()` | **exempted**, see below | fails: 5.95 KB per stream, server-side |
 
+**And it is per axis, because the lane split was not the only blind spot.** `soak.node.ts`
+opens its 500 sessions once and closes none, so it measures what a *live* session costs and
+is structurally incapable of seeing what a *dead* one leaves behind. Three per-disconnect
+defects were found by inspection while that soak was green (D76). `soak:churn` is the
+second axis: connect/disconnect over loopback, bounded at **2048 bytes retained per session
+churned** by linear fit. See D76 for why its warmup is measured in seconds.
+
 **The `call()` exemption, with its cause and its expiry.** D67 ships with a known leak, and
 that cannot coexist with a criterion that forbids one, so the criterion says which leak and
 why rather than being quietly ignored at publish time.
@@ -1477,3 +1484,61 @@ D76's problem and needs a behavioural test rather than a scan.
 
 **Reconsider when:** a call failure needs to be signalled where no stream is left to write
 on. That is the only thing a reset buys, and it is why code `9` survived.
+
+### D76. Teardown is a half nobody drove, so it is measured now
+Three defects, all on the disconnect half of a lifecycle every test only ever connected.
+
+**The Session outlived its connection.** `clearInterval` appeared in exactly one place,
+`Session.close()`, and neither teardown path called it: the server's `conn.closed`
+continuation freed the origin and removed the peer, the client's patched a snapshot. So
+whichever side did not *initiate* a close kept a live `setInterval` whose callback closes
+over `this` — retaining the Session, its Connection, the frame decoder, both queues, the
+sequence gate and every handler set. `unref()` was there and gave false comfort: it stops a
+timer holding the event loop open, not holding memory.
+
+Fixed by `Session.dispose()`, idempotent and wired to `conn.closed` inside `start()` rather
+than left for callers. A cleanup a caller must remember is one a caller will forget, and
+both callers had.
+
+**An adapter rejection abandoned teardown.** `Hub.removePeer` awaited `adapter.leave` inside
+the room loop with no `try`, while `broadcast` had wrapped its adapter call all along. A
+rejection on the first room threw out of the loop: rooms 2..N kept a `Member` record each
+holding a live Session, `#peerRooms.delete(id)` never ran, and nothing retried because
+`conn.closed` resolves once. The caller attached no `.catch`, so it was also an unhandled
+rejection — which ends a Node process by default, the exact opposite of the "core degrades
+rather than crashing" that ADR 0005, D40 and `API.md` all promise. Local state is now
+unconditional and the bus is told with `Promise.allSettled`: the peer's connection is
+already gone, and a bus that cannot be told now will not be told by us failing here.
+
+**A join rejection left a peer half-joined.** `Hub.join` mutated `#rooms` and `#peerRooms`
+*before* awaiting the adapter, with no rollback and no notification. On rejection the hub
+fanned broadcasts to a peer the bus had no record of, and the client was never told it had
+joined — permanently. For a room gated on authorization that is traffic reaching someone
+who was refused. The adapter call now happens first; local state follows it.
+
+**The test that named this and did not test it.** `adapter-conformance.test.ts` had a case
+titled *"join rejecting does not leave the peer half-joined from core's view"* asserting
+only that the client was still `connected` — true whether or not the peer is half-joined.
+`HostileAdapter.failNextJoin` and `failNextLeave` exist for precisely these cases and were
+set by **no test in the repository**. This is D69's shape in a test written after D69.
+
+**Why the soak could not have caught any of it, and what replaces that.** `soak.node.ts`
+never disconnects a session. `soak:churn` does, and the number it reports is bytes retained
+per session churned by linear fit — an absolute quantity, per D13's rule.
+
+Its warmup is **wall clock, not a cycle count**, and that detail is the whole measurement.
+`ORIGIN_QUARANTINE_MS` is 120 s: a freed origin is deliberately held for two minutes before
+reuse, so a run shorter than the window measures quarantine occupancy as though it were a
+leak. 12,000 cycles take 17 seconds, so no cycle count can express "past the window". The
+first draft reported +402 B/session and the second +72 B, both of them quarantine and
+start-up allocation rather than leak. Warming up for 130 s and then fitting over 12,000
+cycles reports **−2 B/session** across 85,783 cycles, with heap flat at 9.6–9.7 MB.
+
+| | retained per session |
+|---|---|
+| before the fixes | **+15,011 B** — 5.1 GB/hour at 100 sessions/s |
+| after, warmup by cycle count (wrong) | +402 B, then +72 B — quarantine, not leak |
+| after, warmup past the quarantine window | **−2 B** — flat |
+
+**Reconsider when:** `soak:churn` reports a positive slope, or `ORIGIN_QUARANTINE_MS`
+changes — the warmup default is tied to it and has to move with it.

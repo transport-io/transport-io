@@ -55,6 +55,13 @@ export class Hub {
       members = new Map()
       this.#rooms.set(room, members)
     }
+    // The bus first, local state second. Mutating before the await left a rejected join
+    // half-applied: the hub fanned broadcasts to a peer the bus had no record of, and the
+    // client was never notified it had joined. For a room whose join is gated on
+    // authorization, that is traffic reaching someone who was refused — permanently,
+    // because nothing rolls it back and nothing retries.
+    await this.#adapter.join(room, id)
+
     members.set(id, { id, session })
     let rooms = this.#peerRooms.get(id)
     if (rooms === undefined) {
@@ -62,7 +69,6 @@ export class Hub {
       this.#peerRooms.set(id, rooms)
     }
     rooms.add(room)
-    await this.#adapter.join(room, id)
     this.#notify(session, FrameType.JOIN, room)
   }
 
@@ -72,18 +78,34 @@ export class Hub {
     members?.delete(id)
     if (members !== undefined && members.size === 0) this.#rooms.delete(room)
     this.#peerRooms.get(id)?.delete(room)
-    await this.#adapter.leave(room, id)
+    // Local state and the peer are settled before the bus is told, so a bus that rejects
+    // leaves this node consistent. The rejection still reaches the caller, who asked.
     if (member !== undefined) this.#notify(member.session, FrameType.LEAVE, room)
+    await this.#adapter.leave(room, id)
   }
 
+  /**
+   * Teardown runs to completion whatever the bus does.
+   *
+   * `broadcast` already wrapped its adapter call; this did not, so a rejection on the
+   * first room threw straight out of the loop — rooms 2..N kept their `Member` record,
+   * each holding a live Session, and `#peerRooms.delete(id)` never ran. Nothing retries,
+   * because `conn.closed` resolves exactly once. A later `to(room).emit()` then fanned
+   * frames into a session that was already gone.
+   *
+   * The local half is what this node's correctness depends on, so it is unconditional.
+   * The bus half is best-effort by nature: the peer's connection is already gone, and a
+   * bus that cannot be told now will not be told by us failing here.
+   */
   async removePeer(id: PeerId): Promise<void> {
-    for (const room of [...(this.#peerRooms.get(id) ?? [])]) {
+    const rooms = [...(this.#peerRooms.get(id) ?? [])]
+    this.#peerRooms.delete(id)
+    for (const room of rooms) {
       const members = this.#rooms.get(room)
       members?.delete(id)
       if (members !== undefined && members.size === 0) this.#rooms.delete(room)
-      await this.#adapter.leave(room, id)
     }
-    this.#peerRooms.delete(id)
+    await Promise.allSettled(rooms.map((room) => this.#adapter.leave(room, id)))
   }
 
   rooms(id: PeerId): readonly string[] {

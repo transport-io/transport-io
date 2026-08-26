@@ -108,6 +108,7 @@ export class Session {
   #handshakeResolve!: (n: Negotiated) => void
   #handshakeReject!: (e: unknown) => void
   #sweepTimer: ReturnType<typeof setInterval> | undefined
+  #disposed = false
 
   /** Resolves when both sides have exchanged a valid handshake. */
   readonly ready: Promise<Negotiated>
@@ -136,6 +137,9 @@ export class Session {
   }
 
   async start(): Promise<Negotiated> {
+    // Whoever closes, both sides release. Registered before anything can fail, so a
+    // session that dies during the handshake is cleaned up too.
+    void this.#conn.closed.then(() => this.dispose())
     this.#conn.onEmitStream((readable) => void this.#readEmitStream(readable))
     this.#conn.onBidi((stream) => this.#acceptCall(stream))
     this.#conn.onDatagram((bytes) => this.#onDatagram(bytes))
@@ -339,8 +343,31 @@ export class Session {
   }
 
   close(code: number, reason: string): void {
-    if (this.#sweepTimer !== undefined) clearInterval(this.#sweepTimer)
+    this.dispose()
     this.#conn.close(code, reason)
+  }
+
+  /**
+   * Idempotent, and wired to `conn.closed` in `start()` so it cannot be forgotten.
+   *
+   * It was forgotten. `clearInterval` appeared in exactly one place — `close()` — and
+   * neither teardown path called it: the server's `conn.closed` continuation freed the
+   * origin and removed the peer, and the client's patched a snapshot. Whichever side did
+   * not *initiate* the close kept a live interval whose callback closes over `this`,
+   * retaining the Session, its Connection, the frame decoder, both queues, the sequence
+   * gate and every handler set. At 100 sessions a second that is 360,000 unreclaimable
+   * Sessions an hour, and `unref()` does nothing about it — it stops a timer holding the
+   * event loop open, not holding memory.
+   */
+  dispose(): void {
+    if (this.#disposed) return
+    this.#disposed = true
+    if (this.#sweepTimer !== undefined) clearInterval(this.#sweepTimer)
+    this.#sweepTimer = undefined
+    this.#handlers.clear()
+    this.#callHandlers.clear()
+    this.#controlHandlers.clear()
+    this.#writer = undefined
   }
 
   // ------------------------------------------------------------------ calls

@@ -131,11 +131,17 @@ export class Server<M extends AnyMap = AnyMap> {
 
     for (const [event, handler] of this.#callHandlers) session.handle(event, handler as never)
     this.#peers.set(id, { peer, session })
-    void conn.closed.then(async () => {
-      this.#peers.delete(id)
-      this.#origins.free(origin, Date.now())
-      await hub.removePeer(id)
-    })
+    void conn.closed
+      .then(async () => {
+        this.#peers.delete(id)
+        this.#origins.free(origin, Date.now())
+        session.dispose()
+        await hub.removePeer(id)
+      })
+      // Teardown is the last thing that runs for this peer; there is no caller left to
+      // hand a rejection to. Without this it was an unhandled rejection, which ends the
+      // process under Node's default — the opposite of what ADR/0005 and D40 promise.
+      .catch(() => undefined)
 
     await session.start()
     for (const cb of this.#onPeer) cb(peer)
