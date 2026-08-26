@@ -1821,9 +1821,14 @@ the whole thing into a no-op that reports nothing and exits 0.
 untestable at this layer. That is an argument for deleting the statement, not for raising the
 ceiling.
 
-### D83. The first publish is `0.1.0`, not `1.0.0`
-Stage 1 was defined as the first stable publish with semver in force. Amended: the first
-publish is `0.1.0`, and the Stage 1 rules apply from it.
+### D83. The first publish is `0.0.1` to hold the name; `0.1.0` is the first release
+Stage 1 was defined as the first stable publish with semver in force. Amended twice.
+
+**`0.0.1` is a name claim, not a release.** npm has no reservation mechanism — verified:
+`npm owner ls` on an unpublished name returns 404 and there is no `reserve` or `claim`
+subcommand — so the only way to hold `transport-io` is to publish something under it. That
+something is `0.0.1`, and it carries no promise beyond existing. **`0.1.0` is the first
+release**, and the Stage 1 rules apply from *it*, not from the name claim.
 
 Three reasons, none of them a matter of taste.
 
@@ -1841,7 +1846,7 @@ shape of one that has not been read hard enough yet, and the sweep is evidence o
 depending on this yet, so the option to break something cheaply is free; the promise of
 stability is not.
 
-**What still applies from the first publish.** No breaking change without a version bump and
+**What still applies from the first release.** No breaking change without a version bump and
 a changelog entry. The difference under `0.x` is that a **minor** bump is allowed to break,
 and the README says so rather than leaving a reader to infer it from the leading zero.
 
