@@ -13,7 +13,7 @@
  *   - `WebTransportError` omits the specification's `streamErrorCode`, so a reset code is
  *     recoverable only by parsing a message string
  */
-import { Http3Server, WebTransport } from '@fails-components/webtransport'
+import { Http3Server, quicheLoaded, WebTransport } from '@fails-components/webtransport'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
 
@@ -201,6 +201,13 @@ export interface Http3ClientOptions {
 }
 
 export async function connectHttp3(opts: Http3ClientOptions): Promise<Connection> {
+  // The binding loads its native transport through a dynamic import and throws
+  // `Lib quiche loading attempt did not end` if a client is constructed before it
+  // settles. A process that also runs a server never sees this, because the server
+  // awaits the same promise on the way up — which is exactly why it went unnoticed
+  // until a client ran on its own.
+  await quicheLoaded
+
   const wt = new WebTransport(opts.url, {
     serverCertificateHashes: [{ algorithm: 'sha-256', value: opts.certificateHash }],
     // Honoured on Firefox and Safari, silently ignored on Chrome. Defence in depth: the

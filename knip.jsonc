@@ -6,7 +6,12 @@
     "@fails-components/webtransport-transport-http3-quiche",
     // Used only by a TypeScript block in README.md, which the docs gate compiles and knip
     // cannot see through markdown. Removing it breaks scripts/check-docs.ts.
-    "zod"
+    "zod",
+    // Loaded by the stream-churn benchmark through createRequire with a computed file
+    // path, because the package exports only "." and that entry is raw TypeScript which
+    // Node refuses to strip inside node_modules. No static analysis can see the import.
+    // Kept as the measured alternative behind the transport seam — see D66.
+    "@moq/web-transport"
   ],
   // Used by the e2e and soak harnesses to mint a short-lived certificate.
   "ignoreBinaries": ["openssl"],

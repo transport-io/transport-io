@@ -1129,12 +1129,91 @@ scenario ADR 0007's seam was built for — a second transport is now a plausible
 rather than a hypothetical.
 
 **Options, in the order they should be considered:**
-1. Report upstream with this measurement. It is a sharper reproduction than the existing
-   issue, which reports 500 MB to 700 MB over twelve hours; this is 181 MB over sixteen
-   thousand streams in a couple of minutes, with a script that needs no application code.
+1. **Reported upstream as fails-components/webtransport#503** on 2026-08-26, with the
+   per-side split and a self-contained reproduction that was run as written before posting.
+   It is a sharper report than the existing #425, which measures 500 MB to 700 MB over
+   twelve hours with a full application; this is 181 MB over sixteen thousand streams in
+   about two minutes with no application code.
 2. Evaluate the second transport behind the seam (`@moq/web-transport`, a NAPI binding over
    a Rust QUIC stack) against the same probe.
 3. Neither of these is a reason to change the protocol. A stream per call stays.
 
 `scratch/binding-only.node.ts` reproduces it in isolation and should move into the
 repository as a pinned regression measurement.
+
+### D66. The leak is on both halves, and the alternative transport is flat
+Measured after D65, because "which side leaks" decides whether this blocks v1: in
+production the client is a browser using its own WebTransport and never touches this
+binding, while the binding is the long-lived server.
+
+**Both halves leak, near-equally.** Two processes, each reporting only its own memory,
+6,000 streams:
+
+| side | heap per bidirectional stream |
+|---|---|
+| client (a browser never runs this) | 5.88 KB |
+| **server (the long-lived process)** | **5.95 KB** |
+| sum | 11.83 KB, matching the 11.76 KB single-process figure |
+
+So the single-process number was two roughly equal halves, and **the server half leaks.
+This remains a Stage 1 blocker**, at half the severity: 5.95 KB per stream allows 688
+streams per hour under the 4 MB/h bound, about one call every five seconds, and costs
+209 MB/h at ten calls per second.
+
+**The alternative transport is flat.** The identical probe, identical counts, against
+`@moq/web-transport` 0.1.4 (a NAPI-RS binding over a Rust QUIC stack):
+
+| transport | per stream, 16,000 streams |
+|---|---|
+| reference binding | 11.60 KB, linear, no plateau |
+| **`@moq/web-transport`** | **0.01 KB** — heap 7.7 → 7.9 MB, RSS plateaus at 82 MB from stream 7,000 |
+
+That is not a smaller leak, it is the absence of one: the plateau is the tell.
+
+**ADR 0007's seam has paid for itself.** It was justified in principle a week ago and is
+now the difference between shipping `call()` and not. The protocol does not change; one
+implementation behind an interface does.
+
+**The honest costs of adopting it**, none of which are reasons not to:
+
+- Its quirks will be different quirks. The swallowed `tooBig` and `blocked`, the missing
+  `streamErrorCode` and the reliability guard are *this* binding's defects. Expect a fresh
+  set, and expect `resetCodeFromError` to need a sibling — its `reset(code)` and
+  `stop(code)` take explicit codes, so the message-parsing may not be needed at all.
+- **It ships raw TypeScript as its only entry point.** `exports` is `{ ".": "./src/index.ts" }`
+  with no compiled JavaScript, and Node refuses to strip types inside `node_modules`, so
+  `import ... from '@moq/web-transport'` fails with
+  `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`. The subpath is not exported either, so the
+  native binding is reachable only by file path. Adopting it means bundling, requiring by
+  path, or persuading upstream to ship JavaScript. This is an adoption cost, not a defect
+  in the QUIC stack.
+- It is version 0.1.4 and young. The reference binding is 1.6.7 with four years of history.
+- Install is *better*: per-platform npm optional dependencies rather than a
+  `prebuild-install` fetch from GitHub Releases, so F1's supply-chain caveat goes away.
+
+### D67. What happens to v1 if both transports leak
+Decided in advance rather than discovered, per the rule that a decision made while standing
+in the problem is not a decision.
+
+**Condition:** the server half leaks above the 4 MB/h bound on every transport we can
+adopt.
+
+**Then: ship v1 with `call()` present and the leak documented on the box.** Not removed,
+not silently budgeted.
+
+- Removing `call()` would give a smaller but honest v1, and it is the tempting option. It
+  is wrong, because `emit` and datagrams are provably flat and `call()`'s design is
+  provably sound — the loopback costs 0.045 KB per call. Deleting a correct feature to
+  route around one implementation's defect is the wrong shape of fix, and it makes the
+  protocol a hostage to a dependency.
+- Shipping with a budget of 353 streams per hour and saying nothing is not a product.
+- Blocking indefinitely on an upstream fix leaves working code unshipped for a reason
+  outside our control.
+
+So `call()` ships, the README carries the leak in the limitations section above the install
+instructions with the measured number and the transport it applies to, and the transport
+seam is documented as the escape hatch. That is consistent with everything else here: state
+the guarantee, including when the guarantee is bad.
+
+**This condition is currently NOT met** — `@moq/web-transport` is flat — so this decision
+is on the shelf rather than in force.

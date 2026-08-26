@@ -86,9 +86,11 @@ Part 2.
 - **Bun segfaults on exit** when the native addon is loaded, 3/3 runs. Node, 0/3.
 - **Safari cannot talk to a quiche-backed server** and is unsupported in v1. Chrome and
   Firefox only.
-- **The transport leaks 11.6 KB per bidirectional stream**, unbounded, upstream. The soak
-  fails and Stage 1 is blocked. Not ours: the loopback costs 0.045 KB and the binding leaks
-  the same amount alone. See D65.
+- **The reference transport leaks per bidirectional stream**, unbounded, upstream: 5.95 KB
+  on the server half and 5.88 KB on the client half. Not ours — our own path over a
+  loopback costs 0.045 KB. The soak fails and Stage 1 is blocked. See D65.
+- **`@moq/web-transport` is flat** on the identical probe: 0.01 KB per stream over 16,000,
+  with a real plateau. The transport seam in ADR 0007 is the way out. See D66.
 
 ## Rules that exist because something nearly shipped
 

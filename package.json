@@ -37,6 +37,7 @@
     "@commitlint/config-conventional": "^21.2.2",
     "@commitlint/types": "^21.2.0",
     "@fails-components/webtransport-transport-http3-quiche": "^1.6.7",
+    "@moq/web-transport": "^0.1.4",
     "@playwright/test": "^1.62.1",
     "@types/bun": "^1.4.0",
     "expect-type": "^1.4.0",
