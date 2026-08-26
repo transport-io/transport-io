@@ -305,6 +305,24 @@ export async function fanOut(a: Adapter, room: string, peer: PeerId): Promise<vo
 `MemoryAdapter` ships in core and is the default, so installing this library and running it
 needs no infrastructure and no configuration.
 
+**If you write an adapter, run the conformance suite against `HostileAdapter` too.** It is
+exported from `transport-io/testing` and behaves like a bus rather than a map: it
+serialises every frame through bytes, adds latency, delivers the publisher its own
+messages, reorders deliveries, and fails on command. `MemoryAdapter` is synchronous,
+infallible and omniscient about membership, so an adapter that only passes against it has
+not been tested against anything.
+
+```ts
+import { HostileAdapter } from 'transport-io/testing'
+
+export const hostile = new HostileAdapter('node-1', {
+  latencyMs: 1,
+  reorder: true,
+  duplicate: true,
+})
+hostile.failNextBroadcast = true // core must degrade, not crash
+```
+
 Every method is async even in memory, frames cross as bytes rather than live objects, and
 any method may reject — a rejected `broadcast` leaves local members served and the session
 up. Core degrades rather than crashing.
