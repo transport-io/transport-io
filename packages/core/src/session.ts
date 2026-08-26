@@ -182,7 +182,7 @@ export class Session {
         'The session opened but no application bytes arrived. Some browsers establish a WebTransport session and then never transmit; that combination is unsupported.',
       )
       this.#handshakeReject(e)
-      this.#conn.close(CloseCode.WT_HANDSHAKE_TIMEOUT, 'handshake deadline')
+      this.close(CloseCode.WT_HANDSHAKE_TIMEOUT, 'handshake deadline')
       onDeadline(e)
     }, this.#deadlineMs)
 
@@ -412,7 +412,7 @@ export class Session {
       this.#emitQueue.push(bytes)
     } catch (e) {
       if (e instanceof PeerTooSlowError) {
-        this.#conn.close(CloseCode.WT_PEER_TOO_SLOW, e.message)
+        this.close(CloseCode.WT_PEER_TOO_SLOW, e.message)
         return
       }
       throw e
@@ -429,6 +429,15 @@ export class Session {
     return { ...this.#dgQueue.stats(), staleReceived: this.#gate.staleReceived }
   }
 
+  /**
+   * The only door out of a session, and every internal path now uses it.
+   *
+   * Guarding this method alone was not enough: four call sites reached `#conn.close()`
+   * directly — the handshake deadline, the peer-too-slow bound, an emit write failure and a
+   * protocol error on the read loop — so the guard covered the one path that already had
+   * the fewest duplicates. A soak still produced 619,422 `close sent twice` complaints from
+   * quiche after the first fix, which is what a partial guard looks like from the outside.
+   */
   close(code: number, reason: string): void {
     // Idempotent in both halves. `dispose()` already was; `conn.close()` was not, so a
     // second close — a client disconnecting while the server is tearing the same session
@@ -677,7 +686,7 @@ export class Session {
         // §5.5: one emit stream per direction and no way to reopen it, so a fault on it is
         // fatal to the lane. Swallowing it left the lane silently dead while `getSnapshot()`
         // still reported `connected`.
-        this.#conn.close(CloseCode.WT_PROTOCOL_ERROR, closeReason(e))
+        this.close(CloseCode.WT_PROTOCOL_ERROR, closeReason(e))
       },
     )
   }
@@ -701,7 +710,7 @@ export class Session {
       // A protocol error on the emit stream is fatal to the lane: there is one stream per
       // direction and no way to reopen it, so resetting would end stream traffic silently.
       this.#handshakeReject(e)
-      this.#conn.close(closeCodeFor(e), closeReason(e))
+      this.close(closeCodeFor(e), closeReason(e))
     }
   }
 

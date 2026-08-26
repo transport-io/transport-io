@@ -1869,3 +1869,40 @@ transport is told exactly once however many times `close()` is called.
 
 **Reconsider when:** never. An idempotent teardown that is idempotent in only one of its two
 steps is not idempotent.
+
+### D85. The soak certified the absence of measurement
+Found by running a deliberately short soak to check something unrelated, and reading the
+output instead of the exit code.
+
+```
+samples (after 10min warmup): 0
+slope (linear fit)   +0.00 MB/h   bound < 4     PASS
+peak RSS             -Infinity MB  bound < 600   PASS
+SOAK PASSED
+```
+
+A two-minute run never reaches the end of its own ten-minute warmup, so it collects no
+samples. With none: the least-squares denominator is zero and the function returns a slope
+of **0**; `Math.max()` of an empty array is **-Infinity**; and both are comfortably inside
+their bounds. The soak that certifies D13 passed while having measured nothing at all, and
+exited 0 while doing it.
+
+This is the D13 defect one layer further down, and the third variant of it in this project:
+
+| | what was certified |
+|---|---|
+| original D13 | growth as a percentage of a baseline nobody fixed — passed against the leak it was written to catch |
+| D76's first draft | quarantine occupancy, reported as leak, because the run was shorter than the quarantine window |
+| here | **nothing**, reported as a pass, because the run was shorter than the warmup |
+
+Each time the number looked fine. `+402 B` and `PASS` and `-Infinity` are all things a person
+skims past.
+
+**The rule this settles.** A threshold is meaningless without a stated minimum number of
+observations, and that minimum is part of the criterion rather than an implementation
+detail. Both soaks now require at least three samples — the fewest a least-squares line
+means anything over — and say so in their output when they do not have them. The churn soak
+already had the guard, which is why it was the one that produced trustworthy numbers.
+
+**Reconsider when:** never. If a run is too short to sample, the correct result is a failure
+that names the reason, which is what it now prints.

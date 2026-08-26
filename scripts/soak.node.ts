@@ -186,15 +186,34 @@ function slopeMbPerHour(pts: readonly Sample[]): number {
   return den === 0 ? 0 : (num / den) * 60
 }
 
+/**
+ * A fit needs points. Without this the whole criterion inverts on an empty sample set:
+ * `den === 0` returns a slope of 0, `Math.max()` of nothing is `-Infinity`, and both
+ * comparisons pass — so a run too short to reach the end of its own warmup printed
+ * `peak RSS -Infinity MB  bound < 600  PASS` and exited 0.
+ *
+ * That is the D13 defect one more layer down: a threshold that certifies the absence of
+ * measurement. Three points is the minimum a least-squares line means anything over, and it
+ * is the same floor the churn soak uses.
+ */
+const MIN_SAMPLES = 3
+const enoughSamples = samples.length >= MIN_SAMPLES
+
 const slope = slopeMbPerHour(samples)
-const peak = Math.max(...samples.map((s) => s.rssMb))
-const slopeOk = slope < SLOPE_BOUND_MB_PER_H
-const ceilingOk = peak < RSS_CEILING_MB
+const peak = samples.length === 0 ? Number.NaN : Math.max(...samples.map((s) => s.rssMb))
+const slopeOk = enoughSamples && slope < SLOPE_BOUND_MB_PER_H
+const ceilingOk = enoughSamples && peak < RSS_CEILING_MB
 const callsOk = !LANES.includes('call') || calls >= TARGET_CALLS
 
 console.log('')
 console.log('─'.repeat(64))
 console.log(`samples (after ${WARMUP_MIN}min warmup): ${samples.length}`)
+if (!enoughSamples) {
+  console.log(
+    `  NOT ENOUGH SAMPLES — need ${MIN_SAMPLES}, got ${samples.length}. ` +
+      `Run for longer than the ${WARMUP_MIN}min warmup plus ${MIN_SAMPLES} sample intervals.`,
+  )
+}
 console.log(
   `slope (linear fit)   ${slope >= 0 ? '+' : ''}${slope.toFixed(2)} MB/h   bound < ${SLOPE_BOUND_MB_PER_H}   ${slopeOk ? 'PASS' : 'FAIL'}`,
 )
