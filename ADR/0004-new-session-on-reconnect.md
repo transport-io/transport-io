@@ -24,7 +24,7 @@ outlives the connection it was granted on.
 
 ## Why this way
 
-The failure is visible, which is the point. An application that must survive reconnection
+The failure is visible by design. An application that must survive reconnection
 writes that logic explicitly, with its own idempotency and its own re-auth, rather than
 inheriting a guarantee that quietly does not hold.
 

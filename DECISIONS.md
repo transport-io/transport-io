@@ -2057,7 +2057,7 @@ whole of the measurement's provenance is a bench script in this repository.
 **The placement.** The limitations lived above the install instructions, which D67 and D73
 put there deliberately. The reasoning was sound and the result was not: the first thing a
 reader saw was seven headings explaining why not to use this, before a single line of what
-it does. Honest and self-defeating are not mutually exclusive.
+it does.
 
 Nothing was softened and nothing was cut. Every word moved to `KNOWN-ISSUES.md`, which now
 also separates the two kinds of entry that were previously mixed: the design positions that

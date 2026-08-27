@@ -183,9 +183,8 @@ A refusal MUST name the offending event in the close reason, for example
 that completes a handshake.** Anyone who can open a session learns the full set of event
 names and lanes - not payloads, not schemas, not data, but the surface. For almost every
 application this is uninteresting, and it is the same information a client bundle already
-contains. It is stated here rather than left to be discovered because it is occasionally
-not uninteresting: if event names encode unreleased features or internal structure, an
-unauthenticated peer can read them.
+contains. It matters when event names encode unreleased features or internal structure,
+because an unauthenticated peer can read them.
 
 **This library authenticates nothing, and offers no hook to.** `Connection` exposes no
 headers, no URL, no peer address and no identity; `ServerOptions` has no reject callback;
@@ -273,8 +272,7 @@ universally. The type byte is at a fixed offset inside the header, so it is read
 any payload has to be buffered; applying the call cap to an `EMIT` frame lets a peer make a
 receiver hold sixteen times what this section permits.
 Exceeding either cap is a protocol error raised by the decoder as
-`WT_PAYLOAD_TOO_LARGE` - not a §10.1 reset code, which is a distinction this document
-previously got wrong. On a call stream the receiver abandons the stream, and the
+`WT_PAYLOAD_TOO_LARGE`, not a §10.1 reset code. On a call stream the receiver abandons the stream, and the
 initiator's call rejects with `WT_PROTOCOL_ERROR` because no response frame arrived. On
 the emit stream, §5.5 applies.
 
@@ -647,8 +645,8 @@ One byte. Sent as the QUIC application error code on `RESET_STREAM` or `STOP_SEN
 left to explain on.** Everything a responder can say about a *call* - the handler threw,
 the event is not in the contract, the payload failed validation, the handshake had not
 completed - is sent as a `CALL_ERROR` frame (§6.4) carrying both a code and a message, on
-the stream the call already owns. That is strictly more than a reset can express, and it
-is why this table is three rows rather than ten.
+the stream the call already owns. That is strictly more than a reset can express, which is
+why only three reset codes exist.
 
 | code | name | meaning and remedy |
 |---|---|---|

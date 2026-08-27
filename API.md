@@ -1,6 +1,6 @@
 # transport-io API
 
-The TypeScript surface as it exists today. Types are shown as they are, not described.
+The TypeScript surface as it exists today. Every signature below is the real declaration.
 
 **Every snippet in this document is extracted and typechecked against the built package in
 CI.** When the API changes, the docs stop compiling and the build breaks.
@@ -27,7 +27,7 @@ export const contract = defineContract({
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-**Write both lines.** The second is not decoration: it is what keeps every hover readable.
+**Write both lines.** The second is what keeps every hover readable.
 With it, hovering `emit` shows 126 characters. Without it - passing the contract inline -
 it shows 303, including your validator's internal types. TypeScript preserves interface
 names in hover but expands type-alias instantiations, so no library-side trick removes the

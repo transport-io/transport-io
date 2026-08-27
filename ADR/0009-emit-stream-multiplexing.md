@@ -30,7 +30,7 @@ three places - this record, the protocol specification, and the README - so that
 The trade is still right: calls and datagrams remain fully isolated, and the alternative
 trades a bounded latency cost for an unbounded memory one.
 
-### The second cost, found by audit rather than by design
+### The second cost, found by audit
 
 One shared lane means one unrecoverable failure. A protocol error on a per-emit stream
 would cost one message; on the shared lane it destroys **all** stream-lane traffic for the
@@ -61,13 +61,13 @@ the `WT_HANDSHAKE_INCOMPLETE` session-close rule disappears.
 
 Two residual cases exist, and both resolve into behaviour that already had to exist:
 
-- **A datagram may still arrive first.** It is discarded silently, which is precisely the
-  unreliable lane's contract. No new rule.
+- **A datagram may still arrive first.** It is discarded silently, which is the unreliable
+  lane's contract. No new rule.
 - **A call stream may still race.** The server answers on that stream with a call-error
   frame and resets it, reusing the existing error path. No session close.
 
 The cost accepted is that a version mismatch is refused after allocating a stream reader
-rather than before. That is one reader, against removing a race from the protocol.
+rather than before. One reader, in exchange for removing a race from the protocol.
 
 **The 5000 ms handshake deadline earns its place separately.** A peer that never opens its
 emit stream is indistinguishable from one that opens it and never writes - which is exactly

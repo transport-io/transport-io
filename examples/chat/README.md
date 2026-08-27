@@ -1,10 +1,10 @@
 # chat with live cursors
 
-Both lanes in one page, so the difference is visible rather than described.
+Both lanes in one page, so you can watch the difference.
 
 - **chat** is `lane: 'stream'` - reliable and ordered. Nothing sent here is ever lost.
-- **cursor** is `lane: 'datagram'` - unreliable. Frames are dropped routinely, and that is
-  the point: a cursor position is stale the moment the next one exists.
+- **cursor** is `lane: 'datagram'` - unreliable. Frames are dropped routinely, which is
+  fine: a cursor position is stale the moment the next one exists.
 - **setName** is a `call()` - request and response on their own bidirectional stream.
 
 The contract in [`contract.ts`](contract.ts) is the only place that says which is which.
@@ -19,7 +19,7 @@ bun run start      # http://localhost:8080
 
 Or `bun run dev`, which does all three.
 
-Open **two** windows to see the point. Type in one; it appears in both. Move the pointer in
+Open **two** windows. Type in one; it appears in both. Move the pointer in
 one; the dot moves in the other, and the drop counters in the header climb under load.
 
 ## Things that will trip you up

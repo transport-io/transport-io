@@ -69,7 +69,7 @@ The build-time collision error stays regardless. It should be unreachable rather
 absent, and an explicit `id` override remains available for anyone who contrives a
 collision or needs a fixed value for an external implementer.
 
-## Deploy story, stated as a property rather than discovered
+## Deploy story
 
 - **Adding an event** changes no existing identifier. Rolling-deploy safe.
 - **Removing an event** changes no existing identifier. Peers that still send it receive a
@@ -80,8 +80,8 @@ collision or needs a fixed value for an external implementer.
 - **Changing an explicit `id`** is breaking and is refused, because it is a genuine
   decoding disagreement.
 
-The README states this as a property of the library, in these terms, rather than leaving it
-to be discovered in production.
+The README states all of this, in these terms, so nobody has to find it out in
+production.
 
 ## Revisit when
 
