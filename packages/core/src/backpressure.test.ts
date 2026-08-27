@@ -111,7 +111,7 @@ describe('the emit bound is reachable, and reaching it disconnects the peer', ()
     await new Promise((r) => setTimeout(r, 20))
 
     // The transport took the handshake and one emit; the other 99 are still queued, which
-    // is the whole point. Before the fix depth was 0 here and `accepted` was 2 - every
+    // is what this asserts. Before the fix depth was 0 here and `accepted` was 2 - every
     // other frame was parked in `#writeChain`, invisible and unbounded.
     expect(peer.accepted).toBeLessThanOrEqual(2)
     expect(session.emitQueueDepth).toBeGreaterThan(90)

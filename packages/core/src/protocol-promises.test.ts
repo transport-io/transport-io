@@ -2,7 +2,7 @@
  * The promises PROTOCOL.md §10 makes, asserted on the wire.
  *
  * Every test here is named for a normative statement, and its body asserts that statement
- * and nothing adjacent to it. That distinction is the whole point of the file. Before it
+ * and nothing adjacent to it. That distinction is what this file exists to hold. Before it
  * existed, three of these promises had a test whose *name* was the promise and whose body
  * asserted something cheaper to reach:
  *

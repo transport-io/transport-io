@@ -12,7 +12,7 @@ export type Schema = StandardSchemaV1
 /**
  * `returns` is meaningful only on the stream lane: a datagram has no response path.
  *
- * The `returns?: never` on the datagram branch is load-bearing, not decoration. Excess
+ * The `returns?: never` on the datagram branch does real work. Excess
  * property checking against a *union* admits any property present on any member, so
  * `{ lane: 'datagram', payload, returns }` compiled happily, `CallableOf` admitted it, and
  * `call()` served it over a bidirectional stream. A contract that says "may be dropped"

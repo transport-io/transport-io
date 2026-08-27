@@ -56,7 +56,7 @@ export interface Publisher {
 /**
  * A bus two or more `MemoryAdapter`s can share, so a single process can model several
  * nodes. Without it `MemoryAdapter` is per-instance and two of them cannot hear each
- * other, which is precisely why the cross-node delivery path had never executed a line.
+ * other, which is why the cross-node delivery path had never executed a line.
  */
 export function memoryBus(): MemoryBus {
   return { listeners: [] }

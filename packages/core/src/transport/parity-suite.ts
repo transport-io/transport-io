@@ -38,7 +38,7 @@ export interface UnderTest {
   /**
    * Whether a peer's stream reset reaches the responder's `ctx.signal`.
    *
-   * `false` is a real capability gap, not a preference. moq surfaces STOP_SENDING only on
+   * `false` is a real capability gap. moq surfaces STOP_SENDING only on
    * the next write, and a long-running handler never makes one, so the handler is not
    * told to stop. The caller still rejects either way - the work just keeps running.
    */

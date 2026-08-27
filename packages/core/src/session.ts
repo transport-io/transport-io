@@ -372,7 +372,7 @@ export class Session {
       // library has - and it rejected with a raw DOMException carrying no code and no
       // remedy, which the error helper printed in API.md reports as 'unknown'.
       // Read through a call so narrowing from the pre-check above does not apply: the
-      // signal can abort at any point during the call, which is the whole reason it exists.
+      // signal can abort at any point during the call, which is what it is for.
       const abortedNow = (): boolean => opts?.signal?.aborted ?? false
       throw isAbort(e) || abortedNow() ? abortToTransportError(e) : e
     } finally {
@@ -667,7 +667,7 @@ export class Session {
 
   /**
    * One write in flight at a time, and the frame stays in the queue until that write
-   * *completes*. That is the whole fix: previously this drained the entire queue on the
+   * *completes*. Previously this drained the entire queue on the
    * same turn as the push and appended each frame to an unbounded promise chain, so depth
    * returned to zero after every push and `EmitQueue`'s bound could never be reached from
    * a Session. The backlog did not go away, it went somewhere that could not disconnect
