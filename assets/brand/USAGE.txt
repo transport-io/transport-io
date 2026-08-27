@@ -1,9 +1,9 @@
-transport-io — brand assets
+transport-io - brand assets
 mark: M1, "bitten slab"
 
 FILES
-  transport-io-mark-ink.svg           mark in ink (#16130F) — light grounds
-  transport-io-mark-bone.svg          mark in bone (#E7E2D6) — dark grounds
+  transport-io-mark-ink.svg           mark in ink (#16130F) - light grounds
+  transport-io-mark-bone.svg          mark in bone (#E7E2D6) - dark grounds
   transport-io-mark-currentcolor.svg  inherits fill from CSS colour
   transport-io-lockup-ink.svg         horizontal lockup, light grounds
   transport-io-lockup-bone.svg        horizontal lockup, dark grounds
