@@ -33,10 +33,9 @@ both sides infer from it.
 npm install transport-io
 ```
 
-A git install does **not** work, and it is worth saying why rather than letting you find
-out: this is a monorepo whose root package is `transport-io-monorepo` and is `private`, so
-`npm install github:transport-io/transport-io` installs that root and `import … from
-'transport-io'` then fails. Verified, not assumed. To work on the library instead, clone it:
+Installing from git does not work. The repository root is a private package called
+`transport-io-monorepo`, so `npm install github:transport-io/transport-io` installs that
+instead and `import … from 'transport-io'` fails. To work on the library itself, clone it:
 
 ```bash
 git clone https://github.com/transport-io/transport-io
@@ -174,6 +173,6 @@ MIT, for the source code.
 
 The name and the marks in [`assets/brand`](assets/brand) are **not** covered by it.
 Copyright and trademark are separate, and MIT speaks only to the first, so the carve out is
-stated explicitly in [`assets/brand/LICENSE`](assets/brand/LICENSE) rather than left to be
-argued about. Short version: use the marks to refer to this project, do not use them as the
-mark of your own. Forking is welcome, under your own name.
+stated in [`assets/brand/LICENSE`](assets/brand/LICENSE). Short version: use the marks to
+refer to this project, not as the mark of your own. Forking is welcome, under your own
+name.

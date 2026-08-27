@@ -146,5 +146,4 @@ reproduction. If it involves the transport, say which browser: Chrome and Firefo
 supported, Safari cannot talk to a quiche backed server and is not.
 
 Known limitations have their own page, [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md). Please check
-there first: some of what looks like a bug is a documented and deliberate refusal, and the
-page says which entries are positions and which is the one real defect.
+there first: some of what looks like a bug is deliberate, and that page says which.

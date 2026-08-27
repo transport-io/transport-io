@@ -25,8 +25,8 @@ than a patch.
 
 ## What this library does not protect you from
 
-These are design positions, not vulnerabilities. They are listed because a reader deciding
-whether to depend on this deserves them stated plainly rather than discovered later.
+These are deliberate, not vulnerabilities. They are here so you can see them before you
+depend on the library, instead of finding them later.
 
 **It authenticates nothing.** `Connection` exposes no headers, no URL, no peer address and
 no identity, and `ServerOptions` has no reject hook. The only control an application has is

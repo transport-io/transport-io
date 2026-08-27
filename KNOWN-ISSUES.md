@@ -1,14 +1,10 @@
 # Known issues and deliberate limits
 
-Two kinds of thing are on this page and it is worth knowing which is which.
+Most of what follows is deliberate. It describes what this library will not do, and why,
+so you can decide before you build on it. None of it is going to change.
 
-Most of it is **design positions**: behaviour that will not change, because changing it
-would mean lying about your data. Those are not bugs and there is no plan to fix them.
-
-One of them is an actual defect, in a dependency rather than here, and it is the only entry
-that carries a measured cost: [each call leaks memory](#each-call-leaks-memory).
-
-If any of this is disqualifying, better to find out now than after you have built on it.
+One entry is different: [each call leaks memory](#each-call-leaks-memory) is a real bug,
+in a dependency, with a measured cost.
 
 ## Chrome and Firefox only
 
@@ -55,11 +51,11 @@ All rooms share one emit stream per direction, so a high-volume room delays a qu
 messages to the same peer. Calls and datagrams are fully isolated - they use separate
 streams and separate packets - but emits to one peer are serialised across every room that
 peer belongs to. Per-room lanes are reserved as a negotiated feature and are not in this
-version. Do not read "independent streams" as a promise about emits.
+version. So "independent streams" is not a promise about emits.
 
 ## Each call leaks memory
 
-This is the one entry on this page that is a defect rather than a position.
+Unlike the rest of this page, this one is a bug.
 
 Every `call()` opens its own bidirectional stream, and the QUIC binding this library ships
 against leaks roughly **5.95 KB of server memory per stream**, unbounded. At ten calls per
@@ -77,8 +73,8 @@ internal seam, but it cannot shut a server down gracefully and does not deliver 
 cancellation to the responder, so it is not the default yet.
 
 If your workload is mostly `emit` and datagrams, this does not affect you: both are flat,
-and you can check that yourself rather than taking it on trust - `npm run soak:lanes` runs
-the memory soak over those two lanes only, and it is expected to pass.
+and you can check for yourself: `npm run soak:lanes` runs the memory soak over those two
+lanes and passes.
 
 ## Protocol versioning
 
@@ -98,11 +94,10 @@ The first release is `0.1.0`. (`0.0.1` is on the registry to claim the name, fro
 tree, and is not a release.) Under `0.x` a **minor** bump is allowed to contain breaking
 changes - pin an exact version, or accept that `^0.1.0` can move under you.
 
-Every breaking change still gets a version bump and a changelog entry; that rule is in force
-from the first release. What `0.x` withholds is the promise that a minor bump is safe, and
-that promise is withheld deliberately: `call()` ships with a documented upstream leak, and a
-single audit shortly before the first release found thirty-one defects worth fixing first.
-That is not an API anyone should treat as settled yet. See D83.
+Every breaking change still gets a version bump and a changelog entry. What `0.x` withholds
+is the promise that a minor bump is safe, and that is deliberate: `call()` ships with a
+documented upstream leak, and an audit shortly before this release turned up thirty-one
+things worth fixing. The API is not settled yet. See D83.
 
 ---
 
