@@ -7,8 +7,10 @@ Framing, length prefixes, buffer accumulation, stream lifecycle and backpressure
 hidden. Reliability is not: an event declares `stream` or `datagram` in the contract, and
 "this message may be dropped" is a property of your data that lives in the type system.
 
-**Full documentation, and the limitations you should read before installing, are in the
-[repository README](https://github.com/transport-io/transport-io#readme).** The short version:
+**Read [KNOWN-ISSUES.md](https://github.com/transport-io/transport-io/blob/main/KNOWN-ISSUES.md)
+before you start.** It is what this library refuses to do and will not change, plus the one
+measured defect. Full documentation is in the
+[repository README](https://github.com/transport-io/transport-io#readme). The short version:
 
 - **WebTransport only.** No WebSocket fallback, deliberately - a fallback would silently
   make the datagram lane reliable and ordered, which is a lie about your data.

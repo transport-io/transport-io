@@ -53,5 +53,6 @@ If WebTransport is unavailable, the connection fails rather than degrading quiet
 **Each `call()` leaks about 5.95 KB of server memory.** This is upstream, in the QUIC
 binding, not in this library: the same code over an in memory transport costs 0.045 KB per
 call, and the binding leaks the same amount with none of this library's code present. It is
-reported upstream and documented at the top of the README. Treat it as a capacity planning
-fact for now. `emit` and datagrams are flat.
+**not** tracked upstream: an issue was opened against the binding and withdrawn before any
+maintainer replied. [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) carries the measurement and its
+provenance. Treat it as a capacity planning fact for now. `emit` and datagrams are flat.

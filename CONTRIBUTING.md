@@ -145,6 +145,6 @@ Include the Node version, the platform, whether the native transport is installe
 reproduction. If it involves the transport, say which browser: Chrome and Firefox are
 supported, Safari cannot talk to a quiche backed server and is not.
 
-Known limitations are listed at the top of the README, above the install instructions,
-deliberately. Please check there first: some of what looks like a bug is a documented and
-deliberate refusal.
+Known limitations have their own page, [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md). Please check
+there first: some of what looks like a bug is a documented and deliberate refusal, and the
+page says which entries are positions and which is the one real defect.

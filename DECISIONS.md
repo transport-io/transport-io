@@ -1415,8 +1415,9 @@ adoptable, for two reasons that are about correctness rather than performance:
 - **No graceful shutdown** (D71). A server that must be killed cannot drain connections.
 - **Abort does not reach the responder** (D72). Cancelling a call leaves the work running.
 
-Against that, the reference binding leaks 5.95 KB per server-side stream (D65, reported
-upstream) but shuts down cleanly and propagates aborts correctly.
+Against that, the reference binding leaks 5.95 KB per server-side stream (D65) but shuts
+down cleanly and propagates aborts correctly. *This entry originally said the leak was
+reported upstream. It was not: see D90.*
 
 **So D67 goes into force:** ship with `call()` present and the leak documented in the
 README above the install instructions, with the measured number and the transport it
@@ -2041,3 +2042,35 @@ The wrapper still exits 1 on an empty glob. Verified in both directions.
 
 **Reconsider when:** `node --test` grows a machine-readable summary that does not depend on
 the reporter. Until then this parses prose, and parsing prose is what this was.
+
+### D90. The limitations get their own page, and the leak was never reported upstream
+Two things, one of which is a correction.
+
+**The correction.** Three documents said the upstream stream leak was "reported upstream".
+It was not. An issue describing it was opened against the binding and closed 75 minutes
+later by the same account, with zero comments, so no maintainer ever saw it. The claim was
+load-bearing in exactly the wrong way: a reader deciding whether to depend on this would
+have read "reported" as "someone is looking at it" and planned around a fix that nobody is
+working on. `README.md`, `SECURITY.md` and D73 now say it is not tracked, and say that the
+whole of the measurement's provenance is a bench script in this repository.
+
+**The placement.** The limitations lived above the install instructions, which D67 and D73
+put there deliberately. The reasoning was sound and the result was not: the first thing a
+reader saw was seven headings explaining why not to use this, before a single line of what
+it does. Honest and self-defeating are not mutually exclusive.
+
+Nothing was softened and nothing was cut. Every word moved to `KNOWN-ISSUES.md`, which now
+also separates the two kinds of entry that were previously mixed: six design positions that
+will not change, and one measured defect. The README links it as "read this before you
+start", and `packages/core/README.md`, `CONTRIBUTING.md` and `SECURITY.md` all point at it,
+because a page nobody links to is where a limitation goes to be forgotten - the same failure
+mode as `OPEN-QUESTIONS.md`.
+
+The rule that survives from D67 is the one that mattered: the leak ships documented, with
+the measured number and the transport it applies to. Where the document sits is a separate
+question from whether it tells the truth.
+
+**Reconsider when:** anything on that page stops being reachable in one click from the
+README, or an entry is added that is neither a position nor a measurement. Both are visible
+in review rather than by tooling, which is a weaker guarantee than this repository usually
+accepts, and is recorded as such.
