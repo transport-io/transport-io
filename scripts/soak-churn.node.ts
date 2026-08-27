@@ -35,7 +35,7 @@ const arg = (name: string, fallback: number): number => {
 /** Cycles in the measured phase, after warmup. */
 const CYCLES = arg('cycles', 12000)
 /**
- * Warmup is in SECONDS, not cycles, and that is the point. `ORIGIN_QUARANTINE_MS` is
+ * Warmup is in SECONDS, not cycles, and the difference matters. `ORIGIN_QUARANTINE_MS` is
  * 120_000: a freed origin is deliberately held for two minutes before reuse, so a run
  * shorter than that measures quarantine occupancy as though it were a leak. 12,000 cycles
  * take about 17 seconds on this machine, so a cycle-count warmup cannot express "past the

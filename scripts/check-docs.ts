@@ -108,7 +108,7 @@ for (const doc of ['API.md', 'README.md', 'AGENTS.md']) {
    * Block N compiles against blocks 1..N, in source order - a *prefix*, not the whole
    * document.
    *
-   * The difference is the whole gate. Concatenating every block into one module made this
+   * The difference is what this gate catches. Concatenating every block into one module made this
    * blind: TypeScript hoists imports, so a block could use a name that a *later* block
    * imported. That is exactly how the README's flagship snippet called `defineContract`
    * without importing it and still compiled - the import was three blocks further down the

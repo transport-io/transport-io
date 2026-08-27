@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 #
 # The published .d.ts must be consumable by the oldest TypeScript this project claims.
-# Floor measured, not assumed: 4.9.5 fails on the emitted `.d.ts` with TS1139 at the `const`
+# The floor is measured: 4.9.5 fails on the emitted `.d.ts` with TS1139 at the `const`
 # type parameter, and 5.0.4 passes. That is D55; this script is what keeps it true.
 #
-# This runs against the PACKED TARBALL in a temporary directory, and that is the whole
-# design. Two earlier shapes of this gate were both wrong, in opposite directions:
+# This runs against the PACKED TARBALL in a temporary directory, which is the design. Two earlier shapes of this gate were both wrong, in opposite directions:
 #
 #   1. `tsc --skipLibCheck packages/core/dist/index.d.ts` in the repository root. That flag
 #      skips checking every declaration file *including the one named on the command line*,
@@ -25,7 +24,7 @@
 # permits extensionless imports that resolve for a bundler and then fail for a consumer on
 # `node16`, so passing under one of the two is not evidence about the other.
 #
-# The negative probe is not decoration. A gate that compiles a file which imports nothing
+# The negative probe matters. A gate that compiles a file which imports nothing
 # interesting passes for ever; this one asserts that a wrong event name is still rejected at
 # the floor version, so the gate fails if the checking silently stops happening.
 #

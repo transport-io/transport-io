@@ -37,7 +37,7 @@ describe('a module Bun may load must not reach the transport', () => {
     expect(v.length).toBe(1)
   })
 
-  test('a Node-only module may import whatever it likes - that is the point of the name', () => {
+  test('a Node-only module may import whatever it likes', () => {
     expect(isNodeOnly('x.node.ts')).toBe(true)
     expect(isNodeOnly('x.node.test.ts')).toBe(true)
     expect(isNodeOnly('x.test.ts')).toBe(false)

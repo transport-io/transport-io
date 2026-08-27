@@ -31,7 +31,7 @@ const NODE_ONLY_PACKAGES = [
   '@moq/web-transport',
 ]
 
-/** A module is Node-only if its own name says so. That is the whole convention. */
+/** A module is Node-only if its own name says so. That is the convention. */
 export function isNodeOnly(file: string): boolean {
   return /\.node\.(test\.)?ts$/.test(file)
 }
