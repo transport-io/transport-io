@@ -2,10 +2,10 @@
 
 Both lanes in one page, so the difference is visible rather than described.
 
-- **chat** is `lane: 'stream'` — reliable and ordered. Nothing sent here is ever lost.
-- **cursor** is `lane: 'datagram'` — unreliable. Frames are dropped routinely, and that is
+- **chat** is `lane: 'stream'` - reliable and ordered. Nothing sent here is ever lost.
+- **cursor** is `lane: 'datagram'` - unreliable. Frames are dropped routinely, and that is
   the point: a cursor position is stale the moment the next one exists.
-- **setName** is a `call()` — request and response on their own bidirectional stream.
+- **setName** is a `call()` - request and response on their own bidirectional stream.
 
 The contract in [`contract.ts`](contract.ts) is the only place that says which is which.
 
@@ -30,7 +30,7 @@ QUIC library does not send. Feature detection will report support and the connec
 establish before failing, which is why the client raises `WT_HANDSHAKE_TIMEOUT` with an
 explanation rather than hanging.
 
-**The certificate expires in 14 days.** That is not our choice — a pinned certificate is
+**The certificate expires in 14 days.** That is not our choice - a pinned certificate is
 capped at 14 days total validity, must be ECDSA (P-256, P-384 or Ed25519), and must be
 hashed with SHA-256. Re-run `bun run cert` when it lapses.
 
@@ -40,7 +40,7 @@ a certificate.
 
 **Two ports, two servers.** 8080 is an ordinary HTTP server for the page. 4433 is QUIC over
 UDP. If you are running this somewhere that does not route UDP to your process, nothing
-will connect — that requirement is in the root README and it is the first thing to check.
+will connect - that requirement is in the root README and it is the first thing to check.
 
 ## What to look at in the code
 
@@ -48,5 +48,5 @@ will connect — that requirement is in the root README and it is the first thin
 the same order; and broadcasts cursors with `.except(peer.id)`, because you already know
 where your own pointer is.
 
-`web/main.ts` uses `subscribe`/`getSnapshot` rather than a pile of events — the same two
+`web/main.ts` uses `subscribe`/`getSnapshot` rather than a pile of events - the same two
 methods a React binding would hand to `useSyncExternalStore`.

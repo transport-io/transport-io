@@ -18,8 +18,8 @@ import { join } from 'node:path'
 /**
  * Loaded through `napi.cjs` rather than the package entry point, deliberately.
  *
- * `@moq/web-transport` declares `exports: { ".": "./src/index.ts" }` — raw TypeScript,
- * no compiled JavaScript — and Node refuses to strip types inside `node_modules`, so
+ * `@moq/web-transport` declares `exports: { ".": "./src/index.ts" }` - raw TypeScript,
+ * no compiled JavaScript - and Node refuses to strip types inside `node_modules`, so
  * `import ... from '@moq/web-transport'` fails outright with
  * ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING. The native binding underneath is a normal
  * CommonJS module, which is what this measures and what an adapter would bind to.

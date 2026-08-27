@@ -1,7 +1,7 @@
 /**
  * The browser Connection, over the platform's own `WebTransport`.
  *
- * Nothing here is imported at module scope — `WebTransport` is read inside connect() —
+ * Nothing here is imported at module scope - `WebTransport` is read inside connect() -
  * so importing this on a server, which Next.js will do, is safe. There is no native
  * addon and no binding, which is why this file is not `*.node.ts`.
  */

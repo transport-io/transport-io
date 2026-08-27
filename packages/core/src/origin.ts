@@ -5,8 +5,8 @@
  * where a collision is close to undebuggable, since two peers would share a sequence space
  * and each would silently discard the other's datagrams as stale.
  *
- * Quarantined, not retired: never reusing turns the counter into a clock — 2^22 values at
- * 100 sessions per second exhausts in under twelve hours — so a busy host would stop
+ * Quarantined, not retired: never reusing turns the counter into a clock - 2^22 values at
+ * 100 sessions per second exhausts in under twelve hours - so a busy host would stop
  * accepting sessions and need a restart.
  */
 import { TransportError } from './errors.ts'
@@ -27,7 +27,7 @@ export class OriginAllocator {
   /**
    * `counterSpace` exists so the exhaustion branch can be reached in a test. Exhausting the
    * real space means 4,194,304 allocations, which is why §7.3's "MUST refuse new sessions"
-   * went unproven — and an unreachable branch in an allocator is exactly the kind of code
+   * went unproven - and an unreachable branch in an allocator is exactly the kind of code
    * that is wrong the first time it runs. Production never passes it.
    */
   constructor(

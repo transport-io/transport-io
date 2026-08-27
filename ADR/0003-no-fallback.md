@@ -1,4 +1,4 @@
-# ADR 0003 — No fallback, and the dependency's fallback is disabled
+# ADR 0003 - No fallback, and the dependency's fallback is disabled
 
 **Status:** accepted · **Decision:** D3, D10, D11
 
@@ -15,7 +15,7 @@ A WebSocket is reliable and ordered. Running the datagram lane over one would si
 convert every `lane: 'datagram'` event into a reliable, ordered one. The contract would
 still say the message may be dropped; the transport would guarantee it never is. The
 application would be built on a guarantee that is a lie, and the lie would be invisible
-precisely where it matters — under the network conditions that triggered the fallback.
+precisely where it matters - under the network conditions that triggered the fallback.
 
 Degrading availability is honest. Degrading a guarantee is not.
 
@@ -51,8 +51,8 @@ error.
 ## Revisit when
 
 The upstream QUIC library advertises the WebTransport session-level flow-control
-**SETTINGS** the browser requires — `WT_INITIAL_MAX_DATA` and
-`WT_INITIAL_MAX_STREAMS_UNI`/`_BIDI` — observable as those names appearing in the shipped
+**SETTINGS** the browser requires - `WT_INITIAL_MAX_DATA` and
+`WT_INITIAL_MAX_STREAMS_UNI`/`_BIDI` - observable as those names appearing in the shipped
 binary's strings alongside the `SETTINGS_WEBTRANS_MAX_SESSIONS_DRAFT07` it already carries.
 
 The earlier wording of this trigger named the `WT_MAX_DATA` **capsule**, which was the

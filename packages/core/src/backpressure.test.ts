@@ -7,18 +7,18 @@
  * Death 1. `emit` drained the queue synchronously on every push, so a burst never queued
  * and neither the datagram ring nor its TTL ever applied.
  *
- * Death 2. The fix made the *datagram* flush coalesced — `#flushDatagrams` defers through
+ * Death 2. The fix made the *datagram* flush coalesced - `#flushDatagrams` defers through
  * an injectable scheduler, which is why the ring and TTL are now genuinely exercised. The
  * emit flush was left synchronous and unconditional: push, then drain the whole queue on
  * the same turn into `#write`, which only appended to an unbounded promise chain and
  * returned. Depth therefore returned to 0 after every push, `length >= max` could never be
  * true from a Session, and `CloseCode.WT_PEER_TOO_SLOW` was unreachable. The backlog had
- * not gone anywhere — it moved from a bounded queue that disconnects into an unbounded
+ * not gone anywhere - it moved from a bounded queue that disconnects into an unbounded
  * chain that does not, and whose `.catch(() => undefined)` also discarded every write
  * failure on the lane that advertises reliable ordered delivery.
  *
  * The lesson is that a bound is only a bound if something *stays* in the bounded thing.
- * The test that existed constructed `new EmitQueue(3)` and pushed four items — it asserted
+ * The test that existed constructed `new EmitQueue(3)` and pushed four items - it asserted
  * the queue, which was never wrong, and never went through a Session, which was.
  */
 import { describe, expect, test } from 'bun:test'
@@ -41,7 +41,7 @@ interface Stalling {
 }
 
 /**
- * A peer that accepts the handshake and then never takes another byte — the real shape of
+ * A peer that accepts the handshake and then never takes another byte - the real shape of
  * "too slow", and the one a `TransformStream` pair cannot produce, because loopback drains
  * as fast as we write.
  */
@@ -111,7 +111,7 @@ describe('the emit bound is reachable, and reaching it disconnects the peer', ()
     await new Promise((r) => setTimeout(r, 20))
 
     // The transport took the handshake and one emit; the other 99 are still queued, which
-    // is the whole point. Before the fix depth was 0 here and `accepted` was 2 — every
+    // is the whole point. Before the fix depth was 0 here and `accepted` was 2 - every
     // other frame was parked in `#writeChain`, invisible and unbounded.
     expect(peer.accepted).toBeLessThanOrEqual(2)
     expect(session.emitQueueDepth).toBeGreaterThan(90)
@@ -139,7 +139,7 @@ describe('a write failure on the emit lane is not swallowed', () => {
     session.sendEncodedFrame(new Uint8Array(64))
 
     // §5.5: there is one emit stream per direction and no way to reopen it, so a fault on
-    // it escalates to the session. `.catch(() => undefined)` made it escalate to nothing —
+    // it escalates to the session. `.catch(() => undefined)` made it escalate to nothing -
     // on the lane that advertises reliable ordered delivery.
     const info = await Promise.race([
       peer.closed,

@@ -89,7 +89,7 @@ export class Server<M extends AnyMap = AnyMap> {
       // Sweeping current peers rather than the ones present at registration: a session
       // accepted in between picked the handler up from `#callHandlers`, so it has to be
       // revoked too. Deleting from the map alone left every already-connected peer still
-      // being answered — revoking a privileged responder did nothing for anyone connected.
+      // being answered - revoking a privileged responder did nothing for anyone connected.
       for (const { session } of this.#peers.values()) session.unhandle(event)
     }
   }
@@ -145,7 +145,7 @@ export class Server<M extends AnyMap = AnyMap> {
       })
       // Teardown is the last thing that runs for this peer; there is no caller left to
       // hand a rejection to. Without this it was an unhandled rejection, which ends the
-      // process under Node's default — the opposite of what ADR/0005 and D40 promise.
+      // process under Node's default - the opposite of what ADR/0005 and D40 promise.
       .catch(() => undefined)
 
     await session.start()

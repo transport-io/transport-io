@@ -11,8 +11,8 @@ hand-written notes for the pre-release period.
 ### The library
 
 - **Framing.** Length-prefixed stream frames to `PROTOCOL.md` §5. QUIC streams do not
-  preserve write boundaries — measured, 51 writes arrived as 217 reads with the large one
-  shattered while the small ones coincidentally survived — so the length prefix is the only
+  preserve write boundaries - measured, 51 writes arrived as 217 reads with the large one
+  shattered while the small ones coincidentally survived - so the length prefix is the only
   thing that recovers them. Property-tested over random frames and random chunk boundaries,
   including one byte at a time.
 - **Handshake** as frame 0 of the emit stream. In-order delivery within a stream makes
@@ -21,7 +21,7 @@ hand-written notes for the pre-release period.
   adding or removing an event is rolling-deploy safe while a lane disagreement is refused.
 - **Both lanes**, rooms, and an encode-once hub that fans the same bytes to local members
   and onto the bus.
-- **`call()`** — one bidirectional stream per call, `AbortSignal` mapped to a stream reset,
+- **`call()`** - one bidirectional stream per call, `AbortSignal` mapped to a stream reset,
   a 256-stream cap that refuses the 257th open without taking the session down, and no
   default timeout.
 - **`HostileAdapter`** and an adapter conformance suite that runs against both
@@ -40,7 +40,7 @@ hand-written notes for the pre-release period.
   exemption lifting automatically when that bench comes back flat. A criterion that ships
   contradicted by a known limitation is not a criterion.
 - **The datagram ring and TTL were unreachable.** `emit` drained the queue synchronously on
-  every push, so a burst never queued and neither policy ever applied — the whole
+  every push, so a burst never queued and neither policy ever applied - the whole
   backpressure design was dead code in the session path. The flush is coalesced now, and
   loss, duplication, reordering and both drop causes are forced deliberately in tests.
 - **And then the emit bound was unreachable, because of that fix.** The datagram flush
@@ -59,7 +59,7 @@ hand-written notes for the pre-release period.
 - **The no-fallback guard would have refused every Chrome session**, because Chrome
   implements neither `requireUnreliable` nor `session.reliability`. The guarantee moved
   server-side where it is browser-independent.
-- **Bun's test glob reached files it must never run** — twice. It matched `*.node.test.ts`,
+- **Bun's test glob reached files it must never run** - twice. It matched `*.node.test.ts`,
   loading a native addon into the runtime that segfaults on it, and later the Playwright
   `*.spec.ts` suite. Both excluded explicitly and checked by file count.
 - **Five of twelve dependency versions were invented** rather than looked up. Dependencies
@@ -78,8 +78,8 @@ hand-written notes for the pre-release period.
   rejects" were each stated in `PROTOCOL.md`, restated in an ADR and restated in `AGENTS.md`.
   Three had a test whose *name* was the promise and whose body asserted something cheaper to
   reach. All four now exist and are asserted on the wire.
-- **A datagram event could be called.** `{ lane: 'datagram', returns }` compiled — excess
-  property checking against a union admits any member's properties — and the call was served
+- **A datagram event could be called.** `{ lane: 'datagram', returns }` compiled - excess
+  property checking against a union admits any member's properties - and the call was served
   over a bidirectional stream and answered. A contract saying "may be dropped" produced a
   guaranteed ordered message with the type system agreeing. D1 is now enforced at `call()`,
   `handle()` and on inbound frames, because a peer is not bound by our types.

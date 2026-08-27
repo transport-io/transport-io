@@ -4,7 +4,7 @@
 #
 #   ./scripts/protect-branch.sh <owner>/<repo>
 #
-# Requires: gh, authenticated. Idempotent — safe to re-run.
+# Requires: gh, authenticated. Idempotent - safe to re-run.
 set -euo pipefail
 
 REPO="${1:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
@@ -20,8 +20,8 @@ gh api -X PUT "repos/${REPO}/branches/main/protection" \
     "contexts": [
       "PR title (the squashed commit subject)",
       "typecheck / lint / dead code / docs",
-      "unit tests (bun — never loads the transport)",
-      "integration tests (node — loads the transport)",
+      "unit tests (bun - never loads the transport)",
+      "integration tests (node - loads the transport)",
       "pack validation",
       "e2e (playwright, real chrome and real quic)",
       "changeset present",

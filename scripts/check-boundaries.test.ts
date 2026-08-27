@@ -1,8 +1,8 @@
 /**
  * The case that matters is the last one: a relative import of a Node-only module from a
  * file that Bun will load. The Biome rule this replaces matched three package specifiers,
- * so that import — the more likely of the two mistakes, because nobody reaches for the raw
- * package name when the wrapper is next door — passed `biome ci` cleanly.
+ * so that import - the more likely of the two mistakes, because nobody reaches for the raw
+ * package name when the wrapper is next door - passed `biome ci` cleanly.
  */
 import { describe, expect, test } from 'bun:test'
 import { findBoundaryViolations, isNodeOnly, scan } from './check-boundaries.ts'
@@ -16,7 +16,7 @@ describe('a module Bun may load must not reach the transport', () => {
     expect(v.map((x) => x.specifier)).toEqual(['@fails-components/webtransport'])
   })
 
-  test('a RELATIVE import of a Node-only module is caught — the hole in the Biome rule', () => {
+  test('a RELATIVE import of a Node-only module is caught - the hole in the Biome rule', () => {
     const v = findBoundaryViolations(
       'packages/core/src/thing.test.ts',
       "import { connectHttp3 } from './transport/fails.node.ts'\n",
@@ -37,7 +37,7 @@ describe('a module Bun may load must not reach the transport', () => {
     expect(v.length).toBe(1)
   })
 
-  test('a Node-only module may import whatever it likes — that is the point of the name', () => {
+  test('a Node-only module may import whatever it likes - that is the point of the name', () => {
     expect(isNodeOnly('x.node.ts')).toBe(true)
     expect(isNodeOnly('x.node.test.ts')).toBe(true)
     expect(isNodeOnly('x.test.ts')).toBe(false)

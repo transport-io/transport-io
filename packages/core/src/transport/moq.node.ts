@@ -117,7 +117,7 @@ function toReadable(recv: MoqRecv): ReadableStream<Uint8Array> {
       }
     },
     cancel(reason) {
-      // STOP_SENDING with an explicit code — no message-string parsing needed here.
+      // STOP_SENDING with an explicit code - no message-string parsing needed here.
       void recv.stop(codeOf(reason)).catch(() => undefined)
     },
   })

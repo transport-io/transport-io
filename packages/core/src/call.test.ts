@@ -94,7 +94,7 @@ describe('call: the stream is the correlation', () => {
     const { client } = await wire()
     // Was a bare `.rejects.toThrow()` on the same WT_UNKNOWN_EVENT path as the test above,
     // so it asserted nothing the neighbour did not. The two faults have different remedies
-    // — add `returns` to the contract, versus register a handler — so the message has to
+    // - add `returns` to the contract, versus register a handler - so the message has to
     // say which one this is.
     // @ts-expect-error 'chat' declares no `returns`
     await expect(client.call('chat', { body: 'x' })).rejects.toThrow(/declares no/)
@@ -144,7 +144,7 @@ describe('call: abort maps to a stream reset', () => {
 })
 
 describe('call: the concurrent stream cap', () => {
-  // Renamed. The old name — "the 257th open is refused" — read as the §10.1 receiver-side
+  // Renamed. The old name - "the 257th open is refused" - read as the §10.1 receiver-side
   // refusal, which this does not exercise: it drives the cap through `client.call()`, so
   // the refusal is this side's own, before a stream is ever opened. The receiver half is
   // asserted in protocol-promises.test.ts, which is where WT_TOO_MANY_STREAMS is observed

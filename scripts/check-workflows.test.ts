@@ -1,5 +1,5 @@
 /**
- * The gate has to fail on the real defect, not on a fixture resembling it — so the last
+ * The gate has to fail on the real defect, not on a fixture resembling it - so the last
  * test here runs against the actual `.github/workflows`. That test failed before the
  * workflow was fixed, which is the only evidence that any of this is load-bearing.
  */

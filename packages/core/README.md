@@ -10,10 +10,10 @@ hidden. Reliability is not: an event declares `stream` or `datagram` in the cont
 **Full documentation, and the limitations you should read before installing, are in the
 [repository README](https://github.com/transport-io/transport-io#readme).** The short version:
 
-- **WebTransport only.** No WebSocket fallback, deliberately — a fallback would silently
+- **WebTransport only.** No WebSocket fallback, deliberately - a fallback would silently
   make the datagram lane reliable and ordered, which is a lie about your data.
 - **Chrome and Firefox.** Safari cannot talk to a quiche-backed server and is unsupported.
-- **The server needs a separate native install**, and its Linux prebuild needs glibc 2.38 —
+- **The server needs a separate native install**, and its Linux prebuild needs glibc 2.38 -
   no default Node `-slim` image has it, and Alpine has no prebuild at all.
 - **Each `call()` leaks ~5.95 KB of server memory**, upstream in the QUIC binding, not in
   this library. `emit` and datagrams are flat.
@@ -23,6 +23,6 @@ hidden. Reliability is not: an event declares `stream` or `datagram` in the cont
 npm install transport-io
 ```
 
-A git install does not work — the repository root is a private monorepo package.
+A git install does not work - the repository root is a private monorepo package.
 
 MIT © #V0ID

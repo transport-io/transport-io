@@ -12,7 +12,7 @@ findings were recomputed rather than accepted.
 
 ## Blocking (6)
 
-### B1. `numeric-event-ids` — the most consequential wire decision has no decision record
+### B1. `numeric-event-ids` - the most consequential wire decision has no decision record
 PROTOCOL.md §5.4 identifies events on the wire by 1-based positional index into the
 sorted contract. Nothing in D1–D51 authorises it. It was invented while drafting prose.
 
@@ -21,7 +21,7 @@ datagram budget) and its cost (positional identity is fragile across contract ed
 is precisely why the fingerprint exists). Record the rejected alternative: string event
 names, which cost 4–20 bytes per datagram.
 
-### B2. `contract-fingerprint` — an entire cryptographic algorithm with no decision behind it
+### B2. `contract-fingerprint` - an entire cryptographic algorithm with no decision behind it
 PROTOCOL.md §4.3 specifies a hash function, canonical serialisation, sort order, truncation
 length and an exclusion rule. D34 states the handshake's contents **exhaustively** as
 `{ v, feat }`. §4.1 adds a third field. `fingerprint` and `WT_CONTRACT_MISMATCH` return
@@ -31,7 +31,7 @@ zero hits across DECISIONS.md and all nine ADRs.
 hash (a peer may validate more strictly) and why 8 bytes is enough (collision risk is
 against accidental drift, not an adversary). Amend D34 to state three fields.
 
-### B3. `length-max-off-by-four` — arithmetic error in the frame cap
+### B3. `length-max-off-by-four` - arithmetic error in the frame cap
 §5.1 defines `Length` as counting bytes **after** itself: 4 header + payload. Its own
 minimum (5 = 4+1) is consistent. Its maximum is not:
 
@@ -44,7 +44,7 @@ off by 4 bytes
 **Resolution:** correct to `1048580`. Add the derived-value assertion to the constants test
 so the two can never drift again.
 
-### B4. `join-leave-have-no-event-id` — a conforming JOIN frame cannot be constructed
+### B4. `join-leave-have-no-event-id` - a conforming JOIN frame cannot be constructed
 §5.2 defines `JOIN` and `LEAVE` as frame types. §5.4 defines Event ID as the contract
 index and carves out `0x0000` for exactly three types: `HANDSHAKE`, `CALL_RESPONSE`,
 `CALL_ERROR`. `JOIN` is not among them, and a room name is not a contract event, so no
@@ -52,7 +52,7 @@ legal Event ID exists for it.
 
 **Resolution:** add `JOIN` and `LEAVE` to the `0x0000` carve-out.
 
-### B5. `emit-stream-reset-kills-the-lane` — a recoverable error is fatal to the session
+### B5. `emit-stream-reset-kills-the-lane` - a recoverable error is fatal to the session
 §1 says a protocol error resets a stream or closes the session per §10. There is exactly
 **one** emit stream per direction (D32), so resetting it destroys all stream-lane traffic
 for the session with no way to reopen. A single malformed frame becomes a silent, total,
@@ -62,7 +62,7 @@ unrecoverable loss of the emit lane.
 appropriate code. Never a bare stream reset. State it in §5 and §10, because the
 one-stream-per-direction design makes stream-level recovery meaningless here.
 
-### B6. `soak-threshold-passes-the-leak` — the graduation criterion certifies the bug it exists to catch
+### B6. `soak-threshold-passes-the-leak` - the graduation criterion certifies the bug it exists to catch
 D13 measures RSS growth between T+10min and T+60min against a 5% threshold. Recomputed
 against the leak it targets:
 
@@ -88,11 +88,11 @@ unknown baseline is unfalsifiable.
 |---|---|---|
 | `too-many-streams-open-vs-close` | D18 says reject further stream opens with `WT_TOO_MANY_STREAMS`; §10.2 makes it a **session close** code. Reject and close are different remedies. | Split: reset the offending stream with a new one-byte code; reserve the session close for repeated abuse. |
 | `emit-cap-scope` / `one-mib-cap-applies-to-calls-too` | §5 scopes the layout to "every stream-lane and call-stream frame", so the 1 MiB emit cap silently binds `CALL_REQUEST` too. D32 scoped it to emits only. | State the cap per frame type. Calls get their own, larger bound. |
-| `room-except` / `except-cannot-cross-the-bus` | API.md §2.3 ships `RoomTarget.except()`; the `Adapter` interface in D40 has no exclusion parameter, so exclusion cannot cross the bus and silently applies only to local peers. | Either add an exclusion set to `broadcast`, or drop `except()` from v1. Recommend adding it — self-exclusion is the common case and a local-only implementation is a correctness bug. |
-| `nodeid-has-no-field` | D20 mandates tagging frames with an origin `nodeId`; §5.1 and §7.2 state fixed overheads of 8 and 7 bytes with no origin field. | Origin travels in the adapter envelope, not the wire frame. Say so explicitly in D20 — the frame the peer receives and the frame the bus carries are not the same bytes. |
+| `room-except` / `except-cannot-cross-the-bus` | API.md §2.3 ships `RoomTarget.except()`; the `Adapter` interface in D40 has no exclusion parameter, so exclusion cannot cross the bus and silently applies only to local peers. | Either add an exclusion set to `broadcast`, or drop `except()` from v1. Recommend adding it - self-exclusion is the common case and a local-only implementation is a correctness bug. |
+| `nodeid-has-no-field` | D20 mandates tagging frames with an origin `nodeId`; §5.1 and §7.2 state fixed overheads of 8 and 7 bytes with no origin field. | Origin travels in the adapter envelope, not the wire frame. Say so explicitly in D20 - the frame the peer receives and the frame the bus carries are not the same bytes. |
 | `staledropped-name-collision` | `staleDropped` names two different things: D15's sender-side TTL drop and D19's receiver-side sequence drop. | Rename the receiver-side one to `staleReceived`. |
 | `call-error-carries-local-only-codes` | §6.4 says `CALL_ERROR` carries a code from §10.1 or §10.3, but §10.3 is defined as never transmitted. | Restrict `CALL_ERROR` to §10.1. |
-| `returns-implies-callable-unconstrained` | `Callable<C>` filters on `returns` and never inspects `lane`, so a datagram event with `returns` is callable — over a lane with no response path. | Constrain `EventDef`: `returns` is only valid with `lane: 'stream'`. Enforce in the type, not in prose. |
+| `returns-implies-callable-unconstrained` | `Callable<C>` filters on `returns` and never inspects `lane`, so a datagram event with `returns` is callable - over a lane with no response path. | Constrain `EventDef`: `returns` is only valid with `lane: 'stream'`. Enforce in the type, not in prose. |
 | `d29-commit-body-self-contradiction` | D29 says the PR body becomes the commit body and `BREAKING CHANGE:` footers are authored there, then says no commit ever has a body. | The amended rule wins: `!` marker, squash set to "Pull request title only". Remove the footer sentence. |
 | `d29-scopes-invalidated-by-d43` | D29's example scopes include `fix(react):`; D43 removes every package except `core`. Scope validation against the workspace list would reject the documented example. | Update the examples to packages that exist. |
 | `feat-intersection-gated-on-wrong-axis` | D34 gates feature intersection on "From Stage 1"; §4.2 gates it on "From protocol version 1". These are different axes and can diverge. | Gate on protocol version. Stage is a publishing state, not a wire property. |
@@ -120,14 +120,14 @@ unknown baseline is unfalsifiable.
 
 ## Superseded but not withdrawn (upheld: 8)
 
-- `d33-names-a-code-that-does-not-exist` — `WT_HANDSHAKE_NOT_COMPLETE` survives at D33:496 only; everywhere else uses `WT_HANDSHAKE_INCOMPLETE`. **I found this one independently before the audit landed.** Fix the name and distinguish the deleted session-close rule from the surviving stream reset code.
-- `three-stream-kinds-fossil` — §3 says "three kinds of QUIC stream" while its own table lists two plus datagrams. Fossil of the pre-amendment handshake stream.
-- `d29-body-rule-self-superseded` — see contradictions table.
-- `type-dollar-rename` — D17 says `Type<T>()`, API.md ships `type$<T>()`.
-- `hostile-adapter-public-subpath` — D40 calls it test-only; API.md §5 documents it at a public import path.
-- `e2e-gate-before-e2e-exists` — D31 makes Playwright a required check on a tooling-only first commit.
-- `room-not-joined-unreachable` — `WT_ROOM_NOT_JOINED` is defined but no documented API path reaches it.
-- `drop-counters-have-no-api-surface` — D15 mandates exposing `droppedDatagrams`/`queueDepth`; API.md exposes neither.
+- `d33-names-a-code-that-does-not-exist` - `WT_HANDSHAKE_NOT_COMPLETE` survives at D33:496 only; everywhere else uses `WT_HANDSHAKE_INCOMPLETE`. **I found this one independently before the audit landed.** Fix the name and distinguish the deleted session-close rule from the surviving stream reset code.
+- `three-stream-kinds-fossil` - §3 says "three kinds of QUIC stream" while its own table lists two plus datagrams. Fossil of the pre-amendment handshake stream.
+- `d29-body-rule-self-superseded` - see contradictions table.
+- `type-dollar-rename` - D17 says `Type<T>()`, API.md ships `type$<T>()`.
+- `hostile-adapter-public-subpath` - D40 calls it test-only; API.md §5 documents it at a public import path.
+- `e2e-gate-before-e2e-exists` - D31 makes Playwright a required check on a tooling-only first commit.
+- `room-not-joined-unreachable` - `WT_ROOM_NOT_JOINED` is defined but no documented API path reaches it.
+- `drop-counters-have-no-api-surface` - D15 mandates exposing `droppedDatagrams`/`queueDepth`; API.md exposes neither.
 
 ---
 
@@ -141,7 +141,7 @@ Checked clean and correctly traceable: the 5000 ms handshake deadline (D33), the
 close-reason cap (D36), the one-byte reset range (D36), the 64/256/16 bounds and 150 ms TTL
 (D15), the 1024 datagram floor and `maxPayload = effective − header` derivation (D19),
 codec `0x01`/`0x00` (D37), and the whole binding surface table (D41). The §4.3 worked
-fingerprint is arithmetically correct — recomputed as `ef8e824fd4867bb0`.
+fingerprint is arithmetically correct - recomputed as `ef8e824fd4867bb0`.
 
 **Resolution:** each becomes a numbered decision before Phase 2. The traceability test in
 the docs gate then keeps the property.
@@ -150,10 +150,10 @@ the docs gate then keeps the property.
 
 ## Rejected (5)
 
-- `error-code-assignments` — inverts D36, which explicitly delegates the table to PROTOCOL.md.
-- `stream-frame-header-layout` — reduces to "the wire spec specifies the wire", though the
+- `error-code-assignments` - inverts D36, which explicitly delegates the table to PROTOCOL.md.
+- `stream-frame-header-layout` - reduces to "the wire spec specifies the wire", though the
   narrower point that the layout has no decision is upheld separately.
-- `baseline-coverage-includes-unsupported-safari` — the documents already address it
+- `baseline-coverage-includes-unsupported-safari` - the documents already address it
   explicitly; F9 is a claim about the feature, D11 about our server.
-- `datagram-floor-vs-reported-max` — the texts do not conflict under a reasonable reading.
+- `datagram-floor-vs-reported-max` - the texts do not conflict under a reasonable reading.
 - One duplicate.

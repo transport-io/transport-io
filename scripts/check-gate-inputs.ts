@@ -3,7 +3,7 @@
  *
  * An aggregate over an empty collection compared against a bound *passes*. Our own scripts
  * now refuse to report a clean run over nothing, but `knip` and `attw` are third-party and
- * cannot be taught that from the inside — both were measured green against empty input:
+ * cannot be taught that from the inside - both were measured green against empty input:
  *
  *   knip, on a project whose entry patterns match no files  -> exit 0, `{"issues":[]}`
  *   attw, on a package whose `dist` is empty                -> exit 0
@@ -22,7 +22,7 @@ const problems: string[] = []
 // ---------------------------------------------------------------- knip sees files
 /**
  * Every `entry` pattern in the knip config must match at least one file. A pattern that
- * stops matching — a directory rename, an extension change — turns dead-code analysis into
+ * stops matching - a directory rename, an extension change - turns dead-code analysis into
  * a tool that reports no dead code because it found no code.
  */
 const KNIP_CONFIG = existsSync('knip.jsonc') ? 'knip.jsonc' : 'knip.json'
@@ -42,7 +42,7 @@ function filesUnder(dir: string): string[] {
  * translating knip's patterns by hand would put a second, subtly different matcher in the
  * repository, and the first draft of exactly that reported three false negatives against
  * patterns that do match. The failure this needs to catch is a config pointing somewhere
- * that no longer holds code — a renamed directory, a moved workspace — and a floor on files
+ * that no longer holds code - a renamed directory, a moved workspace - and a floor on files
  * under the workspace root catches it without pretending to reimplement anything.
  */
 const MIN_FILES_PER_WORKSPACE = 2

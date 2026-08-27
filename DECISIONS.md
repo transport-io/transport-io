@@ -9,17 +9,17 @@ Status: Phase 1a in progress. Entries below are settled unless marked OPEN.
 
 ---
 
-## Part 1 — Fixed design decisions (from the kickoff, not relitigated)
+## Part 1 - Fixed design decisions (from the kickoff, not relitigated)
 
 | id | decision |
 |----|----------|
 | D1 | **lane-in-contract.** Events declare `stream` or `datagram` at contract-definition time. The lane is a property of the message type, never of the call site. |
 | D2 | **streams-as-acks.** Each `call` opens its own bidirectional stream: write request, half-close to end it, read response until the peer closes. No correlation IDs, no pending-callback map, no ack bookkeeping. A stalled call cannot block another call. |
-| D3 | **no-fallback.** WebTransport only. No WebSocket fallback, ever, because it would silently make the datagram lane reliable and ordered — a lie about the user's data. |
+| D3 | **no-fallback.** WebTransport only. No WebSocket fallback, ever, because it would silently make the datagram lane reliable and ordered - a lie about the user's data. |
 | D4 | **new-session-on-reconnect.** Reconnect creates a new session. Room membership does not survive it. `session` event carries `{ id, resumed }`; `resumed` is hardcoded `false` in v0.1 so real resume can arrive later as a `feat` flag rather than a redesign. |
 | D5 | **adapter-boundary.** Pub/sub adapter interface. Frames cross it as bytes, never live objects. Every method is async. `PeerId` is a stable cross-process string. Core never assumes it knows a room's full membership. `MemoryAdapter` ships in core as the default; Redis is not in v1 and core must never reference it. |
 | D6 | **abort-via-stream-reset.** `call()` and `stream()` take an `AbortSignal`; abort maps to a QUIC stream reset. Implemented in v0.1 even though `stream()` ships later. |
-| D7 | **multi-frame-response.** A call response is a sequence of frames terminated by stream close, not one length-prefixed frame — so token streaming is addable without a protocol break. |
+| D7 | **multi-frame-response.** A call response is a sequence of frames terminated by stream close, not one length-prefixed frame - so token streaming is addable without a protocol break. |
 | D8 | **datagram-lane.** The unreliable lane uses WebTransport datagrams directly. |
 | D9 | **serverless-publisher-split.** A write-only `Publisher` (broadcast only, stateless, constructible per invocation) is separated from the full `Adapter`. Session hosting requires a long-running process; that is not designable away. |
 
@@ -29,27 +29,27 @@ themselves, `stream()` and agent helpers, serverless session hosting, the Redis 
 
 ---
 
-## Part 2 — Phase 0 verified findings that became requirements
+## Part 2 - Phase 0 verified findings that became requirements
 
 All of the following were verified on this machine or against shipped artefacts, not
 relayed from documentation.
 
-### F1. Install friction — smaller than feared, with two sharp edges
+### F1. Install friction - smaller than feared, with two sharp edges
 `npm install @fails-components/webtransport` is pure JS: 1s, 896K, no native code. The
 native transport is a **separate, manually installed** package
-(`@fails-components/webtransport-transport-http3-quiche`) loaded by dynamic `import()` —
+(`@fails-components/webtransport-transport-http3-quiche`) loaded by dynamic `import()` -
 it is not even an `optionalDependency`, so npm will never pull it in. Installing it took
 6s and downloaded a prebuilt binary; no compilation.
 
 - **Prebuilds come from GitHub Releases, not npm.** The dependency is on GitHub
   availability, not just the registry. Pin the transport version exactly and cache the
-  download in CI. State this in README requirements — it is a supply-chain fact users
+  download in CI. State this in README requirements - it is a supply-chain fact users
   deserve to know.
 - Prebuild matrix is exactly five triplets: darwin-arm64, darwin-x64, linux-arm64,
   linux-x64, win32-x64. **No musl build**, so Alpine falls back to a source compile
   requiring git, cmake and a C++ toolchain.
 
-### F2. glibc 2.38 — the default Docker tags are a trap
+### F2. glibc 2.38 - the default Docker tags are a trap
 Parsing the ELF verneed table of the published linux-x64 prebuild gives
 `libc.so.6 -> GLIBC_2.38` and `libm.so.6 -> GLIBC_2.38`. Debian 12 bookworm ships glibc
 2.36; the binary will not load.
@@ -69,7 +69,7 @@ Docker Hub digests prove `node:24-slim`, `node:22-slim` and `node:lts-slim` are
 implementation. Under HTTP/2 the datagram lane becomes reliable and ordered over TCP.
 Safari additionally advertises its own H2 fallback "with the same API".
 
-Disabling it is a hard requirement — see D10 for the enforcement rule.
+Disabling it is a hard requirement - see D10 for the enforcement rule.
 
 ### F4. Oversized and blocked datagrams are silently swallowed
 Writing 1212B and 4844B against a 1211B `maxDatagramSize` both resolved with no error.
@@ -130,7 +130,7 @@ implements draft-15 session-level flow control and will not send until credited.
 Searching the shipped `webtransport.node` binary: `WT_MAX_DATA`, `WT_DATA_BLOCKED` and
 `WT_STREAMS_BLOCKED` occur **zero** times, while implemented capsules
 (`CLOSE_WEBTRANSPORT_SESSION`, `DRAIN_WEBTRANSPORT_SESSION`, `ADDRESS_ASSIGN`,
-`DATAGRAM`) occur 2-23 times each — so the absence is real, not a search artefact. The
+`DATAGRAM`) occur 2-23 times each - so the absence is real, not a search artefact. The
 binary advertises only `SETTINGS_WEBTRANS_DRAFT00` and
 `SETTINGS_WEBTRANS_MAX_SESSIONS_DRAFT07`; the settings Safari needs
 (`WT_INITIAL_MAX_DATA`, `WT_INITIAL_MAX_STREAMS_UNI/BIDI`) are absent. Current
@@ -138,19 +138,19 @@ google/quiche `capsule.h` still has `WT_MAX_DATA` commented out and the blocked 
 under `TODO(b/264263113)`.
 
 The maintainer's position (2026-07-12): *"it is not implemented in quiche, so until they
-do, no safari"* — and he will not patch quiche. The only workaround he offers is the
+do, no safari"* - and he will not patch quiche. The only workaround he offers is the
 reliable fallback D3 forbids. The fix is proven feasible (quic-go/webtransport-go#261,
 +29/-6, merged 2026-06-14) but must land in quiche.
 
 **Consequence: Safari is de facto unsupported in v1.** See D11.
 
 ### F11. Upstream defects that become our tests
-- **#365** — writing a zero-length `Uint8Array` freezes the server with a `quic_bug`.
+- **#365** - writing a zero-length `Uint8Array` freezes the server with a `quic_bug`.
   Forbid zero-length frames and datagrams outright (D12).
-- **#425** — RSS 500M→700M+ over 12h at 2,500 sessions / 500 concurrent, attributed to
+- **#425** - RSS 500M→700M+ over 12h at 2,500 sessions / 500 concurrent, attributed to
   stream churn. D2 opens a stream per call, maximally exercising it. Promoted to a
   Stage 1 graduation criterion (D13).
-- **#5** — outgoing datagrams are never expired despite the spec requiring it, open since
+- **#5** - outgoing datagrams are never expired despite the spec requiring it, open since
   2022. Our queue owns expiry (D15).
 
 ### F12. Deployment requires raw UDP ingress
@@ -165,7 +165,7 @@ rather than a recommendation (D19). Everything else is non-normative example-app
 
 ---
 
-## Part 3 — Decisions taken during Phase 1a
+## Part 3 - Decisions taken during Phase 1a
 
 ### D10. No-fallback is enforced server-side; the client check is defence in depth
 The obvious client guard does not work. `requireUnreliable` and `session.reliability` are
@@ -176,8 +176,8 @@ would refuse **every Chrome session**.
   never `reliability: 'both'`. If our server never listens for H2 extended CONNECT, no
   client can negotiate a reliable-only session with us, whatever its browser supports.
   This is browser-independent and testable, and it is the assertion the e2e suite makes.
-- **Client (defence in depth):** set `requireUnreliable: true` — honoured on
-  Firefox/Safari, harmlessly ignored on Chrome — and assert
+- **Client (defence in depth):** set `requireUnreliable: true` - honoured on
+  Firefox/Safari, harmlessly ignored on Chrome - and assert
   `reliability !== 'reliable-only'` so Chrome's `undefined` passes.
 - **Node client:** implements the property, so the strict check applies there.
 - If the assertion fails, the session is refused, never degraded. The e2e suite fails
@@ -191,7 +191,7 @@ Given F10, README states Chrome and Firefox only, with the reason. The e2e matri
 Safari. Known issues gets a "detection lies" entry: Safari reports WebTransport support
 and the session establishes, then no application bytes flow.
 
-We do not merely document it — we detect it. See D16.
+We do not merely document it - we detect it. See D16.
 
 **Revisit when:** google/quiche implements the session-level flow control capsules and
 `@fails-components` ships a release built against it. Concretely: `WT_MAX_DATA` appears
@@ -207,12 +207,12 @@ freezes the server rather than erroring.
 **500 concurrent sessions, 60 minutes, on the pinned Node.** Sample RSS after a forced GC
 every 5 minutes from T+10 to T+60 and fit a line: **the slope must stay under 4 MB/h**, and
 absolute RSS must stay under 600 MB. The 10-minute warmup excludes startup allocation so
-the measurement is slope, not noise. Run manually before Stage 1, never on PRs — too slow
+the measurement is slope, not noise. Run manually before Stage 1, never on PRs - too slow
 and too flaky for a merge gate, and it would be disabled within a month.
 
 The threshold was originally 5% growth between two point samples. That was wrong, and wrong
 in a way worth recording: against the upstream leak's own 16.7 MB/h, the 50-minute window
-yields ~13.9 MB, which at any plausible baseline is 2.8–4.6% — **under the threshold**. The
+yields ~13.9 MB, which at any plausible baseline is 2.8–4.6% - **under the threshold**. The
 criterion would have certified the exact leak it was written to catch. A threshold stated
 as a proportion of a baseline we do not fix in advance is unfalsifiable, and two point
 samples are not a slope.
@@ -221,8 +221,8 @@ samples are not a slope.
 
 | lane | requirement | status |
 |---|---|---|
-| emit (stream) | slope under 4 MB/h | must pass — measured flat |
-| datagram | slope under 4 MB/h | must pass — measured flat, 20,000 sends plateau at 112 MB |
+| emit (stream) | slope under 4 MB/h | must pass - measured flat |
+| datagram | slope under 4 MB/h | must pass - measured flat, 20,000 sends plateau at 112 MB |
 | `call()` | **exempted**, see below | fails: 5.95 KB per stream, server-side |
 
 **And it is per axis, because the lane split was not the only blind spot.** `soak.node.ts`
@@ -259,20 +259,20 @@ Settled by F7, not by preference.
   including the framer property tests.
 
 Enforced two ways so it is mechanical rather than remembered:
-1. Filename split — `*.node.test.ts` for anything loading the transport, separate
+1. Filename split - `*.node.test.ts` for anything loading the transport, separate
    scripts, CI runs both. A test importing quiche must never be reachable from the Bun
    test task.
 
    A convention only means something if the runner honours it, and Bun's default glob is
-   wider than it looks. It matched `*.node.test.ts` — `bun test` picked up 9 files where
-   it should have seen 8, loading the native addon in the runtime that segfaults on it —
+   wider than it looks. It matched `*.node.test.ts` - `bun test` picked up 9 files where
+   it should have seen 8, loading the native addon in the runtime that segfaults on it -
    and it later matched the Playwright `*.spec.ts` suite too, which failed with
    `Playwright Test did not expect test() to be called here`.
 
    The unit script therefore excludes both explicitly, and the exclusion is checked by
    comparing file counts rather than assumed: 14 files unfiltered, 11 filtered. Both
-   escapes were the same mistake — assuming a runner's default matches the intent of a
-   filename — and a third would be a reason to stop relying on globs entirely.
+   escapes were the same mistake - assuming a runner's default matches the intent of a
+   filename - and a third would be a reason to stop relying on globs entirely.
 2. **An import-boundary lint rule** forbidding `@fails-components/*` imports from any
    file not matching `*.node.*`. This fails at typecheck instead of as a segfault that
    looks like flaky CI.
@@ -288,7 +288,7 @@ The three constraints resolve differently because the lanes make different promi
   stale frames are the ones worth losing. 64 frames is ~1s of buffer at 60Hz. Drops
   increment a counter and never throw: dropping is the lane's advertised contract.
 - **Stream lane, room broadcast, per peer:** bounded queue of **256 frames**, then close
-  the session with `WT_PEER_TOO_SLOW`. No dropping — a reliable lane that silently drops
+  the session with `WT_PEER_TOO_SLOW`. No dropping - a reliable lane that silently drops
   is exactly the lie the thesis forbids, and a peer 256 frames behind is already gone.
 - **Token/call streams:** no queue, no drop. Propagate backpressure to the handler by
   awaiting `writer.ready`, high-water mark **16 frames**. This falls out of D2 for free:
@@ -297,17 +297,17 @@ The three constraints resolve differently because the lanes make different promi
   the others" is satisfied by the transport, not by our queueing.
 - **Stale datagrams (separate axis from overflow):** a TTL checked at **dequeue**, not
   enqueue. Drop-oldest handles a burst but does nothing for a peer that stalls two
-  seconds and resumes — the ring never overflows and we deliver 64 stale cursor
+  seconds and resumes - the ring never overflows and we deliver 64 stale cursor
   positions, which is worse than dropping them because the app renders history. Counted
   as `staleDropped`, separate from `overflowDropped`, so the two causes stay
   distinguishable. **TTL is 150ms**, session-wide. It is *not* per-event and there is no
-  `ttl: null` escape hatch — an earlier draft of this entry promised both, `EventDef` never
+  `ttl: null` escape hatch - an earlier draft of this entry promised both, `EventDef` never
   grew the field, and `DatagramQueue` is constructed with no arguments, so the escape hatch
   for the one case the default gets wrong was unreachable by any means. The promise is
   withdrawn rather than implemented: a per-event knob is a contract-shape change, and no
   measured case has yet needed it. 150ms sits inside the window where
   a late frame is still worth showing: cursor lag is perceptible around 100ms and reads
-  as broken by 200ms. The interaction with the ring is what makes it work — a peer
+  as broken by 200ms. The interaction with the ring is what makes it work - a peer
   stalling 2s leaves 64 queued frames, and at 60Hz all but the newest ~9 are past TTL, so
   they are dropped at dequeue rather than rendered as history. The two counters matter
   more than the number: an app can tell a slow network from a slow consumer.
@@ -326,8 +326,8 @@ function, with a test pinning the observed format and a comment recording the up
 defect. Tested against the real transport, never a fake.
 
 ### D17. Schema layer: BYO via Standard Schema, no built-in validator
-Core accepts anything implementing `StandardSchemaV1` — zod, valibot and arktype all ship
-it — so core has zero runtime dependency and zero peer dependency. A types-only `type$<T>()`
+Core accepts anything implementing `StandardSchemaV1` - zod, valibot and arktype all ship
+it - so core has zero runtime dependency and zero peer dependency. A types-only `type$<T>()`
 helper serves users who want inference without runtime validation. Validate inbound only,
 never outbound: you produced your own payload, and double validation doubles hot-path cost.
 
@@ -358,7 +358,7 @@ payload maximum is 1011.
 **Origins are quarantined and reused, not retired.** The first draft said never reuse
 within a host's lifetime, which is right about correctness and wrong about operations: 2²²
 values at 100 sessions per second exhausts in 11.7 hours, so a busy host would stop
-accepting sessions and need a restart — a scheduled outage disguised as a safety property,
+accepting sessions and need a restart - a scheduled outage disguised as a safety property,
 arriving in production because it is a function of uptime times load rather than of
 anything testable.
 
@@ -366,7 +366,7 @@ Reuse is provably safe because both confusable windows are values this protocol 
 receiver discards `(origin, event)` sequence state after 60 seconds idle, and an in-flight
 datagram cannot outlive the 150 ms send-queue TTL plus transit. A released origin is
 therefore quarantined **120 seconds**, twice the longer bound. Steady-state occupancy
-becomes `concurrent + churn × 120s` — 1.4% of the space at 500 sessions/second — so
+becomes `concurrent + churn × 120s` - 1.4% of the space at 500 sessions/second - so
 exhaustion is a genuine limit on **concurrency**, roughly 4.2 million live-plus-quarantined
 per host, never a clock.
 
@@ -393,7 +393,7 @@ rationale as direct evidence for runtime discovery over a hardcoded constant.
 ### D20. Self-publish: core dedupes, local delivery does not round-trip the bus
 Every frame is tagged with an originating `nodeId` (per-process ULID); self-originated
 frames are filtered on receive. Local peers are delivered immediately rather than waiting
-for the bus to echo — lower latency, no dependency on adapter round-trip. Documented
+for the bus to echo - lower latency, no dependency on adapter round-trip. Documented
 consequence: local peers observe a message before remote peers. That is inherent to any
 fan-out and is stated rather than hidden.
 
@@ -412,21 +412,21 @@ that primitive exists. This lives in the transport-seam ADR so nobody later buil
 ### D22. `Publisher` is internal in v1
 D9's Publisher is a design constraint, not a public API. A per-invocation serverless
 Publisher needs a shared bus, but v1 ships only `MemoryAdapter` (in-process) and excludes
-Redis — so nothing in v1 can publish across processes. Define the interface, test it
+Redis - so nothing in v1 can publish across processes. Define the interface, test it
 against `HostileAdapter`, keep it internal, and export it when the Redis adapter makes it
 real. Same treatment and justification as `Transport` (D21).
 
 ### D23. Deployment is not our problem; exactly one fact is library-level
 We ship a library. Where someone runs it is their concern, and a vendor matrix is stale
 the moment Railway ships UDP. README requirements carries exactly this, next to the Node
-version — no vendor names, no flags, no comparison table:
+version - no vendor names, no flags, no comparison table:
 
 > transport-io requires raw UDP ingress to your process on the port you listen on. Unlike
 > TCP, many managed platforms do not provide this. Verify your platform routes UDP before
 > building on this.
 
-Everything else — Fly's dedicated-IPv4 and `fly-global-services` details, the AWS NLB
-QUIC passthrough path, platforms that currently cannot do it — moves to the example app's
+Everything else - Fly's dedicated-IPv4 and `fly-global-services` details, the AWS NLB
+QUIC passthrough path, platforms that currently cannot do it - moves to the example app's
 own docs, dated and marked non-normative.
 
 Two items from that research are design record, not deployment notes: Fly's MTU
@@ -437,14 +437,14 @@ network.
 
 ---
 
-## Part 4 — Code hygiene decisions
+## Part 4 - Code hygiene decisions
 
 ### D24. Hygiene precedes source
 The first commit of Phase 2 is tooling and nothing else. CI passes before a single
 library file exists. Retrofitting standards onto code written without them is how a
 codebase rots, and this one is too young to carry any debt.
 
-**Knip on an empty repo:** the first commit ships a single stub entry per package —
+**Knip on an empty repo:** the first commit ships a single stub entry per package -
 `packages/core/src/index.ts` exporting only the package version constant. That satisfies
 knip's entry resolution and keeps the spirit of the rule: every gate exists and passes
 before real code lands. A version export is not library code.
@@ -471,7 +471,7 @@ the implementation does.
   sequences, random chunk boundaries, round-trip equality.
 - **F6 is a required fixture**: many small writes plus one large write, asserting the
   framer recovers exact message boundaries.
-- Explicit byte assertions for protocol frames. No snapshot tests — a snapshot records
+- Explicit byte assertions for protocol frames. No snapshot tests - a snapshot records
   whatever the code did, including the bug.
 - Tests assert against PROTOCOL.md and API.md, never internal structure.
 - Never mock the thing under test. Adapter tests run against `HostileAdapter`.
@@ -482,7 +482,7 @@ the implementation does.
 ### D28. E2E from Phase 2a, not Phase 3
 Real browser, real server process, real certificate. Playwright driving Chrome against a
 spawned Node server using the self-signed certificate hash flow. The minimal harness
-arrives in **Phase 2a** — two pages, one server, the two-context room test as soon as
+arrives in **Phase 2a** - two pages, one server, the two-context room test as soon as
 there is a room to test. The Phase 3 example app becomes the fixture by **replacing** the
 harness, not by introducing e2e for the first time. Runs on every PR. A flaky e2e test
 gets fixed or deleted, never wrapped in a retry loop.
@@ -509,7 +509,7 @@ We squash merge, which changes where enforcement matters.
 - Same commitlint config for both so they cannot drift.
 - Repository settings: squash merge only, linear history required, both gates required.
 
-**Scopes are required, not optional:** `feat(core):`, `fix(ci):`, `chore(repo):` — validated
+**Scopes are required, not optional:** `feat(core):`, `fix(ci):`, `chore(repo):` - validated
 against the workspace list in `commitlint.config.ts`, which is `core`, `ci`, `docs`, `deps`,
 `repo`. (`fix(react):` appeared here as an example for a package that does not exist, and
 would have been rejected by the gate this very entry describes.)
@@ -517,7 +517,7 @@ transport-io gets its own commitlint config; the global `^[A-Za-z0-9 ,:]{4,72}$`
 rule from another of this author's projects does not travel here. Parentheses are allowed, and the scope is validated
 against the actual workspace package list so `feat(cor):` fails.
 
-**Subject only, never a body.** No commit has a body — not for rationale, not for
+**Subject only, never a body.** No commit has a body - not for rationale, not for
 context, not for issue links. A subject line is the whole commit message.
 
 - commitlint enforces an empty body.
@@ -548,7 +548,7 @@ accepted cost**, with a documented one-liner for generating one so it is a refle
 than a chore.
 
 Canary from day one: `changeset version --snapshot` publishing under the `canary`
-dist-tag on merge to main. Nothing reaches `latest` until Stage 1 — so **Stage 1 begins
+dist-tag on merge to main. Nothing reaches `latest` until Stage 1 - so **Stage 1 begins
 at the first stable publish, not the first publish of any kind.**
 
 ### D31. CI on every PR
@@ -557,7 +557,7 @@ tests, Node integration tests, Playwright e2e, changeset presence.
 
 ---
 
-## Part 5 — Decisions from Phase 1a batch two
+## Part 5 - Decisions from Phase 1a batch two
 
 ### D32. Stream-lane `emit` uses one long-lived unidirectional stream per direction
 Not one stream per emit. Emits are fire-and-forget, and ordered-within-lane is the
@@ -570,8 +570,8 @@ Emit payloads are capped at **1 MiB**; anything larger belongs in a `call`.
 **Accepted cost, stated plainly because it is easy to miss: the head-of-line blocking is
 cross-room.** All rooms share one emit stream per direction, so a busy room delays a quiet
 room's messages to the same peer. That is the problem this transport is sold as solving,
-reintroduced on the lane most apps will use most. The trade is still right — per-room
-streams would multiply #425 churn by room count, and `call` plus datagrams stay isolated —
+reintroduced on the lane most apps will use most. The trade is still right - per-room
+streams would multiply #425 churn by room count, and `call` plus datagrams stay isolated -
 but it is a cost, not a free lunch.
 
 This must appear in **three** places, not one: PROTOCOL.md's emit lane section, the ADR
@@ -597,14 +597,14 @@ symmetric.
 Two residual cases remain, and both resolve into existing behaviour rather than new rules:
 
 - **Datagrams** are not on the emit stream, so one can still arrive first. It is dropped
-  silently — exactly the unreliable lane's advertised contract. No error, no new rule.
+  silently - exactly the unreliable lane's advertised contract. No error, no new rule.
 - **`call` bidi streams** can still race. The server answers on that stream with a
   call-error frame and resets it. No session close; it reuses the error path that already
   exists.
 
 **Deadline: 5000ms in both directions**, producing `WT_HANDSHAKE_TIMEOUT`. A peer that
 never opens its emit stream is indistinguishable from one that never handshakes, so the
-same deadline covers both — and this is what converts Safari's silent hang (F10, D11)
+same deadline covers both - and this is what converts Safari's silent hang (F10, D11)
 into a named error whose message states the likely cause.
 
 The cost accepted: a version mismatch is refused after a stream reader is allocated
@@ -614,7 +614,7 @@ rather than before. That is one reader, against removing a race from the protoco
 The handshake frame carries `{ v: <integer>, feat: <string[]> }`.
 
 - `v` is the protocol major. **Stage 0: both sides require exact equality and refuse
-  otherwise** — the mechanism exists, the compatibility promise does not.
+  otherwise** - the mechanism exists, the compatibility promise does not.
 - From Stage 1, a major mismatch refuses the session with `WT_PROTOCOL_VERSION_MISMATCH`;
   the minor surface is the **intersection** of the two `feat` lists, so old clients keep
   working and new ones light up extras.
@@ -627,7 +627,7 @@ application code. `join` / `leave` exist on the wire only as **server→client
 notifications**, so the client's observable snapshot can reflect membership.
 
 Client-initiated join is an authorization hole, and the kickoff fixes auth as one hook
-rather than a pipeline — if clients could self-join, every app would need to validate room
+rather than a pipeline - if clients could self-join, every app would need to validate room
 names on a join path, which is middleware wearing a different hat. An app that genuinely
 wants client-initiated subscribe routes it through a `call` handler, which is already the
 authenticated path. This also matches the reference: Socket.IO rooms are
@@ -645,7 +645,7 @@ do about it. A Go implementer needs the number; our users need the name.
 
 ### D37. Codec seam: one byte, `0x01` = JSON/UTF-8, `0x00` reserved invalid
 One codec byte in the stream frame header and in the datagram header. Reserving `0x00` as
-always-invalid means a zero-filled buffer can never parse as a valid frame — free
+always-invalid means a zero-filled buffer can never parse as a valid frame - free
 corruption detection. v0.1 receivers reject anything other than `0x01` with
 `WT_UNSUPPORTED_CODEC`. Future codecs negotiate through the `codec-msgpack` `feat` token,
 so msgpack fits later without a protocol break.
@@ -661,7 +661,7 @@ common way this shape is gotten wrong, so it gets an explicit test rather than a
 
 ---
 
-## Part 6 — Sweep decisions (requirements found unmapped, now resolved)
+## Part 6 - Sweep decisions (requirements found unmapped, now resolved)
 
 A mechanical pass over the kickoff prompt, the hygiene addendum and both review replies,
 listing every requirement, constraint or finding with no numbered decision. Each is
@@ -670,7 +670,7 @@ resolved here rather than left as an implementation assumption.
 ### D39. Project lifecycle and graduation criteria
 **Stage 0 (now, unpublished):** breaking changes are free and expected. No backward
 compatibility of any kind, no deprecation paths, no compatibility shims, no migration
-guides, no version checks against an older release — there is no older release. Rename
+guides, no version checks against an older release - there is no older release. Rename
 freely, including package names, exports and file layout. The protocol is v0 and unstable.
 
 **Stage 1 begins at the first *stable* publish, not the first publish of any kind** (D30
@@ -678,7 +678,7 @@ puts canary on `latest`-free `canary` from day one). At Stage 1 everything inver
 applies, the protocol version becomes a promise, and breaking changes need a major bump
 plus a migration note.
 
-**Graduation criteria — all six, so this is a decision and not a vibe:**
+**Graduation criteria - all six, so this is a decision and not a vibe:**
 1. PROTOCOL.md unchanged for a full working example.
 2. Both lanes exercised end to end in the example app.
 3. Adapter conformance suite passing against `HostileAdapter`.
@@ -760,7 +760,7 @@ Schema, no bundled validator) is one instance of this rule, not the whole of it.
 
 **Layout in v1 is `packages/core` and `examples/chat`. `packages/redis-adapter` is not
 created.** The kickoff's Phase 2 sketch lists it, but D5 and D22 exclude Redis from v1 and
-forbid core from referencing it — and an empty package would trip knip, add a changeset
+forbid core from referencing it - and an empty package would trip knip, add a changeset
 surface, and imply a v1 promise we are explicitly not making. It arrives after v1, on its
 own schedule, at its own version. This is a deliberate deviation from the kickoff's
 directory sketch, recorded here so it is not read as an oversight.
@@ -800,7 +800,7 @@ Chrome-and-Firefox-only support statement (D11), and the cross-room emit blockin
 The target reader is someone writing a Go server with no access to our source. Socket.IO's
 real sin was an undocumented custom protocol only their own client could speak.
 
-It must **explicitly state what is not guaranteed on the datagram lane** — not imply it,
+It must **explicitly state what is not guaranteed on the datagram lane** - not imply it,
 not leave it to inference.
 
 ### D49. No open-questions file, and the Phase 1 gate
@@ -841,14 +841,14 @@ and `emit-stream-multiplexing` (D32, carrying the cross-room cost and revisit tr
 
 ---
 
-## Part 7 — Audit resolutions and final pre-implementation decisions
+## Part 7 - Audit resolutions and final pre-implementation decisions
 
 The pre-implementation audit raised 54 findings; 49 were upheld. Full detail in
 `AUDIT.md`. The decisions below resolve them.
 
 ### D52. Event identity is a name hash, not a position
 An event's wire identifier is the **first four bytes of SHA-256 of its name**, big-endian,
-as a `u32`. (Superseded the two-byte `u16` of the first draft — at two bytes one contract in
+as a `u32`. (Superseded the two-byte `u16` of the first draft - at two bytes one contract in
 four collides at 200 events, and the remedy would have been telling a user to rename an
 event in their own domain language.) Collisions are a contract-construction error naming both events, resolved by an
 explicit `id` that becomes part of the contract.
@@ -860,7 +860,7 @@ incorrectly rather than failing cleanly. A name hash is a pure function of the n
 peers always agree for any name they share, and adding or removing events changes no
 existing identifier.
 
-Collision probability is ~0.3% at 20 events, 1.9% at 50, 7.3% at 100 and 26% at 200 —
+Collision probability is ~0.3% at 20 events, 1.9% at 50, 7.3% at 100 and 26% at 200 -
 acceptable only because it is detected at build time with a message naming both events and
 the one-line fix. Full reasoning and the deploy story in `ADR/0010-event-identity.md`.
 
@@ -887,7 +887,7 @@ Pin TypeScript 7.x. Verified: `tsc` builds under `isolatedDeclarations` +
 `verbatimModuleSyntax` + `nodenext`; `knip` exits 1 on unused dependencies; `attw --pack .
 --profile esm-only` and `publint --pack npm` both exit 0.
 
-TS 7 removed the classic compiler API — `require('typescript')` returns only
+TS 7 removed the classic compiler API - `require('typescript')` returns only
 `{ version, versionMajorMinor }`, and the programmatic API moved to `typescript/unstable/*`
 pending a new API in 7.1. Editor support is **not** affected: TS 7 speaks LSP natively via
 `tsc --lsp --stdio`, and the absence of `tsserver.js` is by design.
@@ -920,7 +920,7 @@ Stated in the README, and tested mechanically: CI typechecks the emitted `.d.ts`
 
 `moduleResolution: "bundler"` was the original instruction and is wrong for a library: it
 permits extensionless imports that compile and then fail to resolve for a consumer under
-`node16`/`nodenext` — creating precisely the hazard ATTW was mandated to catch.
+`node16`/`nodenext` - creating precisely the hazard ATTW was mandated to catch.
 
 `isolatedDeclarations` applies to **`packages/core` only**. It is incompatible with the
 contract pattern by design: `export const contract = defineContract({...})` is exactly the
@@ -937,8 +937,8 @@ export interface AppMap extends MapOf<typeof contract> {}
 
 The second line is what makes hover readable, and it is **opt-in by nature**, so it must be
 canonical by convention. Measured: with the interface, `emit` hover is 126 characters and
-mentions no schema library. Without it — inline `MapOf<...>` or a library-supplied
-`ClientOf<>` alias — it is 303 characters with the validator's internal types in it.
+mentions no schema library. Without it - inline `MapOf<...>` or a library-supplied
+`ClientOf<>` alias - it is 303 characters with the validator's internal types in it.
 TypeScript preserves interface names but expands alias instantiations, so no library-side
 trick removes the need for the line.
 
@@ -964,8 +964,8 @@ memory.
 ### D59. Audit resolutions
 Applied to the documents: the frame length cap corrected (`Length` excludes itself, as its
 own minimum already implied) and the §7.1 datagram diagram redrawn against the budget table.
-Both numbers moved again when the event id widened to four bytes — the cap is now `1048584`
-and `MIN_LENGTH` is 9, the datagram header 13 bytes — which is why every one of them is
+Both numbers moved again when the event id widened to four bytes - the cap is now `1048584`
+and `MIN_LENGTH` is 9, the datagram header 13 bytes - which is why every one of them is
 asserted against `protocol.ts` by `scripts/check-docs.ts` rather than restated here where it
 would go stale a third time; `JOIN` and `LEAVE` added to the `0x0000`
 event-ID carve-out, since a room name is not a contract event; the 1 MiB cap scoped to
@@ -1012,13 +1012,13 @@ Swept every numeric threshold in `DECISIONS.md` and the ADRs for the defect that
 
 Found and fixed: D13 itself. Found and tightened: the backpressure revisit trigger, whose
 "1% drops" now names its denominator explicitly as
-`(overflowDropped + staleDropped) / enqueued` over a 60-second window — both counters this
+`(overflowDropped + staleDropped) / enqueued` over a 60-second window - both counters this
 library owns. ADR 0002's trigger, previously the unfalsifiable "stream churn becomes the
 dominant cost", now fires on the D13 slope or p99 call latency above 50 ms at 500
 concurrent sessions.
 
 Clean: the instantiation budget, the consumer TypeScript floor, the emit-lane latency
-trigger, and every queue bound — all absolute. The 89.96% figure is a cited statistic, not
+trigger, and every queue bound - all absolute. The 89.96% figure is a cited statistic, not
 a threshold.
 
 **Rule going forward: a threshold is stated as an absolute quantity, or as a proportion of
@@ -1049,7 +1049,7 @@ workspace package list, and the `!` breaking marker.
 **What may not go in a hook: typecheck, knip, unit tests, e2e.** Those belong to CI. A slow
 pre-commit gets bypassed within a week, and a hook everyone skips is worse than no hook.
 The measured gap is the argument: pre-commit is **~95 ms**, while typecheck alone is 367 ms
-and knip 453 ms on an empty repository — and both grow with the codebase while a
+and knip 453 ms on an empty repository - and both grow with the codebase while a
 staged-scoped hook does not.
 
 **The rule that matters most: nothing in `lefthook.yml` may be the only place a check
@@ -1058,15 +1058,15 @@ counterpart in a comment beside it, and the pairing is asserted:
 
 | hook command | CI counterpart |
 |---|---|
-| `biome` | `static` job — `biome ci .` |
+| `biome` | `static` job - `biome ci .` |
 | `docs-freshness` | `docs-freshness` job, against the PR diff |
-| `commitlint` | `pr-title` job — the same config file, so the two cannot drift |
+| `commitlint` | `pr-title` job - the same config file, so the two cannot drift |
 
 Hooks are fast feedback. CI is the guarantee.
 
 ### D62. Required checks, and what "merge-blocking" means
 Presence of a job in `ci.yml` is not the same as it blocking a merge. The pairing rule in
-D61 — that no hook may be the only place a check exists — is only true if the CI
+D61 - that no hook may be the only place a check exists - is only true if the CI
 counterpart actually gates the merge button.
 
 The following are **required status checks** on `main`, configured in repository settings
@@ -1104,8 +1104,8 @@ which the rule is asserted-but-not-enforced is now as short as the two commands 
 
 ### D63. Windows: hooks are cross-platform, and CI is what gates anyway
 An earlier version of this decision said Windows was unsupported for development. That
-was a large conclusion from a small cause — direct `./node_modules/.bin/` paths, which are
-`.cmd` shims on Windows — and it locked out contributors for an optimisation worth
+was a large conclusion from a small cause - direct `./node_modules/.bin/` paths, which are
+`.cmd` shims on Windows - and it locked out contributors for an optimisation worth
 milliseconds.
 
 Measured before deciding:
@@ -1116,8 +1116,8 @@ Measured before deciding:
 | `npx --no-install biome` | ~250 ms | yes |
 | `bun run <script>` | **112 ms** | **yes** |
 
-lefthook does **not** add `node_modules/.bin` to `PATH` — verified directly, a bare
-`biome` gives `sh: biome: command not found` — so bare names were never an option. A
+lefthook does **not** add `node_modules/.bin` to `PATH` - verified directly, a bare
+`biome` gives `sh: biome: command not found` - so bare names were never an option. A
 package.json script is, because the script runner adds `.bin` to `PATH` itself and
 resolves the Windows shims. The indirection costs **7 ms** against a budget with room,
 where npx would have cost 144.
@@ -1131,7 +1131,7 @@ develop, commit and open a pull request with every gate enforced. Scoping the de
 what is actually true costs nothing and excludes nobody.
 
 ### D64. Node 22 is the development floor, and the local environment now matches
-`engines: >=22`, and the local toolchain was Node 20.20.2 — a warning on install and a
+`engines: >=22`, and the local toolchain was Node 20.20.2 - a warning on install and a
 wrong-environment bug the moment integration tests load the transport. Resolved before the
 framer rather than after: Node 22.23.2 installed and set as the default.
 
@@ -1150,15 +1150,15 @@ Bisected rather than guessed:
 | transport-io over the loopback | 0.045 KB |
 | transport-io over the real transport | 11.8 KB |
 | **the binding alone, no transport-io at all** | **11.76 KB** |
-| datagrams over the real transport | flat — 20,000 emits, 0.6 KB total |
+| datagrams over the real transport | flat - 20,000 emits, 0.6 KB total |
 
 The leak is **upstream and unbounded**. It is not ours: transport-io over a loopback is
 flat over 20,000 calls, and the binding on its own leaks the same amount with none of our
-code in the picture. It is per **bidirectional stream**, not per message — 20,000 datagrams
+code in the picture. It is per **bidirectional stream**, not per message - 20,000 datagrams
 plateau at 112 MB while 4,000 calls climb without pause. A 16,000-stream run is linear
 throughout with no plateau, so it is a leak rather than a bounded cache.
 
-**Practical impact.** At 11.6 KB per stream, the 4 MB/h bound allows 353 streams per hour —
+**Practical impact.** At 11.6 KB per stream, the 4 MB/h bound allows 353 streams per hour -
 about one call every ten seconds. At ten calls per second it is 408 MB/h; at a hundred,
 4 GB/h.
 
@@ -1169,7 +1169,7 @@ bound is not what is wrong.
 **What it does not invalidate.** D2 remains correct as a design: a stream per call is why a
 stalled call blocks nothing, and the loopback numbers show the model itself costs 0.045 KB
 per call. The cost is entirely in one implementation of one transport, which is exactly the
-scenario ADR 0007's seam was built for — a second transport is now a plausible remedy
+scenario ADR 0007's seam was built for - a second transport is now a plausible remedy
 rather than a hypothetical.
 
 **Options, in the order they should be considered:**
@@ -1210,7 +1210,7 @@ streams per hour under the 4 MB/h bound, about one call every five seconds, and 
 | transport | per stream, 16,000 streams |
 |---|---|
 | reference binding | 11.60 KB, linear, no plateau |
-| **`@moq/web-transport`** | **0.01 KB** — heap 7.7 → 7.9 MB, RSS plateaus at 82 MB from stream 7,000 |
+| **`@moq/web-transport`** | **0.01 KB** - heap 7.7 → 7.9 MB, RSS plateaus at 82 MB from stream 7,000 |
 
 That is not a smaller leak, it is the absence of one: the plateau is the tell.
 
@@ -1222,7 +1222,7 @@ implementation behind an interface does.
 
 - Its quirks will be different quirks. The swallowed `tooBig` and `blocked`, the missing
   `streamErrorCode` and the reliability guard are *this* binding's defects. Expect a fresh
-  set, and expect `resetCodeFromError` to need a sibling — its `reset(code)` and
+  set, and expect `resetCodeFromError` to need a sibling - its `reset(code)` and
   `stop(code)` take explicit codes, so the message-parsing may not be needed at all.
 - **It ships raw TypeScript as its only entry point.** `exports` is `{ ".": "./src/index.ts" }`
   with no compiled JavaScript, and Node refuses to strip types inside `node_modules`, so
@@ -1247,7 +1247,7 @@ not silently budgeted.
 
 - Removing `call()` would give a smaller but honest v1, and it is the tempting option. It
   is wrong, because `emit` and datagrams are provably flat and `call()`'s design is
-  provably sound — the loopback costs 0.045 KB per call. Deleting a correct feature to
+  provably sound - the loopback costs 0.045 KB per call. Deleting a correct feature to
   route around one implementation's defect is the wrong shape of fix, and it makes the
   protocol a hostage to a dependency.
 - Shipping with a budget of 353 streams per hour and saying nothing is not a product.
@@ -1259,7 +1259,7 @@ instructions with the measured number and the transport it applies to, and the t
 seam is documented as the escape hatch. That is consistent with everything else here: state
 the guarantee, including when the guarantee is bad.
 
-**This condition is currently NOT met** — `@moq/web-transport` is flat — so this decision
+**This condition is currently NOT met** - `@moq/web-transport` is flat - so this decision
 is on the shelf rather than in force.
 
 ### D68. moq is not adoptable yet, and the reason is not memory
@@ -1280,7 +1280,7 @@ and caller-side abort. `maxDatagramSize` reports 1413, higher than the reference
 | reset code recovery | message-string parsing only | **explicit `reset(code)` / `stop(code)`** |
 | abort reaches `ctx.signal` | yes, after the fix below | **no** |
 | oversized datagram | accepted, discarded, reports success | our layer refuses first either way |
-| reliability attribute | present | absent — correct, it is HTTP/3 only |
+| reliability attribute | present | absent - correct, it is HTTP/3 only |
 | entry point | normal | **raw TypeScript, unimportable from Node** |
 
 `resetCodeFromError` becomes unnecessary on moq: `reset` and `stop` take a numeric code
@@ -1295,7 +1295,7 @@ directly, so the message parsing that exists only to work around a dropped
    moq-dev/web-transport#388 with all three failure modes verified before posting.
 2. **Abort does not reach the responder.** moq surfaces STOP_SENDING only on the next
    write, and a long-running handler never makes one, so `ctx.signal` never fires. The
-   caller still rejects, so the API is not broken — but the work carries on, which is half
+   caller still rejects, so the API is not broken - but the work carries on, which is half
    of what abort is for.
 3. **An unresolved hang under `node --test`.** The identical flow passes under plain
    `node`, and the module loads and binds fine under the runner, so the cause is somewhere
@@ -1313,7 +1313,7 @@ stream, so a peer reset arriving afterwards reached nobody.
 This matters beyond the bug: ADR 0002, the README and API.md all claim the responder's
 signal fires without the client sending anything. That claim was false for as long as it
 has been written down, and every test passed because none of them asserted the responder
-side of an abort — they asserted the caller rejected, which it always did.
+side of an abort - they asserted the caller rejected, which it always did.
 
 Fixed by watching `writer.closed`, which rejects when the peer sends STOP_SENDING. Now
 true on the reference transport, and asserted in both directions in the parity suite so it
@@ -1331,12 +1331,12 @@ coverage was invisible because the tests that existed looked thorough:
 | `connectHttp3` never awaited the native load | ran a client **beside a server** | ran a client **alone** in a process |
 
 The shape is identical in all three: the suite exercised the convenient half of a two-sided
-interaction — the initiating half, the exiting half, the co-located half — and the defect
+interaction - the initiating half, the exiting half, the co-located half - and the defect
 sat in the half that was skipped for convenience. Not one of them was a subtle bug. Each was
 a total failure of a documented guarantee, surviving a green suite.
 
-**The standing rule.** For anything two-sided — caller and responder, startup and shutdown,
-client process and server process — a test asserts *both* sides or it tests neither. When a
+**The standing rule.** For anything two-sided - caller and responder, startup and shutdown,
+client process and server process - a test asserts *both* sides or it tests neither. When a
 test takes a shortcut at the end (`process.exit`, a shared process, a skipped teardown),
 that shortcut is the specification of what it does not cover, and it is worth writing down
 next to the shortcut. `client-standalone.node.test.ts` carries exactly such a note, because
@@ -1383,7 +1383,7 @@ shutdown**. It must be killed.
 
 This is what the `node --test` hang was. The suite reaches teardown and blocks on
 `listener.stop()`. Every standalone probe missed it by ending with `process.exit(0)` rather
-than stopping the listener. That is not a fact about moq — it is the third instance of the
+than stopping the listener. That is not a fact about moq - it is the third instance of the
 pattern recorded in D69, and it belongs there.
 
 No workaround is available here: a pending native promise cannot be cancelled, and the
@@ -1394,7 +1394,7 @@ The question was: drop the guarantee from the documentation, make it per-transpo
 state it, or hold moq until it propagates. **Hold moq.**
 
 Per-transport was the tempting answer and it is wrong. This library's entire thesis is that
-a guarantee is a property of the contract rather than of the deployment — D1 puts the lane
+a guarantee is a property of the contract rather than of the deployment - D1 puts the lane
 in the contract precisely so that what a message promises does not vary with how it is
 carried. A capability that silently depends on which transport an operator chose is the
 same failure in a new place, and D69 exists because this exact guarantee was documented and
@@ -1408,7 +1408,7 @@ peer reset to the responder does not qualify. moq currently cannot.
 
 ### D73. Transport decision: stay on the reference binding, D67 in force
 Three paths were on the table. (b) removed the packaging blocker and the memory result is
-genuinely much better — flat against 5.95 KB per stream server-side. It is still not
+genuinely much better - flat against 5.95 KB per stream server-side. It is still not
 adoptable, for two reasons that are about correctness rather than performance:
 
 - **No graceful shutdown** (D71). A server that must be killed cannot drain connections.
@@ -1440,7 +1440,7 @@ The repository shipped one:
 
 A pull request title is written by whoever opens the pull request. A title containing
 `"; <command>; echo "` closes the string and runs the command on a runner that already has
-the repository checked out, the dependency tree installed and network egress — before a
+the repository checked out, the dependency tree installed and network egress - before a
 human has read the PR. The workflow also declared no `permissions:`, so that command
 inherited whatever the repository default grants.
 
@@ -1450,7 +1450,7 @@ requirement here; nothing in CI writes to the repository.
 
 The rule is absolute rather than an allowlist of contexts believed safe, and that is the
 decision rather than an accident of strictness. `github.base_ref` is safe today only
-because branch protection fixes the base branch — a setting somebody can change, not a
+because branch protection fixes the base branch - a setting somebody can change, not a
 property of the expression. `env:` is safe for a reason nobody can revoke: the shell
 receives the value as data and never re-parses it as script. An allowlist would have to be
 re-audited every time GitHub adds a context or the repository changes a setting; this does
@@ -1481,10 +1481,10 @@ remedies and defaulting to either is how the gap got here.
 | `1000` `WT_PROTOCOL_VERSION_MISMATCH` | Every refusal closed with `1004` = "unrecoverable framing violation". A peer told that debugs a framing bug that is not there, and one that retries on `1004` retries forever against a disagreement that will never resolve. |
 | `1001` `WT_CONTRACT_MISMATCH` | Same, and the remedy differs: redeploy both sides, not fix your framing. |
 | `1006` `WT_RELIABILITY_REFUSED` | The client threw and left without closing, so the peer held a session this side had already abandoned with nothing on the wire to say why. |
-| `9` `WT_TOO_MANY_STREAMS` | `#openCalls` counted only *our* opens. The cap protected the peer from us and did nothing about a peer opening 10,000 — which is the case a cap is for. Now refused **before the request is read**, since the cost being bounded is the decoder, the handler and the 16 MiB the decoder will buffer. |
+| `9` `WT_TOO_MANY_STREAMS` | `#openCalls` counted only *our* opens. The cap protected the peer from us and did nothing about a peer opening 10,000 - which is the case a cap is for. Now refused **before the request is read**, since the cost being bounded is the decoder, the handler and the 16 MiB the decoder will buffer. |
 
 **Deleted, because the implementation was right and the table was fiction.** Reset codes
-`2`–`8` — handler error, protocol error, unsupported codec, payload too large, handshake
+`2`–`8` - handler error, protocol error, unsupported codec, payload too large, handshake
 incomplete, unknown event, validation failed. Every one of these is a *call* failure, and
 this implementation already reports call failures as a `CALL_ERROR` frame carrying a code
 **and a message**, on the stream the call already owns. A reset carries one byte. Keeping
@@ -1492,8 +1492,8 @@ the table would have meant implementing a strictly worse channel to satisfy a do
 The names survive as `TransportErrorCode`s, which is what they always actually were.
 
 **The mechanism, which is the part that matters.** A promise nobody can observe failing is
-not a promise, so `protocol-promises.test.ts` asserts each of these **on the wire** — the
-close code a peer receives, not the `TransportError` this side raised — and a scan there
+not a promise, so `protocol-promises.test.ts` asserts each of these **on the wire** - the
+close code a peer receives, not the `TransportError` this side raised - and a scan there
 fails if any defined code is named by no non-test code path. Its exemption list may only
 shrink, and it is honest about its limit: it proves a code is *referenced*, not that the
 reference is reachable. `WT_PEER_TOO_SLOW` is referenced and its branch is dead, which is
@@ -1509,7 +1509,7 @@ Three defects, all on the disconnect half of a lifecycle every test only ever co
 `Session.close()`, and neither teardown path called it: the server's `conn.closed`
 continuation freed the origin and removed the peer, the client's patched a snapshot. So
 whichever side did not *initiate* a close kept a live `setInterval` whose callback closes
-over `this` — retaining the Session, its Connection, the frame decoder, both queues, the
+over `this` - retaining the Session, its Connection, the frame decoder, both queues, the
 sequence gate and every handler set. `unref()` was there and gave false comfort: it stops a
 timer holding the event loop open, not holding memory.
 
@@ -1522,7 +1522,7 @@ the room loop with no `try`, while `broadcast` had wrapped its adapter call all 
 rejection on the first room threw out of the loop: rooms 2..N kept a `Member` record each
 holding a live Session, `#peerRooms.delete(id)` never ran, and nothing retried because
 `conn.closed` resolves once. The caller attached no `.catch`, so it was also an unhandled
-rejection — which ends a Node process by default, the exact opposite of the "core degrades
+rejection - which ends a Node process by default, the exact opposite of the "core degrades
 rather than crashing" that ADR 0005, D40 and `API.md` all promise. Local state is now
 unconditional and the bus is told with `Promise.allSettled`: the peer's connection is
 already gone, and a bus that cannot be told now will not be told by us failing here.
@@ -1530,18 +1530,18 @@ already gone, and a bus that cannot be told now will not be told by us failing h
 **A join rejection left a peer half-joined.** `Hub.join` mutated `#rooms` and `#peerRooms`
 *before* awaiting the adapter, with no rollback and no notification. On rejection the hub
 fanned broadcasts to a peer the bus had no record of, and the client was never told it had
-joined — permanently. For a room gated on authorization that is traffic reaching someone
+joined - permanently. For a room gated on authorization that is traffic reaching someone
 who was refused. The adapter call now happens first; local state follows it.
 
 **The test that named this and did not test it.** `adapter-conformance.test.ts` had a case
 titled *"join rejecting does not leave the peer half-joined from core's view"* asserting
-only that the client was still `connected` — true whether or not the peer is half-joined.
+only that the client was still `connected` - true whether or not the peer is half-joined.
 `HostileAdapter.failNextJoin` and `failNextLeave` exist for precisely these cases and were
 set by **no test in the repository**. This is D69's shape in a test written after D69.
 
 **Why the soak could not have caught any of it, and what replaces that.** `soak.node.ts`
 never disconnects a session. `soak:churn` does, and the number it reports is bytes retained
-per session churned by linear fit — an absolute quantity, per D13's rule.
+per session churned by linear fit - an absolute quantity, per D13's rule.
 
 Its warmup is **wall clock, not a cycle count**, and that detail is the whole measurement.
 `ORIGIN_QUARANTINE_MS` is 120 s: a freed origin is deliberately held for two minutes before
@@ -1553,12 +1553,12 @@ cycles reports **−2 B/session** across 85,783 cycles, with heap flat at 9.6–
 
 | | retained per session |
 |---|---|
-| before the fixes | **+15,011 B** — 5.1 GB/hour at 100 sessions/s |
-| after, warmup by cycle count (wrong) | +402 B, then +72 B — quarantine, not leak |
-| after, warmup past the quarantine window | **−2 B** — flat |
+| before the fixes | **+15,011 B** - 5.1 GB/hour at 100 sessions/s |
+| after, warmup by cycle count (wrong) | +402 B, then +72 B - quarantine, not leak |
+| after, warmup past the quarantine window | **−2 B** - flat |
 
 **Reconsider when:** `soak:churn` reports a positive slope, or `ORIGIN_QUARANTINE_MS`
-changes — the warmup default is tied to it and has to move with it.
+changes - the warmup default is tied to it and has to move with it.
 
 ### D77. The emit bound is only a bound if something stays in the bounded thing
 D15 has now been dead code twice, and the second death was caused by the fix for the first.
@@ -1567,12 +1567,12 @@ That is the part worth recording; the fix itself is four lines.
 **Death 1.** `emit` drained the queue synchronously on every push, so a burst never queued
 and neither the datagram ring nor its TTL ever applied.
 
-**Death 2.** The fix made the *datagram* flush coalesced, through an injectable scheduler —
+**Death 2.** The fix made the *datagram* flush coalesced, through an injectable scheduler -
 which is why the ring and the TTL are genuinely exercised today. The **emit** flush was left
 synchronous and unconditional: push, then drain the entire queue on the same turn into
 `#write`, which appended each frame to an unbounded promise chain and returned. Depth
 therefore returned to zero after every push, `length >= max` could never be true from a
-Session, and `CloseCode.WT_PEER_TOO_SLOW` was unreachable — a documented, observable,
+Session, and `CloseCode.WT_PEER_TOO_SLOW` was unreachable - a documented, observable,
 normative behaviour with no code path leading to it.
 
 The backlog had not gone anywhere. It moved out of a bounded queue that disconnects and
@@ -1582,7 +1582,7 @@ discarded every write failure on the lane advertising reliable ordered delivery.
 heap growth, and a peer that was never disconnected.
 
 **Why it was invisible.** The test was `new EmitQueue(3)`, push four items, expect a throw.
-It asserted the queue — which was never wrong — and never went through a Session, which was.
+It asserted the queue - which was never wrong - and never went through a Session, which was.
 Same shape as D69: the component was tested, the integration was the thing that failed.
 
 **The fix.** One write in flight at a time, and a frame leaves the queue only when its write
@@ -1597,7 +1597,7 @@ mid-handshake accumulates against the bound rather than racing it.
 enforced only while items remain in the container long enough to be counted. Any code that
 removes an item at hand-off time rather than at completion time has moved the queue
 somewhere else, and the somewhere else is almost never bounded. Before trusting a bound,
-assert the depth is non-zero under load — `backpressure.test.ts` does exactly that, and it
+assert the depth is non-zero under load - `backpressure.test.ts` does exactly that, and it
 is the assertion that would have caught both deaths.
 
 **Reconsider when:** never for the completion-not-hand-off rule. The single in-flight write
@@ -1608,7 +1608,7 @@ that is a performance change and needs a number first.
 `{ lane: 'datagram', payload, returns }` compiled, `CallableOf` admitted the event, and a
 `call()` on it opened a bidirectional stream, reached a registered handler and came back
 answered. A contract that says "this message may be dropped" produced a guaranteed, ordered,
-acknowledged message — with the type system agreeing at every step. That is a violation of
+acknowledged message - with the type system agreeing at every step. That is a violation of
 D1, the first decision this project made, and it was reachable through the public API.
 
 The type hole was excess property checking against a **union**: TypeScript admits any
@@ -1629,7 +1629,7 @@ subverted:
 
 `handle()` is the one that matters most and is the least obvious. Guarding `call()` alone
 leaves a responder happily answering over a bidirectional stream for an event whose contract
-promises the message may be dropped — the violation completes even though this side never
+promises the message may be dropped - the violation completes even though this side never
 initiated it.
 
 **Reconsider when:** never. If an event needs a response it belongs on the stream lane, and
@@ -1642,7 +1642,7 @@ caller reads, and nothing asserted the documented behaviour.
 **`handle()`'s disposer did not revoke anything.** It deleted from the server's own map
 while the per-session registrations it made at accept time stayed live, so revoking a
 privileged responder did nothing for any peer that was already connected. The disposer now
-sweeps current peers — current, not the ones present at registration, because a session
+sweeps current peers - current, not the ones present at registration, because a session
 accepted in between picked the handler up from the map.
 
 **`join()` after teardown succeeded and was retained for ever.** `onSession(async peer => {
@@ -1652,18 +1652,18 @@ swallowing catch, so nothing surfaced, and the teardown that would have removed 
 had already run. A disposed session now refuses to join, with `WT_SESSION_CLOSED`.
 
 **The handshake deadline did not cover the handshake.** It was armed *after*
-`openEmitStream()` and after writing our own handshake — so if either never settled, which
+`openEmitStream()` and after writing our own handshake - so if either never settled, which
 is precisely the stalled-peer case the deadline exists for, no timer was ever armed and
 `connect()` hung for ever. Armed first now, and raced against both awaits. Racing `ready`
 instead would be wrong: a peer whose handshake arrives before we have opened our own stream
 resolves `ready` early and the race would fire on success. `handshakeDeadlineMs` also
-reached `SessionOptions` from nowhere — neither Client nor Server passed it — so the only
+reached `SessionOptions` from nowhere - neither Client nor Server passed it - so the only
 test seam for the whole path was inert. It is now a `ClientOptions` field.
 
 **An aborted call rejected with the platform's error, not ours.** A raw `DOMException`:
 `name: 'TimeoutError'`, `code: 23`, no `remedy`. D18 removes the default call timeout on the
 explicit grounds that `AbortSignal.timeout(ms)` is the documented substitute, which makes
-abort the most-documented failure path this library has — and `WT_ABORTED` was in the
+abort the most-documented failure path this library has - and `WT_ABORTED` was in the
 exported code union while being constructed nowhere, so the error-handling function printed
 verbatim in `API.md` reported `'unknown'` for it. Now a `TransportError` with a remedy.
 
@@ -1699,7 +1699,7 @@ needed:**
 ADR 0010 still said two bytes and `u16` against a wire that has been four bytes and `u32`
 since the widening; D59's worked arithmetic still carried the pre-widening numbers; and §7.3
 argued for a 32-bit Origin *hash* eighty lines after the same section established that
-Origin is allocated and explicitly rejected hashing — an implementer who read to the end
+Origin is allocated and explicitly rejected hashing - an implementer who read to the end
 would have built the collision the first half exists to eliminate.
 
 A normative reference to an unrelated private project of the author's was also removed from
@@ -1709,7 +1709,7 @@ D29. It was a scope leak the earlier cleanup missed.
 `protocol.ts` by `scripts/check-docs.ts`, which is why the widening broke the *documents*
 and not the *gate*. Prose has no such gate, which is why the stale prose survived three
 rounds of review. Where a document states behaviour, prefer a test whose name is the
-statement — see D75 and D78.
+statement - see D75 and D78.
 
 ### D81. The thirteen deferred items, none of which was deferred
 Every CAN WAIT finding was acted on. Two of them turned out not to be cosmetic at all, and
@@ -1718,14 +1718,14 @@ those judgements were wrong.
 
 **Gates that could not fail.**
 
-- `test:node` ran through `--if-present` and a glob that exits 0 on zero matches — two
+- `test:node` ran through `--if-present` and a glob that exits 0 on zero matches - two
   independent ways for the only required check that exercises the native transport to be
   green while testing nothing. `scripts/run-node-tests.sh` asserts the reported test count
   instead. Verified both ways: 7 tests on the real glob, exit 1 on a glob that matches
   nothing.
 - The D14 import boundary was a Biome rule listing three package specifiers, so
   `import … from './transport/fails.node.ts'` inside a plain `*.test.ts` passed `biome ci`
-  cleanly — measured, 0 diagnostics. That is the *more likely* of the two mistakes: nobody
+  cleanly - measured, 0 diagnostics. That is the *more likely* of the two mistakes: nobody
   reaches for the raw package name when the wrapper is next door. Replaced by
   `scripts/check-boundaries.ts`, which checks the property rather than a list of names.
 - `check-node.sh` compared majors while its own error text named 22.18, so every Node
@@ -1736,7 +1736,7 @@ those judgements were wrong.
   check went green kept the green check, and the squash subject comes from the title.
 
 **Assertions that could not fail.** The e2e cursor check matched `translate(\d+px, \d+px)`,
-which all twelve positions satisfy including the first — a sign error freezing the cursor
+which all twelve positions satisfy including the first - a sign error freezing the cursor
 after one datagram passed it. It now asserts the exact distance travelled. The quarantine
 invariant compared against literals rather than the constants it is an invariant *between*.
 `call.test.ts` had two tests on one code path; `call()` now refuses a `returns`-less event
@@ -1744,8 +1744,8 @@ by name, so the two faults have distinct messages matching their distinct remedi
 
 **The one that was not cosmetic.** `Hub`'s remote-delivery branch had never executed a line,
 and writing the first test for it found a real defect: **the Hub deduped against the
-`Server`'s `nodeId` while the envelope carries the *adapter*'s.** Where those differ — which
-is any deployment configuring them separately — a node delivered every local broadcast
+`Server`'s `nodeId` while the envelope carries the *adapter*'s.** Where those differ - which
+is any deployment configuring them separately - a node delivered every local broadcast
 twice, once locally and once back off the bus. `nodeId` is now part of the `Adapter`
 interface and the dedup reads it from there, so the two cannot diverge.
 
@@ -1754,7 +1754,7 @@ both `MemoryAdapter` and `HostileAdapter` were per-instance islands, which is *w
 was never tested. They now accept a shared `memoryBus()`.
 
 **The documentation gate was blind in both directions.** Blocks were concatenated per
-document, and TypeScript hoists imports — so a block could use a name imported by a *later*
+document, and TypeScript hoists imports - so a block could use a name imported by a *later*
 block. That is how the README's flagship "the whole surface, in one file" snippet called
 `defineContract` without importing it. Fixing the snippet then failed as a duplicate
 identifier, which is the same blindness from the other side. Blocks now compile against
@@ -1764,7 +1764,7 @@ import again: the gate fails.
 
 **Documents contradicting their own tooling.** D29 told authors to write `BREAKING CHANGE:`
 footers in the PR body, which `body-empty`, `footer-empty` and
-`squash_merge_commit_message=BLANK` all discard — and the `pr-title` job pipes only the
+`squash_merge_commit_message=BLANK` all discard - and the `pr-title` job pipes only the
 title, so such a footer was never linted *and* never landed. The same entry offered
 `fix(react):` as an example scope, which the gate it was describing rejects.
 
@@ -1773,7 +1773,7 @@ will be because a gate started failing, which is the outcome all of them were re
 
 ### D82. Normative prose has a gate now, and it is deliberately shallow
 Numeric constants are asserted against `protocol.ts`. Code blocks are compiled. Sentences
-saying what an implementation MUST do were checked by nobody — which is how four promises
+saying what an implementation MUST do were checked by nobody - which is how four promises
 lived in three documents and no code, and how ADR 0010 went on claiming a `u16` event id
 against a wire that had been `u32` for weeks. Every other kind of drift in this project has
 been caught by a gate; this kind kept getting through review instead.
@@ -1794,21 +1794,21 @@ implementation's notes.
 **What it does not do, on purpose.** It does not verify the test is any good, or that it
 runs, or that it asserts the statement rather than something adjacent. Building that would
 mean a proof system, and this had to be finished in an afternoon. What it does is make an
-unimplemented promise impossible to write down *silently* — writing `MUST` now costs either
+unimplemented promise impossible to write down *silently* - writing `MUST` now costs either
 a test or an explicit, counted admission that there is none.
 
 **The admission has a ratchet.** `-> UNPROVEN: <reason>` records an honest gap, and the
 count is printed on every run against a ceiling of 8 that may only go down. Same idiom as
 the `ignore` block ceiling in `check-docs.ts`, for the same reason: an exemption without a
 ratchet becomes permanent on the first busy afternoon. Three statements are unproven today,
-and writing them down found the third — no test sends more than one `CALL_RESPONSE`, so D7's
+and writing them down found the third - no test sends more than one `CALL_RESPONSE`, so D7's
 multi-frame shape is reserved and unexercised. That was going to be discovered by whoever
 implemented token streaming against it.
 
 **Coverage rules that make it usable rather than resented.** One marker covers a run of
 consecutive normative lines within 40 lines, so a table of MUSTs takes one marker and not
 twelve. `API.md` states guarantees as bold lead-ins rather than RFC-2119 keywords, so a bold
-opener containing "never" or "always" counts too — "**The lane lives in the contract, never
+opener containing "never" or "always" counts too - "**The lane lives in the contract, never
 at the call site.**" is exactly as binding as a MUST and would otherwise have slipped past.
 
 **Verified by breaking it**, three ways: a new `MUST` with no marker, a marker naming a file
@@ -1824,9 +1824,9 @@ ceiling.
 ### D83. The first publish is `0.0.1` to hold the name; `0.1.0` is the first release
 Stage 1 was defined as the first stable publish with semver in force. Amended twice.
 
-**`0.0.1` is a name claim, not a release.** npm has no reservation mechanism — verified:
+**`0.0.1` is a name claim, not a release.** npm has no reservation mechanism - verified:
 `npm owner ls` on an unpublished name returns 404 and there is no `reserve` or `claim`
-subcommand — so the only way to hold `transport-io` is to publish something under it. That
+subcommand - so the only way to hold `transport-io` is to publish something under it. That
 something is `0.0.1`, and it carries no promise beyond existing. **`0.1.0` is the first
 release**, and the Stage 1 rules apply from *it*, not from the name claim.
 
@@ -1839,7 +1839,7 @@ Three reasons, none of them a matter of taste.
 **Thirty-one before-release defects were found in one sweep**, hours before the first
 publish. Among them: four normative promises with no implementation, a datagram event that
 could be called and answered, a session leaked on every disconnect, and an emit bound that
-could not be reached. That is not the shape of a codebase whose API is settled — it is the
+could not be reached. That is not the shape of a codebase whose API is settled - it is the
 shape of one that has not been read hard enough yet, and the sweep is evidence of both.
 
 **`0.x` costs nothing and `1.0.0` promises what there is no evidence for.** Nobody is
@@ -1859,7 +1859,7 @@ Found by running the full lane soak after D76 rather than by reading the diff.
 
 `Session.close()` calls `dispose()` and then `conn.close()`. `dispose()` was made idempotent
 in D76; `conn.close()` was not. A client disconnecting while the server tears the same
-session down is ordinary and, under load, constant — so the transport was told to close the
+session down is ordinary and, under load, constant - so the transport was told to close the
 same session twice, over and over. quiche logs `WebTransportHttp3 close sent twice` and
 refuses the extra call.
 
@@ -1896,7 +1896,7 @@ This is the D13 defect one layer further down, and the third variant of it in th
 
 | | what was certified |
 |---|---|
-| original D13 | growth as a percentage of a baseline nobody fixed — passed against the leak it was written to catch |
+| original D13 | growth as a percentage of a baseline nobody fixed - passed against the leak it was written to catch |
 | D76's first draft | quarantine occupancy, reported as leak, because the run was shorter than the quarantine window |
 | here | **nothing**, reported as a pass, because the run was shorter than the warmup |
 
@@ -1905,8 +1905,8 @@ skims past.
 
 **The rule this settles.** A threshold is meaningless without a stated minimum number of
 observations, and that minimum is part of the criterion rather than an implementation
-detail. Both soaks now require at least three samples — the fewest a least-squares line
-means anything over — and say so in their output when they do not have them. The churn soak
+detail. Both soaks now require at least three samples - the fewest a least-squares line
+means anything over - and say so in their output when they do not have them. The churn soak
 already had the guard, which is why it was the one that produced trustworthy numbers.
 
 **Reconsider when:** never. If a run is too short to sample, the correct result is a failure
@@ -1929,14 +1929,14 @@ installs is the monorepo root and `import … from 'transport-io'` fails. Verifi
 it into a scratch directory: `node_modules/transport-io-monorepo`, no `transport-io`.
 
 The sequence is the point. The original defect was an install line naming an unpublished npm
-package. It was replaced with a git install that does not work either — corrected in the
+package. It was replaced with a git install that does not work either - corrected in the
 same afternoon, by the same person, in a document about not fabricating things. An
 instruction that has not been executed is a guess about how a tool behaves, and monorepo git
 installs are exactly where that guess goes wrong. Until the first publish the documents say
 clone and build, which is the only sequence that has been run end to end.
 
 **Reconsider when:** the package is published. At that point both READMEs change to
-`npm install transport-io` in the same commit as the publish, and not before — an install
+`npm install transport-io` in the same commit as the publish, and not before - an install
 line pointing at a name nobody owns is how a reader installs a stranger's package on this
 project's authority.
 
@@ -1946,24 +1946,24 @@ Every gate in this repository was fed an input set with nothing in it. Six passe
 An aggregate over an empty collection, compared against a bound, **passes**. Zero violations
 is zero. `Math.max()` of nothing is `-Infinity`. A least-squares denominator of zero returns
 a slope of 0. Every one of those is inside every threshold, so the gate reports success
-having examined nothing — and finding nothing is far more often a broken glob than a clean
+having examined nothing - and finding nothing is far more often a broken glob than a clean
 repository.
 
 | gate | fed nothing, before | after |
 |---|---|---|
-| `check-norms` | **passed** — 0 statements, 0 markers | fails: floors of 20 and 15 |
-| `check-workflows` | **passed** — glob matched no files | fails: floor of 1 |
-| `check-boundaries` | **passed** — glob matched no source | fails: floor of 40 |
-| `check-docs`, snippets | **passed** — 0 blocks compiled cleanly | fails: floor of 15 |
-| `check-docs`, constants | half — an empty parse agrees with an empty enum | fails: floor of 3 rows per table |
-| `knip` | **passed** — no entry files, `{"issues":[]}` | fails via `check-gate-inputs` |
-| `attw` | **passed** — empty `dist` | fails via `check-gate-inputs` |
+| `check-norms` | **passed** - 0 statements, 0 markers | fails: floors of 20 and 15 |
+| `check-workflows` | **passed** - glob matched no files | fails: floor of 1 |
+| `check-boundaries` | **passed** - glob matched no source | fails: floor of 40 |
+| `check-docs`, snippets | **passed** - 0 blocks compiled cleanly | fails: floor of 15 |
+| `check-docs`, constants | half - an empty parse agrees with an empty enum | fails: floor of 3 rows per table |
+| `knip` | **passed** - no entry files, `{"issues":[]}` | fails via `check-gate-inputs` |
+| `attw` | **passed** - empty `dist` | fails via `check-gate-inputs` |
 | `publint` | already failed | unchanged |
 | `bun test` | already failed on zero matches | unchanged |
 | `test:node` | already fixed in D81 | unchanged |
 | `soak:lanes` | already fixed in D85 | unchanged |
 | `soak:churn` | already guarded | unchanged |
-| `check-node.sh` | passes, **correctly** — it checks one value, not an aggregate | unchanged |
+| `check-node.sh` | passes, **correctly** - it checks one value, not an aggregate | unchanged |
 
 `knip` and `attw` are third-party and cannot be taught this from the inside; "no issues" is a
 truthful answer to "look at nothing". The floor has to come from the caller, which is
@@ -1973,7 +1973,7 @@ target named by the package's `exports` map must be present in the packed tarbal
 **One thing this exercise cost, worth recording.** The first draft of the knip floor
 translated its glob patterns by hand and reported three false negatives against patterns that
 do match. A second, subtly different glob matcher in the repository is a liability, so it was
-replaced with a floor on files under each workspace root — which catches the failure that
+replaced with a floor on files under each workspace root - which catches the failure that
 actually happens (a config pointing at a renamed directory) without pretending to
 reimplement anything.
 
@@ -1982,7 +1982,7 @@ that reduces a collection to a verdict states a minimum size, and that minimum i
 check rather than a detail of it.
 
 **Reconsider when:** a floor starts failing because the repository legitimately shrank. Lower
-it deliberately, in a commit that says why — the same ratchet as every other ceiling here.
+it deliberately, in a commit that says why - the same ratchet as every other ceiling here.
 
 ### D88. The three unproven norms are zero
 D82 shipped with three `UNPROVEN` markers against a ceiling of eight. A ratchet is the right
@@ -1991,22 +1991,22 @@ with a number attached, so each was either proved or the promise was corrected. 
 turned out to be provable, two of them only after the implementation grew what the statement
 already claimed.
 
-**`receiver-accepts-multi-frame-response` — proved, and the document corrected too.** The
+**`receiver-accepts-multi-frame-response` - proved, and the document corrected too.** The
 receiver genuinely does tolerate a sequence; it was untestable only because no sender in this
 library produces one. Writing the sequence by hand from a raw stream proves the tolerance.
 But §6 read as though multi-frame responses happen, and a Go implementer would have built a
 receive loop for something that never arrives. The section now says **reserved, not
-implemented** in a block that cannot be skimmed past, while still requiring tolerance —
+implemented** in a block that cannot be skimmed past, while still requiring tolerance -
 because that tolerance is what keeps token streaming from being a protocol break later.
 
-**`host-ordinal-exhaustion-refuses` — proved, via a seam.** Reaching the branch meant
+**`host-ordinal-exhaustion-refuses` - proved, via a seam.** Reaching the branch meant
 4,194,304 allocations. `OriginAllocator` now takes a counter-space parameter, used by the
 test and by nothing else, and the exhaustion path is exercised at size 8. An unreachable
 branch in an allocator is exactly the code that is wrong the first time it runs, and this one
 also had to prove the right *remedy*: the error says concurrency limit, not clock, so an
 operator does not restart the host expecting it to help.
 
-**`session-streams-not-reused` — the implementation did not do it.** Nothing stopped `call()`
+**`session-streams-not-reused` - the implementation did not do it.** Nothing stopped `call()`
 opening a stream on a closed session. The transport may well accept the open, in which case
 the call hangs for ever rather than failing. `call()` now refuses with `WT_SESSION_CLOSED`.
 
@@ -2023,13 +2023,13 @@ nothing. The wrapper parses the summary line for a test count. It matched `# tes
 
 The GitHub runner's reporter prints `ℹ tests 7`.
 
-So the first CI run after that change went red on a job where all seven tests passed —
-`pass 6, fail 0, skipped 1` — because the guard could not read the summary and treated an
+So the first CI run after that change went red on a job where all seven tests passed -
+`pass 6, fail 0, skipped 1` - because the guard could not read the summary and treated an
 unparseable count as zero. Locally it was invisible: a non-TTY local run emits the `#` form,
 which is the one the guard knew.
 
 Two things to keep from it. **A guard that cannot parse its input must say so** rather than
-defaulting to the failure it was written to detect — the message now distinguishes "matched
+defaulting to the failure it was written to detect - the message now distinguishes "matched
 no tests" from "could not read the summary", because those need different fixes. And
 **anything that parses another tool's human-readable output is environment-dependent by
 construction**: the count and the pass total are now both extracted, matched on the word

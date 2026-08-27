@@ -1,5 +1,5 @@
 /**
- * The transport seam. Internal — not exported from the package (D21).
+ * The transport seam. Internal - not exported from the package (D21).
  *
  * It exists so the reference transport's defects stay in one place: it silently swallows
  * oversized and blocked datagrams, its error type omits the specification's
@@ -30,7 +30,7 @@ export interface Connection {
   maxDatagramSize(): number
 
   /**
-   * `undefined` where the runtime does not implement the attribute — which includes the
+   * `undefined` where the runtime does not implement the attribute - which includes the
    * dominant browser. Treated as "unknown, allowed"; only an explicit 'reliable-only' is
    * refused. See D10.
    */

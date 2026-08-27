@@ -1,4 +1,4 @@
-# ADR 0006 — Node for the transport, Bun for everything else
+# ADR 0006 - Node for the transport, Bun for everything else
 
 **Status:** accepted · **Decision:** D14
 
@@ -11,8 +11,8 @@
 
 ## The evidence
 
-This is not a preference. The identical smoke test — session establishment, half-close,
-multi-frame response, datagram round trip — was run on both runtimes on the same machine:
+This is not a preference. The identical smoke test - session establishment, half-close,
+multi-frame response, datagram round trip - was run on both runtimes on the same machine:
 
 | runtime | functional checks | outcome |
 |---|---|---|

@@ -2,7 +2,7 @@
  * A gate for normative prose, which had none.
  *
  * Numeric constants are asserted against `protocol.ts`. Code blocks are compiled. Sentences
- * that say what an implementation MUST do were checked by nobody — which is how four
+ * that say what an implementation MUST do were checked by nobody - which is how four
  * promises lived in three documents and no code, and how ADR 0010 kept claiming a `u16`
  * event id against a wire that had been `u32` for weeks.
  *
@@ -20,7 +20,7 @@
  *   <!-- norm: some-future-thing -> UNPROVEN: reason it is not yet testable -->
  *
  * The marker goes on the line directly after the statement it covers. One marker may cover
- * several consecutive normative lines — a table of MUSTs needs one, not twelve.
+ * several consecutive normative lines - a table of MUSTs needs one, not twelve.
  *
  *   bun run scripts/check-norms.ts
  */
@@ -73,7 +73,7 @@ export interface Marker {
 const NORMATIVE = /\b(MUST NOT|MUST|SHALL NOT|SHALL)\b/
 
 /**
- * `API.md` states its guarantees as bold lead-ins rather than RFC-2119 keywords — "**The
+ * `API.md` states its guarantees as bold lead-ins rather than RFC-2119 keywords - "**The
  * lane lives in the contract, never at the call site.**" is exactly as binding as a MUST
  * and would otherwise slip past. Restricted to bold openers so that ordinary prose using
  * the word "never" is not dragged in.
@@ -110,7 +110,7 @@ export function parse(
 
 /**
  * A statement is covered when a marker appears within `REACH` lines below it, so one marker
- * can cover a run of consecutive MUSTs — a table row per line otherwise needs a marker per
+ * can cover a run of consecutive MUSTs - a table row per line otherwise needs a marker per
  * row, which would make the documents unreadable and the gate resented.
  */
 const REACH = 40
@@ -192,7 +192,7 @@ function main(): void {
   if (unproven.length > MAX_UNPROVEN) {
     problems.push(
       `${unproven.length} markers are UNPROVEN, above the ceiling of ${MAX_UNPROVEN}. ` +
-        'Prove one or delete the promise — never raise the ceiling.',
+        'Prove one or delete the promise - never raise the ceiling.',
     )
   }
 

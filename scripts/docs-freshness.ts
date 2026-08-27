@@ -23,7 +23,7 @@ const touchedDocs = staged.filter((f) => DOCS.test(f))
 
 if (touchedSource.length > 0 && touchedDocs.length === 0) {
   if (process.env[ACK] === '1') {
-    console.log(`[docs] ${ACK}=1 — proceeding without a documentation change.`)
+    console.log(`[docs] ${ACK}=1 - proceeding without a documentation change.`)
     process.exit(0)
   }
   console.error('')
@@ -32,10 +32,10 @@ if (touchedSource.length > 0 && touchedDocs.length === 0) {
   for (const f of touchedSource) console.error(`    changed: ${f}`)
   console.error('')
   console.error('  Documents that may need updating in THIS commit:')
-  console.error('    API.md        — if any exported signature changed')
-  console.error('    PROTOCOL.md   — if any wire format, constant or error code changed')
-  console.error('    DECISIONS.md  — if this implements or revises a decision')
-  console.error('    ADR/          — if this reverses something a record explains')
+  console.error('    API.md        - if any exported signature changed')
+  console.error('    PROTOCOL.md   - if any wire format, constant or error code changed')
+  console.error('    DECISIONS.md  - if this implements or revises a decision')
+  console.error('    ADR/          - if this reverses something a record explains')
   console.error('')
   console.error(`  If none apply, re-run with ${ACK}=1 to record that judgement.`)
   console.error('')

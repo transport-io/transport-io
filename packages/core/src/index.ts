@@ -7,7 +7,7 @@ export {
   memoryBus,
   type PeerId,
   // `Adapter.onRemote` is typed in terms of this, so anyone writing a Redis adapter needs
-  // it. Without it their only options were `unknown` or retyping the interface by hand —
+  // it. Without it their only options were `unknown` or retyping the interface by hand -
   // the exact failure mode CLAUDE.md records as having already broken this project three
   // times.
   type RemoteEnvelope,
@@ -56,7 +56,7 @@ export type { SessionStats } from './session.ts'
  * `isolatedDeclarations` forbids inferring it from an import and a version that drifts from
  * its manifest is a lie in the one place a user checks first.
  *
- * `changeset version` moves the manifest, so this moves in the same commit — which the test
+ * `changeset version` moves the manifest, so this moves in the same commit - which the test
  * enforces rather than trusting anyone to remember.
  */
 export const VERSION: string = '0.0.1'

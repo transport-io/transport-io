@@ -2,7 +2,7 @@
  * Minimal reproduction of the moq server-close deadlock (D71).
  *
  * No transport-io involved. `NapiServer.close()` never returns if an `accept()` is
- * outstanding, so a moq server cannot be shut down gracefully — a server that accepts
+ * outstanding, so a moq server cannot be shut down gracefully - a server that accepts
  * connections always has an accept pending.
  *
  *   node packages/core/src/bench/moq-close-deadlock.node.ts          # returns, exits

@@ -1,4 +1,4 @@
-# ADR 0008 — Backpressure: three lanes, three answers
+# ADR 0008 - Backpressure: three lanes, three answers
 
 **Status:** accepted · **Decision:** D15
 
@@ -24,15 +24,15 @@ correct on one, a lie on another, and unnecessary on the third.
 
 ## Why each answer differs
 
-**Datagram — drop oldest.** Every realistic datagram payload is last-write-wins, so the
+**Datagram - drop oldest.** Every realistic datagram payload is last-write-wins, so the
 stale frames are the ones worth losing. 64 frames is roughly one second of buffer at 60 Hz.
 Dropping is the lane's advertised contract, so it counts rather than throws.
 
-**Emit — never drop, disconnect instead.** A lane that advertises reliable ordered delivery
+**Emit - never drop, disconnect instead.** A lane that advertises reliable ordered delivery
 and then silently drops is exactly the lie this project exists to avoid. A peer 256 frames
 behind has already failed; disconnecting is the honest outcome.
 
-**Call streams — no queue and no drop.** This one falls out of ADR 0002 rather than being
+**Call streams - no queue and no drop.** This one falls out of ADR 0002 rather than being
 designed. Each call owns its own QUIC stream, so awaiting the writer applies flow control
 to that call's own producer. One slow consumer stalls only itself. The requirement that one
 slow consumer must not stall the others is satisfied by the transport, not by our queueing.
@@ -65,7 +65,7 @@ fiction, and an unfalsifiable one.
 ## Revisit when
 
 A 50-peer room at 60 Hz shows `(overflowDropped + staleDropped) / enqueued` above 1% for
-any peer, measured over a 60-second window in the example app — or an emit-lane disconnect
+any peer, measured over a 60-second window in the example app - or an emit-lane disconnect
 is observed at a queue depth below 256.
 
 The denominator is stated explicitly because a threshold expressed as a proportion of an

@@ -2,7 +2,7 @@
  * D14's runtime split, enforced against what people actually write.
  *
  * The rule: anything that loads the quiche transport runs on Node; everything else runs on
- * Bun. It is enforced because the native addon segfaults Bun on exit — measured 3/3 runs —
+ * Bun. It is enforced because the native addon segfaults Bun on exit - measured 3/3 runs -
  * and a segfault *after* a reporter has printed its summary looks like a pass.
  *
  * The Biome rule that was supposed to carry this matches three package specifiers and
@@ -10,7 +10,7 @@
  * `*.test.ts` sailed straight through. That import is the more likely mistake of the two:
  * nobody reaches for the raw package name, they reach for the wrapper next door.
  *
- * So this checks the property rather than a list of package names — a module that is not
+ * So this checks the property rather than a list of package names - a module that is not
  * itself Node-only may not reach anything that is, by any specifier.
  *
  *   bun run scripts/check-boundaries.ts
@@ -41,7 +41,7 @@ export function findBoundaryViolations(file: string, source: string): Violation[
   const out: Violation[] = []
   for (const [i, line] of source.split('\n').entries()) {
     // Anchored at the start of the line on purpose. An unanchored match also fires inside
-    // string literals — including this checker's own doc comment and its test's fixtures,
+    // string literals - including this checker's own doc comment and its test's fixtures,
     // which are made entirely of the thing being detected.
     const m =
       /^\s*(?:import|export)\b[^'"]*['"]([^'"]+)['"]/.exec(line) ??
@@ -73,7 +73,7 @@ function sourceFiles(dir: string): string[] {
 /**
  * This checker's own test is excluded, and it is the only exclusion. Its entire content is
  * fixtures of the thing being detected, so scanning it would be scanning a list of examples
- * — and an exclusion list that grows past one entry is a rule losing an argument.
+ * - and an exclusion list that grows past one entry is a rule losing an argument.
  */
 const SELF_TEST = 'check-boundaries.test.ts'
 

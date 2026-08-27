@@ -1,10 +1,10 @@
-# ADR 0011 — Contract identity is an event table, not a fingerprint
+# ADR 0011 - Contract identity is an event table, not a fingerprint
 
 **Status:** accepted · **Decision:** D53
 
 ## Decision
 
-The handshake carries the **event table** — one `[name, id, lane]` triple per event — not a
+The handshake carries the **event table** - one `[name, id, lane]` triple per event - not a
 hash of the contract. Peers compare tables **per event**, not as a whole.
 
 | condition | outcome |
@@ -20,7 +20,7 @@ hash of the contract. Peers compare tables **per event**, not as a whole.
 
 The draft specified SHA-256 over a canonical serialisation of the contract, truncated to 8
 bytes, compared for equality. It was invented while writing prose and never had its
-consequences worked through — which is exactly why it is dangerous.
+consequences worked through - which is exactly why it is dangerous.
 
 A whole-contract hash is an **all-or-nothing** comparison. Any difference, anywhere,
 refuses the session. That converts every additive contract change into a fleet-wide
@@ -47,8 +47,8 @@ Including them is the obvious implementation and it is wrong.
 
 Adding an optional field to one event's payload is backwards compatible by every normal
 definition. Under a schema-covering hash it refuses every existing session. The library
-would be treating a compatible change as a breaking one, at the exact moment — a rolling
-deploy — when that is most expensive.
+would be treating a compatible change as a breaking one, at the exact moment - a rolling
+deploy - when that is most expensive.
 
 The deeper reason is that **schema disagreement has a clean local failure mode and
 identity disagreement does not.** A payload that does not match the receiver's schema
@@ -99,7 +99,7 @@ about a lane agreement implies a shared feature set.
 ## Consequence for D34
 
 D34 stated the handshake's contents exhaustively as `{ v, feat }`. It ships three fields.
-D34 is corrected to match, and the exhaustive claim is the reason this was caught — a
+D34 is corrected to match, and the exhaustive claim is the reason this was caught - a
 decision that enumerates should be checked against what the specification actually carries.
 
 ## Revisit when

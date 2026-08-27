@@ -1,5 +1,5 @@
 /**
- * Backpressure. PROTOCOL.md §9 — three lanes, three answers, because they make different
+ * Backpressure. PROTOCOL.md §9 - three lanes, three answers, because they make different
  * promises.
  *
  * The transport swallows its own "blocked" indication along with "too big", so a refused
@@ -23,7 +23,7 @@ interface Queued<T> {
  * Datagram lane: bounded ring, drop OLDEST on overflow, TTL checked at DEQUEUE.
  *
  * The two axes are different problems. Drop-oldest handles a burst. It does nothing for a
- * peer that stalls two seconds and resumes — the ring never overflows, so a backlog of
+ * peer that stalls two seconds and resumes - the ring never overflows, so a backlog of
  * stale positions is delivered and the application renders history, which is worse than
  * delivering nothing. TTL at dequeue is what fixes that, and the two causes are counted
  * separately so an operator can tell a slow consumer from a slow network.
@@ -96,7 +96,7 @@ export class EmitQueue<T> {
 
   /**
    * The head, left in place. An item leaves this queue only when its write has actually
-   * completed — `shift()` on hand-off would make depth a measure of nothing, which is
+   * completed - `shift()` on hand-off would make depth a measure of nothing, which is
    * precisely how the bound came to be unreachable.
    */
   peek(): T | undefined {

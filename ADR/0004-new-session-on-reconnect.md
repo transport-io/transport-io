@@ -1,4 +1,4 @@
-# ADR 0004 — Reconnect creates a new session
+# ADR 0004 - Reconnect creates a new session
 
 **Status:** accepted · **Decision:** D4
 

@@ -1,4 +1,4 @@
-# ADR 0005 — The adapter boundary, and why it has a hostile implementor
+# ADR 0005 - The adapter boundary, and why it has a hostile implementor
 
 **Status:** accepted · **Decision:** D5, D20, D22, D40, D44
 

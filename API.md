@@ -28,7 +28,7 @@ export interface AppMap extends MapOf<typeof contract> {}
 ```
 
 **Write both lines.** The second is not decoration: it is what keeps every hover readable.
-With it, hovering `emit` shows 126 characters. Without it — passing the contract inline —
+With it, hovering `emit` shows 126 characters. Without it - passing the contract inline -
 it shows 303, including your validator's internal types. TypeScript preserves interface
 names in hover but expands type-alias instantiations, so no library-side trick removes the
 need for the line.
@@ -39,8 +39,8 @@ message type, so client and server cannot disagree about it.
 
 ### 1.1 Validation is bring-your-own
 
-`payload` accepts anything implementing the Standard Schema interface — zod, valibot and
-arktype all do — so core has no runtime dependency on a validator and your validator's
+`payload` accepts anything implementing the Standard Schema interface - zod, valibot and
+arktype all do - so core has no runtime dependency on a validator and your validator's
 types never appear in ours. `type$<T>()` is the types-only escape hatch used above: it
 infers without validating and costs nothing at runtime.
 
@@ -67,7 +67,7 @@ export const withOverride = defineContract({
 A `Connection` comes from the transport seam, and which one you import decides where the
 code runs. `transport-io/browser-transport` uses the platform's own `WebTransport` and
 loads nothing native. `transport-io/node-transport` loads the QUIC binding and must only be
-imported from a file named `*.node.ts` — a lint rule enforces that, because the binding
+imported from a file named `*.node.ts` - a lint rule enforces that, because the binding
 segfaults Bun on exit.
 
 ```ts
@@ -97,7 +97,7 @@ Argument of type '"chatt"' is not assignable to parameter of type '"chat" | "cur
 ```
 
 **`new Client(...)` performs no I/O.** It touches neither `window` nor `WebTransport`, so
-importing this module on a server — which Next.js will do — is safe. Feature detection
+importing this module on a server - which Next.js will do - is safe. Feature detection
 happens inside `connect()`.
 
 **`connect()` and `disconnect()` are idempotent and refcounted**, so two components sharing
@@ -126,7 +126,7 @@ export async function saveIt(): Promise<number> {
 ```
 
 **There is no default timeout.** A dead peer is detected by the QUIC idle timeout, which
-closes the session and rejects every pending call — the case a timeout is usually reached
+closes the session and rejects every pending call - the case a timeout is usually reached
 for is already handled. Adding a default timer would reintroduce exactly the
 pending-callback bookkeeping this design removes. For a slow but live responder:
 
@@ -142,7 +142,7 @@ responder's `ctx.signal` fires without the client sending anything. On a WebSock
 would need an app-level protocol and the peer would keep working until it heard you.
 
 A session is capped at 256 concurrent call streams. The 257th open is refused with
-`WT_TOO_MANY_STREAMS` and **the session stays up** — a leaking handler must not take the
+`WT_TOO_MANY_STREAMS` and **the session stays up** - a leaking handler must not take the
 other 256 calls down with it.
 
 ### 2.2 Responding
@@ -262,7 +262,7 @@ export function report(peer: ServerPeer): string {
 
 `overflowDropped` and `staleDropped` are counted separately on purpose: the first means a
 burst outran a bounded queue, the second means a peer stalled and the frames aged out. One
-number covering both would be unactionable. Both are **our** drops — the transport reports
+number covering both would be unactionable. Both are **our** drops - the transport reports
 neither loss nor congestion, so no count here claims to be the network's.
 
 ---
@@ -332,7 +332,7 @@ hostile.failNextBroadcast = true // core must degrade, not crash
 ```
 
 Every method is async even in memory, frames cross as bytes rather than live objects, and
-any method may reject — a rejected `broadcast` leaves local members served and the session
+any method may reject - a rejected `broadcast` leaves local members served and the session
 up. Core degrades rather than crashing.
 
 A node receiving its own publish back is normal, and core dedupes by originating node
@@ -355,7 +355,7 @@ discovered downstream.
 | `client.on(event, handler)` | Returns an unsubscribe function, making effect cleanup a one-liner. |
 | `TransportError.code` | Lets a binding branch on a stable code rather than a message. |
 
-Core imports no framework, ever — not React, not Next, not even as a type-only import — and
+Core imports no framework, ever - not React, not Next, not even as a type-only import - and
 holds no module-level singleton or global mutable state, because that breaks request
 isolation on the server and makes tests order-dependent.
 

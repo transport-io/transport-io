@@ -4,7 +4,7 @@ import { expect, type Page, test } from '@playwright/test'
  * The canonical end-to-end test: two browser contexts join one room, one message is sent
  * on each lane, and both contexts receive it.
  *
- * Everything under it is theory until this passes — real Chromium, real QUIC over UDP, a
+ * Everything under it is theory until this passes - real Chromium, real QUIC over UDP, a
  * real pinned certificate, and the example app as the fixture.
  */
 
@@ -25,7 +25,7 @@ test('two clients in one room exchange a message on each lane', async ({ browser
   await connected(alice)
   await connected(bob)
 
-  // Each client is told its name by a call() — request and response on their own
+  // Each client is told its name by a call() - request and response on their own
   // bidirectional stream, with no correlation identifier anywhere.
   await expect(lines(alice).filter({ hasText: 'you are' })).toHaveCount(1)
   await expect(lines(bob).filter({ hasText: 'you are' })).toHaveCount(1)
@@ -70,7 +70,7 @@ test('two clients in one room exchange a message on each lane', async ({ browser
   // Last-write-wins: the dot ends at the FINAL position, not the first.
   //
   // The old assertion was `toMatch(/translate\(\d+px, \d+px\)/)`, which every one of the
-  // twelve positions satisfies — including the first. A sign error in `SequenceGate.accept`
+  // twelve positions satisfies - including the first. A sign error in `SequenceGate.accept`
   // that froze the cursor after one datagram passed it went straight through. Movement is
   // the only thing that distinguishes last-write-wins from first-write-wins, so movement is
   // what is asserted, and by the exact distance travelled rather than merely "more".
@@ -78,7 +78,7 @@ test('two clients in one room exchange a message on each lane', async ({ browser
     .poll(async () => (await positionOf())[0], { timeout: 5_000 })
     .toBe(firstX + (STEPS - 1) * STEP_X)
 
-  // Alice does not receive her own cursor — the server excludes the sender.
+  // Alice does not receive her own cursor - the server excludes the sender.
   await expect(alice.locator('#surface .cursor')).toHaveCount(0)
 
   await alice.context().close()
@@ -119,7 +119,7 @@ test('a dropped datagram never becomes a dropped chat message', async ({ browser
     })
   }
 
-  // Our counters, not the network's — and a real number, not the static label. 400 moves
+  // Our counters, not the network's - and a real number, not the static label. 400 moves
   // in one turn is far past the 64-frame ring, so drop-oldest must have fired.
   await expect
     .poll(

@@ -40,7 +40,7 @@ export class Hub {
     this.#adapter = adapter
     this.#table = table
     // A node receiving its own publish back is normal, so core dedupes by origin node
-    // rather than relying on the adapter to suppress it — and dedupes against the
+    // rather than relying on the adapter to suppress it - and dedupes against the
     // *adapter's* id, which is the one stamped into the envelope. It used to compare
     // against the Server's separate `nodeId`, so any deployment where those differed
     // delivered every local broadcast twice, in silence.
@@ -60,7 +60,7 @@ export class Hub {
       throw new TransportError(
         'WT_SESSION_CLOSED',
         `peer ${id} disconnected before it could join '${room}'`,
-        'Check the peer is still connected after any await, or ignore this — it is routine.',
+        'Check the peer is still connected after any await, or ignore this - it is routine.',
       )
     }
     let members = this.#rooms.get(room)
@@ -71,7 +71,7 @@ export class Hub {
     // The bus first, local state second. Mutating before the await left a rejected join
     // half-applied: the hub fanned broadcasts to a peer the bus had no record of, and the
     // client was never notified it had joined. For a room whose join is gated on
-    // authorization, that is traffic reaching someone who was refused — permanently,
+    // authorization, that is traffic reaching someone who was refused - permanently,
     // because nothing rolls it back and nothing retries.
     await this.#adapter.join(room, id)
 
@@ -101,7 +101,7 @@ export class Hub {
    * Teardown runs to completion whatever the bus does.
    *
    * `broadcast` already wrapped its adapter call; this did not, so a rejection on the
-   * first room threw straight out of the loop — rooms 2..N kept their `Member` record,
+   * first room threw straight out of the loop - rooms 2..N kept their `Member` record,
    * each holding a live Session, and `#peerRooms.delete(id)` never ran. Nothing retries,
    * because `conn.closed` resolves exactly once. A later `to(room).emit()` then fanned
    * frames into a session that was already gone.

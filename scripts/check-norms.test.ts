@@ -1,6 +1,6 @@
 /**
- * The gate's own tests. It is shallow by design — it does not check that a test is any
- * good — so the only things worth asserting are the three ways it can be evaded: writing a
+ * The gate's own tests. It is shallow by design - it does not check that a test is any
+ * good - so the only things worth asserting are the three ways it can be evaded: writing a
  * MUST with no marker, pointing a marker at a file that says nothing about it, and reusing
  * an id so two statements appear to be one.
  */

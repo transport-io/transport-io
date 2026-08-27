@@ -1,5 +1,5 @@
 /**
- * Handshake. PROTOCOL.md §4 — frame 0 of the emit stream.
+ * Handshake. PROTOCOL.md §4 - frame 0 of the emit stream.
  *
  * Being frame 0 of a stream that already exists is what removes the early-traffic race:
  * in-order delivery within a stream means nothing can arrive before it. There is no

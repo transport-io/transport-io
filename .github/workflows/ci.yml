@@ -2,7 +2,7 @@ name: CI
 
 on:
   # `types` stated explicitly: the default set does not include `edited`, so a PR retitled
-  # after the title check went green kept the green check — and the squash subject is taken
+  # after the title check went green kept the green check - and the squash subject is taken
   # from the title, so an unvalidated subject landed on main. Same hole for the
   # docs-freshness job, which reads DOCS_ACK out of the PR body.
   pull_request:
@@ -29,8 +29,8 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: '24' }
       - run: npm ci
-      # The PR title becomes the commit subject under squash merge, so this gate —
-      # not the local hook — is what protects the changelog. Same config as the hook.
+      # The PR title becomes the commit subject under squash merge, so this gate -
+      # not the local hook - is what protects the changelog. Same config as the hook.
       #
       # Through `env:`, never interpolated. The title is written by whoever opens the PR;
       # substituted into the script text it is arbitrary code on a runner that already has
@@ -68,7 +68,7 @@ jobs:
         run: bun run scripts/check-gate-inputs.ts
 
   unit:
-    name: unit tests (bun — never loads the transport)
+    name: unit tests (bun - never loads the transport)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -77,7 +77,7 @@ jobs:
       - run: npm run test:unit
 
   integration:
-    name: integration tests (node — loads the transport)
+    name: integration tests (node - loads the transport)
     # glibc image. The linux prebuild needs GLIBC_2.38, so not Alpine and not a
     # default -slim tag, which are byte-identical to bookworm (glibc 2.36).
     runs-on: ubuntu-latest

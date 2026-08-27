@@ -3,13 +3,13 @@
  *
  * This has been wrong twice, and the second one was written in the commit that fixed the
  * first. That is a pattern rather than bad luck, and the pattern is that an install
- * instruction is a *claim about how a package manager behaves* — nobody's intuition about
+ * instruction is a *claim about how a package manager behaves* - nobody's intuition about
  * monorepo git installs is reliable, and mine was wrong in a document about not fabricating
  * things.
  *
- *   1. `npm install transport-io` — named an unpublished package, so a reader would either
+ *   1. `npm install transport-io` - named an unpublished package, so a reader would either
  *      get a 404 or, worse, whatever stranger claimed the name.
- *   2. `npm install github:v0id-user/transport-io` (the repository's address at the time) — resolves the repository *root*, whose
+ *   2. `npm install github:v0id-user/transport-io` (the repository's address at the time) - resolves the repository *root*, whose
  *      package is `transport-io-monorepo` and is private. What lands in `node_modules` is
  *      the monorepo, and `import … from 'transport-io'` fails.
  *
@@ -52,7 +52,7 @@ const commands = DOCS.filter((d) => existsSync(d)).flatMap((d) =>
 
 if (commands.length === 0) {
   /**
-   * No install line is a legitimate state — the documents currently say clone and build,
+   * No install line is a legitimate state - the documents currently say clone and build,
    * because the package is not published. But "nothing to check" must not be silently
    * green, so the alternative instruction has to be there instead. Otherwise this gate
    * passes hardest on a README that tells a reader nothing at all.
@@ -81,7 +81,7 @@ if (commands.length === 0) {
       const rootLanded = join(dir, 'node_modules', ROOT_PACKAGE, 'package.json')
       if (existsSync(rootLanded)) {
         problems.push(
-          `${doc}: \`${cmd}\` installs '${ROOT_PACKAGE}' — the private monorepo root.\n` +
+          `${doc}: \`${cmd}\` installs '${ROOT_PACKAGE}' - the private monorepo root.\n` +
             `    \`import … from '${LIBRARY}'\` fails for anyone who follows this line.`,
         )
       } else if (!existsSync(installed)) {

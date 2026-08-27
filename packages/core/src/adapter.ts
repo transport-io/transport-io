@@ -5,7 +5,7 @@
  * Rules core obeys (D40): every method is async even in memory, frames cross as bytes and
  * never as live objects, `PeerId` is a stable cross-process string, no node assumes it
  * knows a room's full membership, a frame for a room with no local members is dropped
- * silently rather than erroring, and any method may reject — core degrades rather than
+ * silently rather than erroring, and any method may reject - core degrades rather than
  * crashing.
  */
 export type PeerId = string

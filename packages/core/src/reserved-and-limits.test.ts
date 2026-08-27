@@ -13,7 +13,7 @@
  *   - the receiver *does* tolerate a frame sequence, even though no sender produces one, so
  *     the requirement on receivers is testable today by writing the sequence by hand;
  *   - exhaustion needed 4,194,304 allocations, so the allocator grew an injectable counter
- *     space — used here and nowhere else, because an unreachable branch in an allocator is
+ *     space - used here and nowhere else, because an unreachable branch in an allocator is
  *     precisely the code that is wrong the first time it runs;
  *   - "must not reuse a stream from a closed session" needed the implementation to actually
  *     refuse, which it did not.
@@ -34,7 +34,7 @@ const contract = defineContract({
 })
 interface AppMap extends MapOf<typeof contract> {}
 
-describe('§6 — a response is a sequence terminated by stream close', () => {
+describe('§6 - a response is a sequence terminated by stream close', () => {
   test('a receiver accepts more than one CALL_RESPONSE, though no v0 sender sends one', async () => {
     const server = createServer<AppMap>({ contract })
     await server.listen()
@@ -42,8 +42,8 @@ describe('§6 — a response is a sequence terminated by stream close', () => {
     const client = new Client<AppMap>({ contract, connect: async () => clientSide })
     await Promise.all([server.accept(serverSide), client.connect()])
 
-    // Answer by hand, with a sequence. Nothing in this library produces this shape — D7
-    // reserves it for token streaming — so the only way to exercise the receiver's
+    // Answer by hand, with a sequence. Nothing in this library produces this shape - D7
+    // reserves it for token streaming - so the only way to exercise the receiver's
     // tolerance is to be the sender.
     serverSide.onBidi((stream) => {
       void (async () => {
@@ -106,7 +106,7 @@ describe('§6 — a response is a sequence terminated by stream close', () => {
   })
 })
 
-describe('§7.3 — a host that exhausts its origin space refuses new sessions', () => {
+describe('§7.3 - a host that exhausts its origin space refuses new sessions', () => {
   test('allocation throws WT_TOO_MANY_STREAMS rather than reusing or wrapping', () => {
     // Eight values instead of 4,194,304. The branch is identical; only the size differs.
     const alloc = new OriginAllocator(1, 120_000, 8)
@@ -139,7 +139,7 @@ describe('§7.3 — a host that exhausts its origin space refuses new sessions',
   })
 })
 
-describe('§11 — a stream from a closed session is not reused', () => {
+describe('§11 - a stream from a closed session is not reused', () => {
   test('call() on a closed session refuses instead of opening a stream', async () => {
     const server = createServer<AppMap>({ contract })
     await server.listen()
@@ -154,7 +154,7 @@ describe('§11 — a stream from a closed session is not reused', () => {
     await new Promise((r) => setTimeout(r, 20))
 
     // The transport may well accept `openBidi()` on a dead session, in which case the call
-    // hangs for ever rather than failing — which is why refusing here is the requirement
+    // hangs for ever rather than failing - which is why refusing here is the requirement
     // and not merely tidy.
     const err = await client.call('save', { text: 'no' }).then(
       () => null,

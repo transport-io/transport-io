@@ -101,7 +101,7 @@ describe('the ring drops OLDEST under a burst', () => {
     expect(r.received.at(-1)).toBe(burst)
   })
 
-  test('dropping never throws — it is the lane’s advertised contract', async () => {
+  test('dropping never throws - it is the lane’s advertised contract', async () => {
     const r = await rig({ manualFlush: true })
     expect(() => {
       for (let n = 0; n < 500; n++) r.client.emit('cursor', { n })
@@ -129,7 +129,7 @@ describe('the TTL discards at dequeue, which is what a stall needs', () => {
     peer.on('cursor', (p) => got.push(p.n))
 
     for (let n = 1; n <= 5; n++) client.emit('cursor', { n })
-    // The ring never overflowed — five frames, capacity sixty-four — so drop-oldest does
+    // The ring never overflowed - five frames, capacity sixty-four - so drop-oldest does
     // nothing here. Without a TTL these five stale positions would be delivered and the
     // application would render history.
     expect(client.stats()?.overflowDropped).toBe(0)
@@ -153,7 +153,7 @@ describe('the TTL discards at dequeue, which is what a stall needs', () => {
 })
 
 describe('loss, duplication and reordering on the wire', () => {
-  test('a lost datagram is simply absent — no error, no gap-filling', async () => {
+  test('a lost datagram is simply absent - no error, no gap-filling', async () => {
     const r = await rig({ unreliable: { dropAt: new Set([2, 4]) } })
     for (let n = 1; n <= 5; n++) {
       r.client.emit('cursor', { n })

@@ -4,7 +4,7 @@ Real-time apps over WebTransport. Socket.IO's shape, on a transport with multipl
 and datagrams, without Socket.IO's mistakes.
 
 **Hide the mechanism, expose the guarantee.** Framing, length prefixes, buffer
-accumulation, stream lifecycle and backpressure queues are hidden — nobody should ever
+accumulation, stream lifecycle and backpressure queues are hidden - nobody should ever
 write framing code. Reliability semantics are always visible: "this message may be
 dropped" is a property of your data, not an implementation detail, and it lives in the
 type system.
@@ -27,7 +27,7 @@ both sides infer from it.
 ## Read this before you install
 
 These are properties of the library, not caveats to grow out of. If any of them is
-disqualifying, stop here — that is the point of putting them first.
+disqualifying, stop here - that is the point of putting them first.
 
 ### Chrome and Firefox only
 
@@ -41,7 +41,7 @@ lands upstream.
 ### There is no fallback
 
 Not to WebSocket, not to anything. A WebSocket is reliable and ordered, so falling back to
-one would silently convert every `lane: 'datagram'` event into a reliable one — your
+one would silently convert every `lane: 'datagram'` event into a reliable one - your
 contract would still say the message may be dropped while the transport guaranteed it
 never is. Degrading availability is honest. Degrading a guarantee is not. An unsupported
 runtime gets `WT_NO_SUPPORT` and nothing else.
@@ -49,7 +49,7 @@ runtime gets `WT_NO_SUPPORT` and nothing else.
 ### Reconnect creates a new session
 
 A reconnection is a new session with a new identity. Room membership does not survive it,
-and pending calls reject. Re-establishing authentication and resubscribing is your job —
+and pending calls reject. Re-establishing authentication and resubscribing is your job -
 the library gives you the primitive and the hook, because whether a call was executed
 before the connection dropped is unknowable from the client, and pretending otherwise
 means silently risking duplicate execution.
@@ -65,14 +65,14 @@ on the stream lane, and the contract is where you say which.
 ### It requires raw UDP ingress to your process
 
 On the port you listen on. Unlike TCP, many managed platforms do not provide this. Verify
-your platform routes UDP before building on this library — it is the first thing to check
+your platform routes UDP before building on this library - it is the first thing to check
 when nothing connects, and no amount of application code works around it.
 
 ### The emit lane blocks across rooms
 
 All rooms share one emit stream per direction, so a high-volume room delays a quiet room's
-messages to the same peer. Calls and datagrams are fully isolated — they use separate
-streams and separate packets — but emits to one peer are serialised across every room that
+messages to the same peer. Calls and datagrams are fully isolated - they use separate
+streams and separate packets - but emits to one peer are serialised across every room that
 peer belongs to. Per-room lanes are reserved as a negotiated feature and are not in this
 version. Do not read "independent streams" as a promise about emits.
 
@@ -80,16 +80,16 @@ version. Do not read "independent streams" as a promise about emits.
 
 Every `call()` opens its own bidirectional stream, and the QUIC binding this library ships
 against leaks roughly **5.95 KB of server memory per stream**, unbounded. At ten calls per
-second that is about 209 MB an hour. It is not this library's leak — the same code over an
+second that is about 209 MB an hour. It is not this library's leak - the same code over an
 in-memory transport costs 0.045 KB per call, and the binding leaks the same amount with
-none of this library's code present — but it is what you get if you deploy this today.
+none of this library's code present - but it is what you get if you deploy this today.
 
 It is reported upstream. An alternative transport measures flat on the same benchmark and
 is wired up behind an internal seam, but it cannot shut a server down gracefully and does
 not deliver call cancellation to the responder, so it is not the default yet.
 
 If your workload is mostly `emit` and datagrams, this does not affect you: both are flat,
-and you can check that yourself rather than taking it on trust — `npm run soak:lanes` runs
+and you can check that yourself rather than taking it on trust - `npm run soak:lanes` runs
 the memory soak over those two lanes only, and it is expected to pass.
 
 ### Protocol versioning
@@ -107,7 +107,7 @@ first stable release.
 ### The package is `0.x`, and a minor bump may break you
 
 The first publish is `0.1.0`. Under `0.x` a **minor** bump is allowed to contain breaking
-changes — pin an exact version, or accept that `^0.1.0` can move under you.
+changes - pin an exact version, or accept that `^0.1.0` can move under you.
 
 Every breaking change still gets a version bump and a changelog entry; that rule is in force
 from the first publish. What `0.x` withholds is the promise that a minor bump is safe, and
@@ -141,7 +141,7 @@ npm install @fails-components/webtransport-transport-http3-quiche
 ```
 
 It is not a dependency of anything, only a dynamic import, so no package manager will pull
-it in for you. Browsers need nothing extra — they use the platform's own WebTransport.
+it in for you. Browsers need nothing extra - they use the platform's own WebTransport.
 
 Two things about that native package are worth knowing before CI surprises you:
 
@@ -152,20 +152,20 @@ Two things about that native package are worth knowing before CI surprises you:
   it. Use a `trixie` variant or Ubuntu 24.04. There is no musl build at all, so Alpine
   falls back to a source compile.
 
-**Consumers** need Node 22 or newer, and TypeScript 5.0 or newer — gated by `const` type
+**Consumers** need Node 22 or newer, and TypeScript 5.0 or newer - gated by `const` type
 parameters in the public types, and checked in CI.
 
 **Contributors** additionally need [Bun](https://bun.sh) and `openssl` on `PATH`. Bun runs
 the unit tests, the documentation gate and the example build; `openssl` mints the
 short-lived certificate the browser needs for WebTransport. Neither is optional: `npm
 install` succeeds without Bun and then the first `git commit` fails, because the hooks shell
-out to it. Development is supported on macOS and Linux only — Windows contributors should
+out to it. Development is supported on macOS and Linux only - Windows contributors should
 use WSL.
 
 ## Use
 
 ```ts standalone
-// contract.ts — the whole surface, in one file
+// contract.ts - the whole surface, in one file
 import { defineContract, type MapOf, type$ } from 'transport-io'
 
 export const contract = defineContract({
@@ -178,7 +178,7 @@ export const contract = defineContract({
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-Write both lines. The second is what keeps every hover readable — with it, hovering `emit`
+Write both lines. The second is what keeps every hover readable - with it, hovering `emit`
 shows 126 characters; without it, 303, including your validator's internals.
 
 ```ts
@@ -223,12 +223,12 @@ unrolling the contract type.
 **Acknowledgements are streams, not bookkeeping.** Each `call` opens its own bidirectional
 stream: write the request, half-close to end it, read until the peer closes. The stream
 *is* the correlation, so there are no acknowledgement identifiers, no pending-callback map
-and no timeout tracking — and a stalled call cannot block another one. Cancellation is a
+and no timeout tracking - and a stalled call cannot block another one. Cancellation is a
 QUIC stream reset: immediate, costing no application message, and the responder's signal
 fires without the client sending anything.
 
 **No default call timeout.** A dead peer is detected by the QUIC idle timeout, which
-rejects every pending call — the case a timeout is usually reached for is already handled.
+rejects every pending call - the case a timeout is usually reached for is already handled.
 Pass `AbortSignal.timeout(ms)` when you want one.
 
 **A documented wire protocol.** [`PROTOCOL.md`](PROTOCOL.md) is written so someone can
@@ -238,7 +238,7 @@ real sin was an undocumented protocol only its own client could speak.
 **Batteries included, no infrastructure.** `MemoryAdapter` is the default, so `npm install`
 and run. If you write your own adapter, `transport-io/testing` exports `HostileAdapter`,
 which serialises frames through bytes, adds latency, reorders, duplicates and fails on
-command — because an adapter that only passes against an in-memory map has not been tested
+command - because an adapter that only passes against an in-memory map has not been tested
 against anything.
 
 ## Not in this version
@@ -250,11 +250,11 @@ bindings, and the Redis adapter.
 
 ## Documentation
 
-- [`PROTOCOL.md`](PROTOCOL.md) — the wire format
-- [`API.md`](API.md) — the TypeScript surface
-- [`DECISIONS.md`](DECISIONS.md) — every question this project raised, answered
-- [`ADR/`](ADR) — the records a future contributor would want to reverse
-- [`examples/chat`](examples/chat) — both lanes in one page
+- [`PROTOCOL.md`](PROTOCOL.md) - the wire format
+- [`API.md`](API.md) - the TypeScript surface
+- [`DECISIONS.md`](DECISIONS.md) - every question this project raised, answered
+- [`ADR/`](ADR) - the records a future contributor would want to reverse
+- [`examples/chat`](examples/chat) - both lanes in one page
 
 ## Licence
 

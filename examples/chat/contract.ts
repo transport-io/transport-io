@@ -2,7 +2,7 @@ import { defineContract, type MapOf, type$ } from 'transport-io'
 
 /**
  * The whole application surface, in one file. Reading this tells you every event, its
- * payload and — critically — whether it can be dropped.
+ * payload and - critically - whether it can be dropped.
  */
 export const contract = defineContract({
   /** Reliable and ordered. A chat message that vanishes is a bug. */

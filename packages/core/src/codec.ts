@@ -1,4 +1,4 @@
-/** JSON over UTF-8. PROTOCOL.md §5.3 — codec 0x01, the only one this version speaks. */
+/** JSON over UTF-8. PROTOCOL.md §5.3 - codec 0x01, the only one this version speaks. */
 import { TransportError } from './errors.ts'
 
 const encoder = new TextEncoder()

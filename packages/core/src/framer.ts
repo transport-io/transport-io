@@ -3,7 +3,7 @@
  *
  * QUIC streams are byte streams and do not preserve write boundaries. Measured on the
  * reference transport, 51 writes arrived as 217 reads, and the large write fragmented
- * while the small ones happened to survive — which is the worst case, because naive
+ * while the small ones happened to survive - which is the worst case, because naive
  * boundary-trusting code passes in development and fails under load. The length prefix
  * is the only thing that recovers frame boundaries, and nobody using this library should
  * ever have to think about it.
@@ -27,7 +27,7 @@ export interface Frame {
   readonly payload: Uint8Array
 }
 
-/** §5.1 — the cap is per frame type: a call is the documented home for a large payload. */
+/** §5.1 - the cap is per frame type: a call is the documented home for a large payload. */
 export function maxPayloadFor(type: FrameType): number {
   return type === FrameType.CALL_REQUEST || type === FrameType.CALL_RESPONSE
     ? MAX_CALL_PAYLOAD_BYTES
@@ -64,8 +64,8 @@ export function encodeFrame(frame: Frame): Uint8Array {
 }
 
 /**
- * Incremental decoder. Feed it whatever the transport hands you — a fragment, several
- * frames, or a frame split across many reads — and it yields whole frames only.
+ * Incremental decoder. Feed it whatever the transport hands you - a fragment, several
+ * frames, or a frame split across many reads - and it yields whole frames only.
  */
 export class FrameDecoder {
   #buf: Uint8Array = new Uint8Array(0)
@@ -98,8 +98,8 @@ export class FrameDecoder {
       }
       const payloadLength = length - STREAM_HEADER_BYTES
       // §5.3 gives calls 16 MiB and everything else 1 MiB. This enforced the call cap for
-      // every frame type, so a peer could declare 16 MiB on the emit lane — sixteen times
-      // its documented cap — and the decoder would buffer toward it.
+      // every frame type, so a peer could declare 16 MiB on the emit lane - sixteen times
+      // its documented cap - and the decoder would buffer toward it.
       //
       // The type byte is at offset 4, so it is readable as soon as five bytes are, which is
       // before any payload has to be held. Until then the universal cap applies, which

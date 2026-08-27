@@ -5,7 +5,7 @@
  * script *text* before the shell ever sees it, so any expansion whose value an outsider
  * controls is arbitrary code on the runner. A pull request title is outsider-controlled by
  * definition, and the runner it lands on has the repository checked out, the dependency
- * tree installed and network egress — before a human has looked at the PR.
+ * tree installed and network egress - before a human has looked at the PR.
  *
  * The rule here is deliberately absolute rather than an allowlist of contexts believed
  * safe. `github.base_ref` is safe today because branch protection fixes the base; that is

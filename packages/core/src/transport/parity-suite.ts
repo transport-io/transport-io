@@ -40,7 +40,7 @@ export interface UnderTest {
    *
    * `false` is a real capability gap, not a preference. moq surfaces STOP_SENDING only on
    * the next write, and a long-running handler never makes one, so the handler is not
-   * told to stop. The caller still rejects either way — the work just keeps running.
+   * told to stop. The caller still rejects either way - the work just keeps running.
    */
   readonly propagatesAbortToHandler: boolean
   readonly name: string
@@ -55,7 +55,7 @@ export interface UnderTest {
 }
 
 // Random high ports. A fixed port makes this suite fail for a reason that has nothing to
-// do with the code — an orphan from a previous killed run still holding the socket, which
+// do with the code - an orphan from a previous killed run still holding the socket, which
 // cost an hour to diagnose once already.
 
 const dir = mkdtempSync(join(tmpdir(), 'parity-'))
@@ -94,7 +94,7 @@ const settle = async (ms = 400): Promise<void> => {
 /**
  * One transport per process, deliberately.
  *
- * Running both bindings' servers concurrently in a single process hangs — verified: each
+ * Running both bindings' servers concurrently in a single process hangs - verified: each
  * works alone and both can bind, but sessions on both at once deadlock. That is a
  * property of running two native QUIC stacks side by side, not of transport-io, and no
  * deployment would do it. Splitting by process is also better isolation.

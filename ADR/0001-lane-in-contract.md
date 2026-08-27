@@ -1,4 +1,4 @@
-# ADR 0001 — The lane lives in the contract
+# ADR 0001 - The lane lives in the contract
 
 **Status:** accepted · **Decision:** D1
 

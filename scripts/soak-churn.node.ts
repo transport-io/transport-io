@@ -3,7 +3,7 @@
  *
  * `soak.node.ts` opens 500 sessions, holds them for an hour and closes none, so it measures
  * what a *live* session costs over time. Every per-disconnect defect is invisible to it by
- * construction — three were found by inspection, and the reason none of them showed up in a
+ * construction - three were found by inspection, and the reason none of them showed up in a
  * green soak is that no session in that soak ever disconnects.
  *
  * This one connects and disconnects, and measures what a *dead* session leaves behind.
@@ -14,7 +14,7 @@
  * here is only ever "do WE leak". Loopback costs 0.045 KB per call, so anything this finds
  * is ours.
  *
- * The bound is retained bytes per session churned — an absolute quantity, and a quantity
+ * The bound is retained bytes per session churned - an absolute quantity, and a quantity
  * this library counts. Not a percentage of a baseline measured at run time: that is the
  * defect D13 was written to fix, and it would have certified the exact leak it existed to
  * catch.
@@ -39,14 +39,14 @@ const CYCLES = arg('cycles', 12000)
  * 120_000: a freed origin is deliberately held for two minutes before reuse, so a run
  * shorter than that measures quarantine occupancy as though it were a leak. 12,000 cycles
  * take about 17 seconds on this machine, so a cycle-count warmup cannot express "past the
- * window" at all — only wall clock can.
+ * window" at all - only wall clock can.
  */
 const WARMUP_SECONDS = arg('warmup-seconds', 130)
 const SAMPLE_EVERY = arg('sample-every', 500)
 
 /**
  * Measured, not assumed. Without the group-3 fixes this run reports **15,011 B per
- * session** — a leaked `setInterval` holding the entire object graph, which is 5.1 GB an
+ * session** - a leaked `setInterval` holding the entire object graph, which is 5.1 GB an
  * hour at 100 sessions a second.
  *
  * The bound is not tighter because a few hundred bytes of allocator noise per session is

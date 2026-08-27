@@ -76,7 +76,7 @@ describe('a room cannot be joined by a session that is already gone', () => {
 describe('the handshake deadline covers the whole handshake', () => {
   test('a transport that never opens the emit stream still times out', async () => {
     // The deadline was armed *after* `openEmitStream()` and after writing our own
-    // handshake. If either never settled — the stalled-peer case the deadline exists for —
+    // handshake. If either never settled - the stalled-peer case the deadline exists for -
     // no timer was ever armed and connect() hung for ever.
     const conn: Connection = {
       closed: new Promise<CloseInfo>(() => {}),
@@ -117,7 +117,7 @@ describe('an aborted call rejects with this library’s own error', () => {
       (e: unknown) => e,
     )
 
-    // Was a raw DOMException — `name: 'TimeoutError'`, `code: 23`, no `remedy`. The error
+    // Was a raw DOMException - `name: 'TimeoutError'`, `code: 23`, no `remedy`. The error
     // helper printed verbatim in API.md returns 'unknown' for it, and `WT_ABORTED` is in
     // the exported code union while being constructed nowhere. Aborting a call is the most
     // documented failure path this library has.

@@ -49,5 +49,5 @@ writeFileSync(join(out, 'hash.json'), JSON.stringify({ sha256: [...hash] }))
 
 const notAfter = new X509Certificate(cert).validTo
 console.log(`certificate written to ${out}`)
-console.log(`  expires ${notAfter} — regenerate with \`bun run cert\` when it does`)
+console.log(`  expires ${notAfter} - regenerate with \`bun run cert\` when it does`)
 console.log(`  sha-256 ${hash.toString('hex')}`)

@@ -1,4 +1,4 @@
-# ADR 0002 — Acknowledgements are streams, not bookkeeping
+# ADR 0002 - Acknowledgements are streams, not bookkeeping
 
 **Status:** accepted · **Decision:** D2, D7
 
@@ -19,7 +19,7 @@ id to pending callback, and a timer per entry to clean up.
 
 That machinery exists only because everything shares one channel. It brings an id space to
 manage, a map that leaks if a response never arrives, a timeout that must be tuned, and
-head-of-line blocking — one slow response delays every other message on the connection.
+head-of-line blocking - one slow response delays every other message on the connection.
 
 ## Why this way
 
@@ -38,7 +38,7 @@ protocol break.
 bidirectional stream, which is 408 MB/h at ten calls per second. See D65.
 
 It did not fire on the design. transport-io over an in-memory transport costs 0.045 KB per
-call — the model is sound — and the binding leaks the same 11.76 KB with none of our code
+call - the model is sound - and the binding leaks the same 11.76 KB with none of our code
 present. The cost is in one implementation of one transport, which is what ADR 0007's seam
 exists to make replaceable. A stream per call stays.
 

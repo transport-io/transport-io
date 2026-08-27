@@ -9,8 +9,8 @@
  *   - "the 257th open is refused" drove the cap through `client.call()` and asserted the
  *     caller's own local throw, so the receiver-side refusal it names was never exercised.
  *   - version and contract mismatch were asserted by calling `negotiate()` directly and
- *     reading `TransportError.code`, so the close code a peer actually receives — the only
- *     part another implementation can observe — was never checked. `CloseCode` appeared in
+ *     reading `TransportError.code`, so the close code a peer actually receives - the only
+ *     part another implementation can observe - was never checked. `CloseCode` appeared in
  *     zero test files.
  *   - the emit bound was asserted against `new EmitQueue(3)` in isolation, never through a
  *     Session, which is why the bound being unreachable from a Session went unnoticed.
@@ -64,7 +64,7 @@ async function halfWired(): Promise<{
 }> {
   const [ours, theirs] = loopbackPair()
   // A real peer reads the emit stream. Without this the session's own handshake write
-  // never drains and start() blocks before it ever reaches the refusal — a property of the
+  // never drains and start() blocks before it ever reaches the refusal - a property of the
   // harness, not of the code under test.
   theirs.onEmitStream((r) => {
     void (async () => {
@@ -97,7 +97,7 @@ async function sendHandshake(peer: Connection, payload: unknown): Promise<void> 
   )
 }
 
-describe('§10.2 — a peer must be able to tell these apart from a framing bug', () => {
+describe('§10.2 - a peer must be able to tell these apart from a framing bug', () => {
   test('peers disagreeing on `v` closes the session with 1000', async () => {
     const { peer, started } = await halfWired()
     const ours = buildHandshake(await buildEventTable(contract))
@@ -155,7 +155,7 @@ describe('§10.2 — a peer must be able to tell these apart from a framing bug'
   })
 })
 
-describe('§10.1 — the receiver refuses, the initiator is not merely asked not to', () => {
+describe('§10.1 - the receiver refuses, the initiator is not merely asked not to', () => {
   test(`the ${MAX_CONCURRENT_CALL_STREAMS + 1}th INBOUND call stream is reset with WT_TOO_MANY_STREAMS`, async () => {
     const server = createServer<AppMap>({ contract })
     await server.listen()
@@ -211,7 +211,7 @@ describe('§10.1 — the receiver refuses, the initiator is not merely asked not
     expect(refused).toBeInstanceOf(Error)
     expect(refused?.message).toContain(`code:${ResetCode.WT_TOO_MANY_STREAMS}`)
 
-    // The session survives the refusal — a cap that closes the session is a denial of
+    // The session survives the refusal - a cap that closes the session is a denial of
     // service with extra steps.
     expect(client.getSnapshot().status).toBe('connected')
   })

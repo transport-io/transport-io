@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>transport-io — chat with live cursors</title>
+<title>transport-io - chat with live cursors</title>
 <style>
   :root { color-scheme: light dark; --bg:#fff; --fg:#111; --dim:#666; --line:#e5e5e5; --accent:#2563eb; }
   @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --dim:#999; --line:#2a2a2a; } }
@@ -32,17 +32,17 @@
 <header>
   <h1>transport-io</h1>
   <span class="meta">status <span id="status" data-state="idle">idle</span></span>
-  <span class="meta">rooms <span id="rooms">—</span></span>
-  <span class="meta">drops <span id="drops">—</span></span>
+  <span class="meta">rooms <span id="rooms">-</span></span>
+  <span class="meta">drops <span id="drops">-</span></span>
 </header>
 <main>
   <section>
-    <div class="label">chat — <strong>stream lane</strong>, reliable and ordered. Nothing here is ever lost.</div>
+    <div class="label">chat - <strong>stream lane</strong>, reliable and ordered. Nothing here is ever lost.</div>
     <div id="log"></div>
     <form id="composer"><input id="body" placeholder="say something" autocomplete="off" /><button>send</button></form>
   </section>
   <section>
-    <div class="label">cursors — <strong>datagram lane</strong>, unreliable. Move your pointer; dropped frames are normal.</div>
+    <div class="label">cursors - <strong>datagram lane</strong>, unreliable. Move your pointer; dropped frames are normal.</div>
     <div id="surface"></div>
   </section>
 </main>

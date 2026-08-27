@@ -1,4 +1,4 @@
-# ADR 0007 — An internal transport seam with one implementation
+# ADR 0007 - An internal transport seam with one implementation
 
 **Status:** accepted · **Decision:** D21
 
@@ -16,7 +16,7 @@ becomes a scattered special case instead of a contained one.
 
 ## Why a seam with one implementor is justified here
 
-Ordinarily a boundary with one implementor is a smell — the same argument made against
+Ordinarily a boundary with one implementor is a smell - the same argument made against
 `MemoryAdapter` in ADR 0005. Two things make this the exception:
 
 1. **Two credible second implementors now exist**: a Rust-backed NAPI binding over quinn,

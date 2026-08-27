@@ -7,7 +7,7 @@
  *
  * The threshold is an ABSOLUTE SLOPE BY LINEAR FIT, not two point samples. The original
  * criterion was "5% growth between T+10 and T+60", and against #425's own 16.7 MB/h that
- * yields ~13.9 MB, which at any plausible baseline is under 5% — it would have certified
+ * yields ~13.9 MB, which at any plausible baseline is under 5% - it would have certified
  * the exact leak it was written to catch. Two point samples are not a slope.
  *
  *   node --expose-gc scripts/soak.node.ts [--minutes 60] [--sessions 500]
@@ -35,7 +35,7 @@ const arg = (name: string, fallback: number): number => {
 /**
  * `--lanes emit,datagram` measures only the lanes bound by D13's slope criterion.
  * `--lanes call` measures the exempted lane, whose number is recorded rather than gated.
- * Default is all three, which will fail until the upstream leak is fixed — that is the
+ * Default is all three, which will fail until the upstream leak is fixed - that is the
  * exemption being visible rather than silent.
  */
 const LANES = argStr('lanes', 'emit,datagram,call').split(',')
@@ -98,7 +98,7 @@ void (async () => {
 
 console.log(`soak: ${SESSIONS} sessions, ${MINUTES} min, lanes: ${LANES.join(', ')}`)
 if (!LANES.includes('call')) {
-  console.log('note: the call lane is excluded — this run measures the D13-bound lanes only')
+  console.log('note: the call lane is excluded - this run measures the D13-bound lanes only')
 }
 console.log(`platform: ${process.platform}-${process.arch}, node ${process.version}`)
 console.log('')
@@ -189,7 +189,7 @@ function slopeMbPerHour(pts: readonly Sample[]): number {
 /**
  * A fit needs points. Without this the whole criterion inverts on an empty sample set:
  * `den === 0` returns a slope of 0, `Math.max()` of nothing is `-Infinity`, and both
- * comparisons pass — so a run too short to reach the end of its own warmup printed
+ * comparisons pass - so a run too short to reach the end of its own warmup printed
  * `peak RSS -Infinity MB  bound < 600  PASS` and exited 0.
  *
  * That is the D13 defect one more layer down: a threshold that certifies the absence of
@@ -210,7 +210,7 @@ console.log('─'.repeat(64))
 console.log(`samples (after ${WARMUP_MIN}min warmup): ${samples.length}`)
 if (!enoughSamples) {
   console.log(
-    `  NOT ENOUGH SAMPLES — need ${MIN_SAMPLES}, got ${samples.length}. ` +
+    `  NOT ENOUGH SAMPLES - need ${MIN_SAMPLES}, got ${samples.length}. ` +
       `Run for longer than the ${WARMUP_MIN}min warmup plus ${MIN_SAMPLES} sample intervals.`,
   )
 }

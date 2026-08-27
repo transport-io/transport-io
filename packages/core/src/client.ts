@@ -2,7 +2,7 @@
  * Client surface.
  *
  * Constructible without I/O: nothing here touches `window` or `WebTransport` at module
- * scope, so importing this on a server — which Next.js will do — is safe. Feature
+ * scope, so importing this on a server - which Next.js will do - is safe. Feature
  * detection happens inside connect().
  */
 import { type AnyMap, buildEventTable, type CallableOf, type Contract } from './contract.ts'

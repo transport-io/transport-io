@@ -1,7 +1,7 @@
 /**
  * Two servers, one bus, distinct node ids.
  *
- * `Hub`'s remote-delivery branch — the `onRemote` callback in its constructor — had never
+ * `Hub`'s remote-delivery branch - the `onRemote` callback in its constructor - had never
  * executed a single line in any test. Every server-backed test pairs one server with one
  * adapter whose `nodeId` matches, so the `if (e.nodeId === this.#nodeId) return` guard
  * always returned early, and local fan-out never goes through the bus at all. Inverting
@@ -137,7 +137,7 @@ describe('getSnapshot is referentially stable', () => {
     const second = a.client.getSnapshot()
     // The claim API.md and D38 both make. `useSyncExternalStore` re-renders on every call
     // that returns a new object, so a fresh object here is an infinite render loop in
-    // React — which is the reason the guarantee exists and the reason nobody noticed it
+    // React - which is the reason the guarantee exists and the reason nobody noticed it
     // was only ever asserted by reading a field off the result.
     expect(first).toBe(second)
   })

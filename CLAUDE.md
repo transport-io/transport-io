@@ -23,7 +23,7 @@ the app's data, not an implementation detail, and it belongs in the type system.
 ## Where the decisions live
 
 `DECISIONS.md` is the ledger. Every question this project has raised is answered there,
-numbered D1 onward. **There is no `OPEN-QUESTIONS.md` and there never will be** — it is
+numbered D1 onward. **There is no `OPEN-QUESTIONS.md` and there never will be** - it is
 where a design flaw goes to be forgotten. Resolved does not mean certain: where something
 cannot be known before implementation, the entry records a decided default plus the
 specific observable trigger that would make us revisit it.
@@ -45,7 +45,7 @@ Full text in `DECISIONS.md`; this is the summary a fresh session needs so it can
 - **D2 streams-as-acks.** Each `call` opens its own bidirectional stream. No correlation
   IDs, no pending map. A stalled call cannot block another call.
 - **D3 no-fallback.** WebTransport only. A WebSocket fallback would silently make the
-  datagram lane reliable and ordered — a lie about the user's data.
+  datagram lane reliable and ordered - a lie about the user's data.
 - **D4 new-session-on-reconnect.** Reconnect is a new session. Room membership does not
   survive it.
 - **D5 adapter-boundary.** Frames cross as bytes. Every method async. `MemoryAdapter` is
@@ -87,7 +87,7 @@ Part 2.
 - **Safari cannot talk to a quiche-backed server** and is unsupported in v1. Chrome and
   Firefox only.
 - **The reference transport leaks per bidirectional stream**, unbounded, upstream: 5.95 KB
-  on the server half and 5.88 KB on the client half. Not ours — our own path over a
+  on the server half and 5.88 KB on the client half. Not ours - our own path over a
   loopback costs 0.045 KB. The soak fails and Stage 1 is blocked. See D65.
 - **`@moq/web-transport` is flat** on the identical probe: 0.01 KB per stream over 16,000,
   with a real plateau. The transport seam in ADR 0007 is the way out. See D66.
@@ -100,7 +100,7 @@ recollection.
 
 This has failed three times: a hand-vendored `StandardSchemaV1` that silently broke every
 validator, a fabricated contract fingerprint in a document promising every snippet runs, and
-five of twelve invented dependency versions. Twice it was caught by luck — an install
+five of twelve invented dependency versions. Twice it was caught by luck - an install
 failure and a variance error. The fingerprint would have shipped.
 
 So the rule is mechanical, not a thing to remember at the moment you are not thinking about
@@ -145,7 +145,7 @@ export const contract = defineContract({ /* ... */ })
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-The second line is what keeps hover readable — 126 characters instead of 303, with no
+The second line is what keeps hover readable - 126 characters instead of 303, with no
 validator internals. It is opt-in by nature, so it is canonical by convention: it appears
 in the README, in every API.md example, in `examples/chat`, and in `AGENTS.md`. The inline
 form appears nowhere.
@@ -155,7 +155,7 @@ form appears nowhere.
 Development is supported on **macOS and Linux**. Windows is not, and this is a statement
 rather than an oversight: hook commands invoke `./node_modules/.bin/` paths directly, which
 are `.cmd` shims on Windows, and the scripts assume a POSIX shell. Windows contributors
-should use WSL. Note this is about *developing* the library — the transport itself publishes
+should use WSL. Note this is about *developing* the library - the transport itself publishes
 a `win32-x64` prebuild, so running it on Windows is a separate question that is not blocked.
 
 ## Hooks vs CI
@@ -170,7 +170,7 @@ fast feedback, CI is the guarantee. See D61.
 
 ## Working style
 
-- Ask when a decision is unresolved. Never guess and move on — an unasked question becomes
+- Ask when a decision is unresolved. Never guess and move on - an unasked question becomes
   a silent assumption in code.
 - **Every question carries a recommended answer and the reasoning.** A question with no
   position attached is the same deferral the no-open-questions rule exists to prevent.
@@ -189,7 +189,7 @@ Conventional Commits, scope required and validated against the workspace package
 **Subject only, never a body.** commitlint enforces an empty body. Breaking changes use
 the `!` marker, because a `BREAKING CHANGE:` footer would require one:
 `feat(core)!: rename emit to send`. Rationale lives in the changeset, the ADR, or
-`PROTOCOL.md` — those are read, commit bodies are not.
+`PROTOCOL.md` - those are read, commit bodies are not.
 
 One logical change per commit. If the subject needs "and", it is two commits. Never mix a
 refactor with a behaviour change. Every commit passes typecheck, lint and unit tests on its

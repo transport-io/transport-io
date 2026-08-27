@@ -1,6 +1,6 @@
 /**
  * Type-level tests. A wrong event name or a wrong payload shape must fail to compile, and
- * the error must be readable — not a wall of conditional type.
+ * the error must be readable - not a wall of conditional type.
  *
  * Uses expect-type rather than tsd: tsd consumes the TypeScript compiler API, which does
  * not exist between 7.0 and 7.1. See D54.

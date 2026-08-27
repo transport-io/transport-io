@@ -1,4 +1,4 @@
-/** Datagram header. PROTOCOL.md §7.1 — codec, event id, origin, sequence, then payload. */
+/** Datagram header. PROTOCOL.md §7.1 - codec, event id, origin, sequence, then payload. */
 import { TransportError } from './errors.ts'
 import {
   Codec,

@@ -47,7 +47,7 @@ describe('event identity', () => {
     expect(await eventIdOf('save')).toBe(360565394)
   })
 
-  test('is stable under insertion — the whole reason it is not positional', async () => {
+  test('is stable under insertion - the whole reason it is not positional', async () => {
     const before = await buildEventTable(
       defineContract({
         chat: { lane: 'stream', payload: type$<unknown>() },
@@ -114,7 +114,7 @@ describe('handshake negotiation', () => {
     expect(RESERVED_FEATURES).toContain('session-resume')
   })
 
-  test('an added event is NOT a mismatch — additive change is rolling-deploy safe', async () => {
+  test('an added event is NOT a mismatch - additive change is rolling-deploy safe', async () => {
     const local = buildHandshake(await table(base))
     const peer = buildHandshake(
       await table({ ...base, typing: { lane: 'stream', payload: type$<unknown>() } }),
@@ -126,7 +126,7 @@ describe('handshake negotiation', () => {
 
   // A unit test of negotiate(), which is all it ever was. It says nothing about what a
   // peer receives; the close code for this case is asserted in protocol-promises.test.ts.
-  test('negotiate() rejects a lane disagreement — it is a guarantee, not a detail', async () => {
+  test('negotiate() rejects a lane disagreement - it is a guarantee, not a detail', async () => {
     const local = buildHandshake(await table(base))
     const peer = buildHandshake(
       await table({ ...base, cursor: { lane: 'stream', payload: type$<unknown>() } }),
@@ -264,7 +264,7 @@ describe('backpressure', () => {
     expect(q.stats().overflowDropped).toBe(0)
   })
 
-  test('emit lane never drops — it disconnects instead', () => {
+  test('emit lane never drops - it disconnects instead', () => {
     const q = new EmitQueue<number>(3)
     q.push(1)
     q.push(2)
@@ -279,7 +279,7 @@ describe('origin allocation', () => {
     for (let i = 0; i < 50; i++) expect(a.allocate(0)).not.toBe(0)
   })
 
-  test('a freed origin is quarantined, then reused — not retired', () => {
+  test('a freed origin is quarantined, then reused - not retired', () => {
     const a = new OriginAllocator(0, 120_000)
     const first = a.allocate(0)
     a.free(first, 0)

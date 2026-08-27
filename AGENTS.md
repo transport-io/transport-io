@@ -16,8 +16,8 @@ npm install transport-io
 npm install @fails-components/webtransport-transport-http3-quiche   # server only
 ```
 
-The native package is a separate deliberate install. It is not a dependency of anything —
-only a dynamic import — so no package manager pulls it in. Browsers need nothing extra.
+The native package is a separate deliberate install. It is not a dependency of anything -
+only a dynamic import - so no package manager pulls it in. Browsers need nothing extra.
 
 Node ≥ 22. TypeScript ≥ 5.0 for consumers.
 
@@ -33,7 +33,7 @@ Node ≥ 22. TypeScript ≥ 5.0 for consumers.
 `transport-io/node-transport` loads a native addon that segfaults Bun on exit. Only import
 it from a file named `*.node.ts`.
 
-## The contract — always two lines
+## The contract - always two lines
 
 ```ts
 import { defineContract, type MapOf, type$ } from 'transport-io'
@@ -53,7 +53,7 @@ characters; `Client<MapOf<typeof contract>>` hovers at 303 with the validator's 
 types in it, because TypeScript preserves interface names and expands alias
 instantiations. Every example everywhere uses this form.
 
-`payload` accepts any Standard Schema validator — zod, valibot, arktype — or `type$<T>()`
+`payload` accepts any Standard Schema validator - zod, valibot, arktype - or `type$<T>()`
 for inference with no runtime validation. Inbound payloads are validated; outbound are not.
 
 ### Rules the contract enforces
@@ -132,7 +132,7 @@ for await (const conn of listener.sessions()) void server.accept(conn)
 `peer.join()` does it, and the client learns membership from a notification. If you want
 client-initiated subscription, make it an ordinary event you handle on the server, where
 you can apply whatever authorization your application has. **This library authenticates
-nothing** and gives a handler no peer identity beyond `peer.id`, which it assigned itself —
+nothing** and gives a handler no peer identity beyond `peer.id`, which it assigned itself -
 so "handle it on the server" means your check runs there, not that anyone has been
 identified. See PROTOCOL.md §3.
 
@@ -146,7 +146,7 @@ is never thrown from this library.
 
 | code | means | do |
 |---|---|---|
-| `WT_NO_SUPPORT` | runtime has no WebTransport | nothing — there is no fallback |
+| `WT_NO_SUPPORT` | runtime has no WebTransport | nothing - there is no fallback |
 | `WT_DATAGRAM_TOO_LARGE` | payload past the path limit | shorten it, or use the stream lane |
 | `WT_ROOM_NOT_JOINED` | broadcast to a room this session is not in | join first |
 | `WT_SESSION_CLOSED` | session closed while an operation was pending | reconnect and retry |
@@ -170,7 +170,7 @@ is never thrown from this library.
 **Datagrams may be dropped, duplicated or reordered.** Duplicates and stale arrivals are
 discarded for you. Loss is never reported, because loss is the contract. `stats()` returns
 `overflowDropped` (a burst outran the 64-frame ring), `staleDropped` (a frame aged past its
-150 ms TTL while queued) and `staleReceived` (a duplicate or out-of-order arrival) — all of
+150 ms TTL while queued) and `staleReceived` (a duplicate or out-of-order arrival) - all of
 them **our** counters, never the network's.
 
 **The emit lane blocks across rooms.** One stream per direction carries every room, so a
@@ -188,7 +188,7 @@ surfaces as `WT_HANDSHAKE_TIMEOUT`.
 
 ```ts
 // A skeleton that must satisfy the real interface, rather than a copy of it. If `Adapter`
-// changes, this block stops compiling — a retyped interface would just quietly go stale.
+// changes, this block stops compiling - a retyped interface would just quietly go stale.
 import type {
   Adapter,
   AdapterFrame,
@@ -199,7 +199,7 @@ import type {
 
 class MyAdapter implements Adapter {
   // The identity stamped into every envelope you publish, and the one core dedupes
-  // against. One per node — sharing an adapter instance between two servers gives them
+  // against. One per node - sharing an adapter instance between two servers gives them
   // one identity and breaks the dedup in both directions.
   readonly nodeId = 'node-a'
 

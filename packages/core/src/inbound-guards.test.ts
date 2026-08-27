@@ -3,7 +3,7 @@
  *
  * Both matter for the same reason: a peer is not this library. A second implementation
  * written from the spec will do what the spec permits, and both of these were places where
- * what we accept is wider than what we document — which is the direction that costs
+ * what we accept is wider than what we document - which is the direction that costs
  * somebody memory or a surprise, rather than merely failing a strict peer.
  */
 /**
@@ -60,7 +60,7 @@ describe('the payload cap is per frame type, as §5.3 says', () => {
     ).toThrow(/WT_PAYLOAD_TOO_LARGE/)
   })
 
-  test('a CALL_REQUEST at the emit cap plus one is still fine — calls have their own cap', () => {
+  test('a CALL_REQUEST at the emit cap plus one is still fine - calls have their own cap', () => {
     const decoder = new FrameDecoder()
     // No over-tightening: §5.3 gives calls 16 MiB precisely because a call is the
     // documented home for payloads too large to emit.
@@ -111,7 +111,7 @@ describe('a datagram arriving before the handshake is discarded', () => {
     // The stream lane has had a `#negotiated` guard all along; the datagram lane had none,
     // so a pre-handshake datagram was decoded and delivered here while PROTOCOL.md §7 and
     // ADR 0009 both say it is discarded silently. A second implementer drops it; this one
-    // rendered it — and the application sees an event from a session it has not agreed a
+    // rendered it - and the application sees an event from a session it has not agreed a
     // contract with.
     expect(seen).toEqual([])
     void EVENT_ID_NOT_APPLICABLE

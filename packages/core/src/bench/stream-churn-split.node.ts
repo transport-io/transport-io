@@ -2,7 +2,7 @@
  * The per-stream leak (D65), measured on each side separately.
  *
  * The single-process bench conflates two populations. In production the client is a
- * browser using its own native WebTransport and never touches this binding — the binding
+ * browser using its own native WebTransport and never touches this binding - the binding
  * runs on the server. So which half leaks decides whether this is a Stage 1 blocker or a
  * documented caveat for Node clients.
  *

@@ -24,7 +24,7 @@ export class TransportError extends Error {
   readonly remedy: string
 
   constructor(code: TransportErrorCode, message: string, remedy: string) {
-    super(`${code}: ${message} — ${remedy}`)
+    super(`${code}: ${message} - ${remedy}`)
     this.name = 'TransportError'
     this.code = code
     this.remedy = remedy

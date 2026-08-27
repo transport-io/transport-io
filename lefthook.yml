@@ -27,5 +27,5 @@ commit-msg:
   commands:
     commitlint:
       # CI counterpart: `pr-title` job. Under squash merge the PR title becomes the
-      # commit subject, so that gate — not this hook — protects the changelog.
+      # commit subject, so that gate - not this hook - protects the changelog.
       run: bun run commitlint --edit {1}

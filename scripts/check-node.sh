@@ -5,7 +5,7 @@
 # file, so a TypeScript guard dies with ERR_UNKNOWN_FILE_EXTENSION and says nothing useful.
 set -euo pipefail
 # 22.18 is the floor, not 22. Comparing majors only meant every Node 22.0-22.17 passed
-# this guard silently and then died with ERR_UNKNOWN_FILE_EXTENSION — the exact error the
+# this guard silently and then died with ERR_UNKNOWN_FILE_EXTENSION - the exact error the
 # header above says this script exists to convert into something readable.
 REQUIRED=22.18
 CURRENT="$(node -p 'process.versions.node.split(".").slice(0,2).join(".")')"

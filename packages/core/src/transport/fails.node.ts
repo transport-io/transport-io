@@ -205,7 +205,7 @@ export async function connectHttp3(opts: Http3ClientOptions): Promise<Connection
   // The binding loads its native transport through a dynamic import and throws
   // `Lib quiche loading attempt did not end` if a client is constructed before it
   // settles. A process that also runs a server never sees this, because the server
-  // awaits the same promise on the way up — which is exactly why it went unnoticed
+  // awaits the same promise on the way up - which is exactly why it went unnoticed
   // until a client ran on its own.
   await quicheLoaded
 
@@ -217,7 +217,7 @@ export async function connectHttp3(opts: Http3ClientOptions): Promise<Connection
   } as never) as unknown as AnySession
 
   // `closed` rejects independently of `ready`. If the handshake fails, nothing has
-  // attached to it yet and Node sees an unhandled rejection — which terminates a server
+  // attached to it yet and Node sees an unhandled rejection - which terminates a server
   // by default. Claim it before awaiting `ready`; FailsConnection re-reads the same
   // settled promise, so nothing is lost.
   const closedGuard = wt.closed.catch(() => undefined)

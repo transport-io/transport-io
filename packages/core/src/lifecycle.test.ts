@@ -4,13 +4,13 @@
  * The three defects here share a shape with D69: each is on the half of a two-sided
  * lifecycle that no test drove. Every existing test connects and asserts; none of them
  * *disconnects* and asserts, so a per-disconnect leak was invisible. `scripts/soak.node.ts`
- * has the same blind spot by construction — it opens 500 sessions and closes none — which
+ * has the same blind spot by construction - it opens 500 sessions and closes none - which
  * is why `soak:churn` exists alongside these.
  *
  * The adapter half is worse than untested. `HostileAdapter.failNextJoin` and
  * `failNextLeave` were written for exactly these cases and set by no test in the repository,
  * and the conformance test named "join rejecting does not leave the peer half-joined from
- * core's view" asserted only that the client was still `connected` — a property that holds
+ * core's view" asserted only that the client was still `connected` - a property that holds
  * whether or not the peer is half-joined.
  */
 import { describe, expect, test } from 'bun:test'
@@ -94,7 +94,7 @@ describe('a disconnect releases what the connection was holding', () => {
         await new Promise((r) => setTimeout(r, 5))
       }
     })
-    // Was 25 — `clearInterval` appears in exactly one place, `Session.close()`, and
+    // Was 25 - `clearInterval` appears in exactly one place, `Session.close()`, and
     // neither teardown continuation called it. Whichever side did not initiate the close
     // kept a live interval retaining its whole Session.
     expect(live).toBe(0)
@@ -126,7 +126,7 @@ describe('an adapter that rejects degrades core rather than crashing it', () => 
     await new Promise((r) => setTimeout(r, 80))
 
     // Was a=0 b=1 c=1 with peer.rooms still ["a","b","c"]: the throw escaped the loop
-    // before rooms 2..N and before `#peerRooms.delete(id)`, and nothing retries —
+    // before rooms 2..N and before `#peerRooms.delete(id)`, and nothing retries -
     // `conn.closed` resolves once. A later `to('b').emit()` then fanned frames into a
     // dead session's queue.
     expect([server.memberCount('a'), server.memberCount('b'), server.memberCount('c')]).toEqual(
@@ -203,7 +203,7 @@ describe('closing twice is not two closes', () => {
 
     // quiche logs "WebTransportHttp3 close sent twice" and refuses the extra ones. A client
     // disconnecting while the server tears the same session down is ordinary, so this fired
-    // routinely under the soak — a protocol-level complaint we generated and ignored.
+    // routinely under the soak - a protocol-level complaint we generated and ignored.
     expect(closes).toBe(1)
   })
 })

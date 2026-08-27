@@ -1,4 +1,4 @@
-# ADR 0010 — Event IDs are name hashes, not positions
+# ADR 0010 - Event IDs are name hashes, not positions
 
 **Status:** accepted · **Decision:** D52
 
@@ -20,7 +20,7 @@ It is more compact to describe and identical in size on the wire.
 It fails on the only axis that matters, which is what happens when a contract changes.
 **Positional means insertion renumbers.** Adding an event named `archive` to a contract
 containing `chat` and `cursor` shifts both of them by one. Every peer holding the previous
-contract now disagrees with the new one about what `1` means — not for the new event, but
+contract now disagrees with the new one about what `1` means - not for the new event, but
 for events nobody touched.
 
 The consequence in operation is severe and non-obvious: during a rolling deploy, adding a
@@ -38,7 +38,7 @@ or not they agree on anything else in the contract. Adding, removing or reorderi
 changes no existing identifier.
 
 That property is what makes rolling deploys work, and it is also what makes the contract
-identity check in ADR 0011 cheap — most of the disagreement it would otherwise have to
+identity check in ADR 0011 cheap - most of the disagreement it would otherwise have to
 detect cannot arise.
 
 ## Width: four bytes, and why not two
@@ -56,7 +56,7 @@ at 200 events.
 
 What decided it is not the probability but **what a collision costs the person who hits
 one.** They are told to rename an event in their own domain language because two SHA-256
-prefixes happened to match — "rename `roomDeleted`, it collides with `userTyping`". No
+prefixes happened to match - "rename `roomDeleted`, it collides with `userTyping`". No
 error message makes that acceptable, and it lands in exactly the place this library is
 meant to feel sharp.
 

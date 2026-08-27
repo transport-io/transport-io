@@ -3,8 +3,8 @@
  * never of the call site. A contract that says "may be dropped" must not be able to produce
  * a guaranteed, ordered, acknowledged message.
  *
- * It could. `{ lane: 'datagram', payload, returns }` compiled — excess property checking
- * against a *union* admits any property present on any member — `CallableOf` then admitted
+ * It could. `{ lane: 'datagram', payload, returns }` compiled - excess property checking
+ * against a *union* admits any property present on any member - `CallableOf` then admitted
  * the event, and `Session.call` never looked at the lane, so the request went out over a
  * bidirectional stream and came back answered. The type system agreed with the violation
  * the whole way down.
@@ -99,7 +99,7 @@ describe('a datagram event is not callable, from either side of the wire', () =>
       if (value !== undefined) frames.push(...decoder.push(value))
     }
 
-    // Refused with an error frame, not answered, and not silently dropped either — the
+    // Refused with an error frame, not answered, and not silently dropped either - the
     // caller has to learn that its contract disagrees with ours.
     expect(frames.length).toBeGreaterThan(0)
     expect(frames[0]?.type).toBe(FrameType.CALL_ERROR)
@@ -113,7 +113,7 @@ describe('a datagram event is not callable, from either side of the wire', () =>
     await expect(client.call('chat' as never, { body: 'x' } as never)).rejects.toThrow()
   })
 
-  test('the datagram lane still works normally — the guard is not a blanket refusal', async () => {
+  test('the datagram lane still works normally - the guard is not a blanket refusal', async () => {
     const { client, peer } = await wire()
     const seen: unknown[] = []
     client.on('cursor', (p) => seen.push(p))

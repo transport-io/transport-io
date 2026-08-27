@@ -51,7 +51,7 @@ interface Block {
    * Tagged ```ts standalone: this block must compile with nothing before it.
    *
    * Prefix concatenation lets a block inherit imports from earlier blocks, which is right
-   * for a document read top to bottom — but wrong for a block a reader copies whole. The
+   * for a document read top to bottom - but wrong for a block a reader copies whole. The
    * README's contract snippet says "the whole surface, in one file" and called
    * `defineContract` without importing it; an earlier block three screens up had the
    * import, so every form of concatenation accepted it and the reader got a broken file.
@@ -86,7 +86,7 @@ const MAX_IGNORED_BLOCKS = 1
 
 /**
  * Floors, because finding nothing is far more often a broken glob than a clean repository.
- * Zero snippets compiled cleanly, and zero constants disagreed with zero constants — both
+ * Zero snippets compiled cleanly, and zero constants disagreed with zero constants - both
  * are green, and both mean the gate looked at nothing. Same class as the lane soak passing
  * on an empty sample set.
  */
@@ -98,27 +98,27 @@ mkdirSync(OUT, { recursive: true })
 
 let blockCount = 0
 let fileCount = 0
-// AGENTS.md was exempt from this gate entirely — four `ts` blocks that no tool had ever
+// AGENTS.md was exempt from this gate entirely - four `ts` blocks that no tool had ever
 // compiled, in the document whose whole purpose is to be read and copied by a machine.
 for (const doc of ['API.md', 'README.md', 'AGENTS.md']) {
   const blocks = extractBlocks(doc)
   if (blocks.length === 0) continue
 
   /**
-   * Block N compiles against blocks 1..N, in source order — a *prefix*, not the whole
+   * Block N compiles against blocks 1..N, in source order - a *prefix*, not the whole
    * document.
    *
    * The difference is the whole gate. Concatenating every block into one module made this
    * blind: TypeScript hoists imports, so a block could use a name that a *later* block
    * imported. That is exactly how the README's flagship snippet called `defineContract`
-   * without importing it and still compiled — the import was three blocks further down the
+   * without importing it and still compiled - the import was three blocks further down the
    * page, where no reader copying the first block would ever see it.
    *
    * A prefix keeps the narrative working, because a later block legitimately builds on the
    * `contract` and `AppMap` an earlier one defined, and that is how the documents are meant
    * to be read. It just refuses to let a block borrow from its own future.
    *
-   * Import *bindings* already in scope are dropped, per module — a document re-stating an
+   * Import *bindings* already in scope are dropped, per module - a document re-stating an
    * import so a snippet reads correctly on its own must not then fail as a duplicate
    * identifier. Dropping whole duplicate lines is not enough: README imports
    * `defineContract` alone in one block and alongside `MapOf` and `type$` in another, so
@@ -176,7 +176,7 @@ if (blockCount < MIN_BLOCKS) {
 if (ignoredBlocks > MAX_IGNORED_BLOCKS) {
   fail(
     `${ignoredBlocks} documentation blocks are tagged \`ignore\`, above the ceiling of ` +
-      `${MAX_IGNORED_BLOCKS}. Implement the surface or lower the ceiling — never raise it.`,
+      `${MAX_IGNORED_BLOCKS}. Implement the surface or lower the ceiling - never raise it.`,
   )
 }
 
@@ -232,7 +232,7 @@ function compare(label: string, doc: Map<number, string>, code: Record<string, n
 }
 // Each table must have parsed something. Comparing an empty parse against an empty enum
 // agrees perfectly, and comparing an empty parse against a populated enum only fails in one
-// direction — so a parser that silently stopped matching rows would be caught by luck, or
+// direction - so a parser that silently stopped matching rows would be caught by luck, or
 // not at all.
 for (const [name, rows] of [
   ['reset code', resetCodes],
@@ -323,7 +323,7 @@ const coreIsStub = [...coreEntry.matchAll(/^export /gm)].length <= 1
 
 if (coreIsStub) {
   console.log(
-    `docs: snippet compilation PENDING — core is still the stub entry (${blockCount} blocks)`,
+    `docs: snippet compilation PENDING - core is still the stub entry (${blockCount} blocks)`,
   )
 } else if (fileCount > 0) {
   try {

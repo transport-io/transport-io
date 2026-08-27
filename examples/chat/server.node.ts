@@ -3,7 +3,7 @@
  *
  * Two servers, deliberately: a plain HTTP one on 8080 serving the page, and the
  * WebTransport one on 4433 carrying the session. `http://localhost` is a trustworthy
- * origin, so the page gets a secure context without a certificate of its own — only the
+ * origin, so the page gets a secure context without a certificate of its own - only the
  * WebTransport endpoint needs one.
  */
 
@@ -19,7 +19,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const certDir = join(here, '.cert')
 // Overridable, because 8080 is the most contended port on any developer's machine and the
 // e2e config offers the same override. Both halves have to read it or the override is a
-// knob that moves what Playwright waits for without moving what this binds — which is
+// knob that moves what Playwright waits for without moving what this binds - which is
 // exactly what it did until a fresh-clone run caught it.
 const WT_PORT = Number(process.env.E2E_WT_PORT ?? 4433)
 const WEB_PORT = Number(process.env.E2E_PORT ?? 8080)

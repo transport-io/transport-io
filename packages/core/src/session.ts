@@ -1,6 +1,6 @@
 /**
  * One side of a session. Both the server's view of a peer and the client's view of the
- * server are this class — the handshake is symmetric, and so is everything after it.
+ * server are this class - the handshake is symmetric, and so is everything after it.
  */
 import { decodePayload, encodePayload, validate } from './codec.ts'
 import type { EventTable } from './contract.ts'
@@ -63,7 +63,7 @@ function closeCodeFor(e: unknown): number {
 
 /**
  * §10.2 caps the reason at 1024 **bytes**. Slicing to 1024 characters overshoots by up to
- * threefold on non-ASCII — and event names, which appear in mismatch messages, are the
+ * threefold on non-ASCII - and event names, which appear in mismatch messages, are the
  * user's own domain language. Truncated on a code-point boundary so the result is never
  * a broken surrogate pair.
  */
@@ -142,7 +142,7 @@ export class Session {
       this.#handshakeReject = rej
     })
     // `ready` is rejected from the emit-stream read loop, which can reach a refusal before
-    // start() has got as far as awaiting it — the peer's handshake is frame 0 and may be
+    // start() has got as far as awaiting it - the peer's handshake is frame 0 and may be
     // decoded during our own `openEmitStream()`. An unobserved rejection terminates a Node
     // server by default, so it is observed here. start() still surfaces it to its caller.
     void this.ready.catch(() => undefined)
@@ -164,7 +164,7 @@ export class Session {
      * Armed before the stream is opened, and raced against every await that follows.
      *
      * It used to be armed *after* `openEmitStream()` and after our own handshake write, so
-     * if either never settled — precisely the stalled-peer case this deadline exists for —
+     * if either never settled - precisely the stalled-peer case this deadline exists for -
      * no timer was ever armed and `connect()` hung for ever. Racing `ready` instead would
      * not work: a peer whose handshake arrives before we have opened our own stream
      * resolves `ready` early, and the race would fire on success.
@@ -308,7 +308,7 @@ export class Session {
    * identifiers, no pending map, and a stalled call blocks nothing else.
    *
    * There is no default timeout. A dead peer is detected by the QUIC idle timeout, which
-   * closes the session and rejects every pending call — the case a timeout is usually
+   * closes the session and rejects every pending call - the case a timeout is usually
    * reached for is already handled. Pass `AbortSignal.timeout(ms)` for a slow but live
    * responder.
    */
@@ -328,7 +328,7 @@ export class Session {
     // An already-aborted signal must not open a stream just to tear it down.
     // §11: a peer that has detected its counterpart is gone MUST NOT reuse a stream from
     // that session. Opening a new one on a dead session is the same mistake wearing a
-    // different hat — the transport may even accept it, and the call then hangs.
+    // different hat - the transport may even accept it, and the call then hangs.
     if (this.#disposed) {
       throw new TransportError(
         'WT_SESSION_CLOSED',
@@ -339,7 +339,7 @@ export class Session {
     if (opts?.signal?.aborted === true) throw abortToTransportError(opts.signal.reason)
     // An event that declares no `returns` has no response to wait for. The type system
     // already excludes it from `CallableOf`; this is the same refusal for a caller that
-    // reached the wire without the types — and it names the actual problem instead of
+    // reached the wire without the types - and it names the actual problem instead of
     // travelling to the responder to come back as "no handler registered", which is a
     // different fault with a different remedy.
     if (entry.lane === 'stream' && entry.def.returns === undefined) {
@@ -369,7 +369,7 @@ export class Session {
     } catch (e) {
       // D18 removes the default call timeout on the grounds that `AbortSignal.timeout(ms)`
       // is the documented substitute, so aborting is the most-documented failure this
-      // library has — and it rejected with a raw DOMException carrying no code and no
+      // library has - and it rejected with a raw DOMException carrying no code and no
       // remedy, which the error helper printed in API.md reports as 'unknown'.
       // Read through a call so narrowing from the pre-check above does not apply: the
       // signal can abort at any point during the call, which is the whole reason it exists.
@@ -387,7 +387,7 @@ export class Session {
   /**
    * The cap is a receiver-side refusal or it is nothing. `call()` declining to open a
    * 257th stream protects the peer from us; it does nothing about a peer that opens 10,000
-   * — a Go implementation written from PROTOCOL.md, or a browser calling
+   * - a Go implementation written from PROTOCOL.md, or a browser calling
    * `createBidirectionalStream()` directly. That is the case §10.1 code 9 exists for.
    *
    * Refused before the request is read, deliberately: the cost this bound exists to bound
@@ -443,15 +443,15 @@ export class Session {
    * The only door out of a session, and every internal path now uses it.
    *
    * Guarding this method alone was not enough: four call sites reached `#conn.close()`
-   * directly — the handshake deadline, the peer-too-slow bound, an emit write failure and a
-   * protocol error on the read loop — so the guard covered the one path that already had
+   * directly - the handshake deadline, the peer-too-slow bound, an emit write failure and a
+   * protocol error on the read loop - so the guard covered the one path that already had
    * the fewest duplicates. A soak still produced 619,422 `close sent twice` complaints from
    * quiche after the first fix, which is what a partial guard looks like from the outside.
    */
   close(code: number, reason: string): void {
     // Idempotent in both halves. `dispose()` already was; `conn.close()` was not, so a
-    // second close — a client disconnecting while the server is tearing the same session
-    // down, which is ordinary — reached the transport twice. quiche logs
+    // second close - a client disconnecting while the server is tearing the same session
+    // down, which is ordinary - reached the transport twice. quiche logs
     // "WebTransportHttp3 close sent twice" and refuses it, which is a protocol-level
     // complaint we were generating and then ignoring.
     if (this.#disposed) return
@@ -462,13 +462,13 @@ export class Session {
   /**
    * Idempotent, and wired to `conn.closed` in `start()` so it cannot be forgotten.
    *
-   * It was forgotten. `clearInterval` appeared in exactly one place — `close()` — and
+   * It was forgotten. `clearInterval` appeared in exactly one place - `close()` - and
    * neither teardown path called it: the server's `conn.closed` continuation freed the
    * origin and removed the peer, and the client's patched a snapshot. Whichever side did
    * not *initiate* the close kept a live interval whose callback closes over `this`,
    * retaining the Session, its Connection, the frame decoder, both queues, the sequence
    * gate and every handler set. At 100 sessions a second that is 360,000 unreclaimable
-   * Sessions an hour, and `unref()` does nothing about it — it stops a timer holding the
+   * Sessions an hour, and `unref()` does nothing about it - it stops a timer holding the
    * event loop open, not holding memory.
    */
   dispose(): void {
@@ -565,7 +565,7 @@ export class Session {
     }
 
     // The request is fully read at this point, so nothing is watching the stream any
-    // more — which is why an abort never reached the handler. The initiator's abort
+    // more - which is why an abort never reached the handler. The initiator's abort
     // resets its send side AND cancels its read side, and that STOP_SENDING surfaces here
     // as a rejection on our writer. Watch it, or `ctx.signal` is decoration.
     void writer.closed.catch(() => controller.abort())
@@ -671,7 +671,7 @@ export class Session {
    * same turn as the push and appended each frame to an unbounded promise chain, so depth
    * returned to zero after every push and `EmitQueue`'s bound could never be reached from
    * a Session. The backlog did not go away, it went somewhere that could not disconnect
-   * anyone — and whose `.catch(() => undefined)` discarded every write failure on the lane
+   * anyone - and whose `.catch(() => undefined)` discarded every write failure on the lane
    * that advertises reliable ordered delivery.
    *
    * Nothing flushes before the handshake, so frame 0 keeps its position by construction

@@ -127,7 +127,7 @@ describe('the four framing edge cases', () => {
 
 describe('the measured fixture: 51 writes arrived as 217 reads', () => {
   // Not a curiosity. On the reference transport, 50 small writes plus one large write
-  // were delivered as 217 reads with a largest chunk of 1220 bytes — the small writes
+  // were delivered as 217 reads with a largest chunk of 1220 bytes - the small writes
   // coincidentally survived as discrete reads and the large one shattered. That is the
   // case that passes naively in development and fails under load.
   test('recovers exact boundaries when chunking bears no relation to frames', () => {

@@ -65,7 +65,7 @@ client.subscribe(() => {
   const s = client.getSnapshot()
   statusEl.textContent = s.status
   statusEl.dataset.state = s.status
-  roomsEl.textContent = s.rooms.join(', ') || '—'
+  roomsEl.textContent = s.rooms.join(', ') || '-'
   if (s.lastError !== null)
     append('system', `${s.lastError.code}: ${s.lastError.remedy}`, Date.now())
 })
@@ -77,7 +77,7 @@ try {
   await client.connect()
 } catch (e) {
   const err = e as TransportError
-  append('system', `could not connect — ${err.code}: ${err.remedy}`, Date.now())
+  append('system', `could not connect - ${err.code}: ${err.remedy}`, Date.now())
   throw e
 }
 
@@ -109,6 +109,6 @@ surface.addEventListener('pointermove', (e) => {
 setInterval(() => {
   const s = client.stats()
   if (s === undefined) return
-  // Our drops, not the network's — the transport reports neither loss nor congestion.
+  // Our drops, not the network's - the transport reports neither loss nor congestion.
   dropsEl.textContent = `overflow ${s.overflowDropped} · stale ${s.staleDropped} · dedup ${s.staleReceived}`
 }, 500)

@@ -5,7 +5,7 @@ equality and refuse the session otherwise. The negotiation mechanism described i
 exists; the compatibility promise does not.
 
 This document is the specification. It is written so that an implementer with no access to
-the reference source — someone writing a Go server, for instance — can build an
+the reference source - someone writing a Go server, for instance - can build an
 interoperable peer from this document alone. Where the reference implementation and this
 document disagree, this document is correct and the implementation is a bug.
 
@@ -54,7 +54,7 @@ A session uses two kinds of QUIC stream, plus datagrams.
 |---|---|---|
 | Emit lane | one **unidirectional** stream per direction | whole session |
 | Call | one **bidirectional** stream per call | one request/response exchange |
-| Datagram lane | not a stream | — |
+| Datagram lane | not a stream | - |
 
 ### 3.1 The emit lane
 
@@ -69,8 +69,8 @@ against it.
 
 **Consequence, stated plainly: head-of-line blocking on the emit lane is cross-room.** All
 rooms share one emit stream per direction, so a high-volume room delays a quiet room's
-messages to the same peer. Calls and datagrams are unaffected — they use separate streams
-and separate packets — but emits to one peer are serialised across every room that peer
+messages to the same peer. Calls and datagrams are unaffected - they use separate streams
+and separate packets - but emits to one peer are serialised across every room that peer
 belongs to. Implementers should not describe the emit lane as offering per-room
 independence.
 
@@ -93,7 +93,7 @@ a length.**
 > **Reserved, not implemented.** No version 0 sender emits more than one `CALL_RESPONSE`,
 > and nothing in this implementation produces the multi-frame shape. It exists so that
 > token streaming can be added without a protocol break (D7). Do not build a receive loop
-> expecting a second frame from a version 0 peer — it will not arrive. Do build one that
+> expecting a second frame from a version 0 peer - it will not arrive. Do build one that
 > *tolerates* a second frame, because that tolerance is what keeps the future addition from
 > being a break, and it is required below.
 
@@ -181,7 +181,7 @@ A refusal MUST name the offending event in the close reason, for example
 
 **Property worth knowing before you deploy: the server sends its event table to every peer
 that completes a handshake.** Anyone who can open a session learns the full set of event
-names and lanes — not payloads, not schemas, not data, but the surface. For almost every
+names and lanes - not payloads, not schemas, not data, but the surface. For almost every
 application this is uninteresting, and it is the same information a client bundle already
 contains. It is stated here rather than left to be discovered because it is occasionally
 not uninteresting: if event names encode unreleased features or internal structure, an
@@ -190,7 +190,7 @@ unauthenticated peer can read them.
 **This library authenticates nothing, and offers no hook to.** `Connection` exposes no
 headers, no URL, no peer address and no identity; `ServerOptions` has no reject callback;
 and the handshake payload is exhaustively `{ v, feat, events }`. The only control an
-application has is whether to call `accept()` on a connection at all — and the transport
+application has is whether to call `accept()` on a connection at all - and the transport
 listener hands it nothing to decide on. Note also that `accept()` writes the full event
 table before `onSession` fires, so the disclosure described above happens **before** any
 application code runs; refusing the peer afterwards does not undo it.
@@ -204,7 +204,7 @@ is not one.
 **Payload schema shape is not exchanged and not compared.** A schema disagreement produces
 one `WT_VALIDATION_FAILED` on one message, which is local, readable and recoverable. An
 identity disagreement corrupts every message of that type, silently. The handshake refuses
-what cannot be caught later and permits what can — so adding an optional field to a payload
+what cannot be caught later and permits what can - so adding an optional field to a payload
 is not a breaking change, and adding or removing an event is safe during a rolling deploy.
 
 ### 4.4 Ordering of the two checks
@@ -216,8 +216,8 @@ disagreement, and no agreement about lanes implies a shared feature set.
 ## 5. Frame layout on streams
 
 Every stream-lane and call-stream frame uses this layout. QUIC streams are byte streams
-and **do not preserve write boundaries** — a single write may be delivered as many reads,
-and many writes may be delivered as one — so the length prefix is the only way to recover
+and **do not preserve write boundaries** - a single write may be delivered as many reads,
+and many writes may be delivered as one - so the length prefix is the only way to recover
 frame boundaries.
 
 ```
@@ -247,7 +247,7 @@ frame boundaries.
 | **Fixed overhead** | **12** | 4 length + 8 header |
 | Payload | 1 to 1 048 576 | |
 
-`Length` MUST be at least **9** — eight header bytes plus at least one payload byte.
+`Length` MUST be at least **9** - eight header bytes plus at least one payload byte.
 <!-- norm: length-minimum-nine -> packages/core/src/framer.test.ts -->
 
 **A `Length` of 0 is a protocol error.** So is a payload of zero bytes. Stream close is the
@@ -259,10 +259,10 @@ forward it.
 
 `Length` exceeding `1048584` (1 MiB payload plus the 8 header bytes it counts) is a
 protocol error. `Length` counts only bytes *after* itself, so the four bytes of the Length
-field are not included — the same convention its minimum of 9 already reflects.
+field are not included - the same convention its minimum of 9 already reflects.
 
-The 16 MiB cap applies to the **call frames** — `CALL_REQUEST`, `CALL_RESPONSE` and
-`CALL_ERROR` — because a call is the documented home for payloads too large to emit and
+The 16 MiB cap applies to the **call frames** - `CALL_REQUEST`, `CALL_RESPONSE` and
+`CALL_ERROR` - because a call is the documented home for payloads too large to emit and
 inheriting the emit cap would leave them nowhere to go. **Every other frame type is capped
 at 1 MiB**, including `EMIT` and the control frames, which are orders of magnitude smaller
 in practice.
@@ -273,7 +273,7 @@ universally. The type byte is at a fixed offset inside the header, so it is read
 any payload has to be buffered; applying the call cap to an `EMIT` frame lets a peer make a
 receiver hold sixteen times what this section permits.
 Exceeding either cap is a protocol error raised by the decoder as
-`WT_PAYLOAD_TOO_LARGE` — not a §10.1 reset code, which is a distinction this document
+`WT_PAYLOAD_TOO_LARGE` - not a §10.1 reset code, which is a distinction this document
 previously got wrong. On a call stream the receiver abandons the stream, and the
 initiator's call rejects with `WT_PROTOCOL_ERROR` because no response frame arrived. On
 the emit stream, §5.5 applies.
@@ -293,7 +293,7 @@ the lane.
 
 | value | name | valid on |
 |---|---|---|
-| `0x00` | reserved, invalid | — |
+| `0x00` | reserved, invalid | - |
 | `0x01` | `HANDSHAKE` | emit stream, frame 0 only |
 | `0x02` | `EMIT` | emit stream |
 | `0x03` | `CALL_REQUEST` | call stream, first frame only |
@@ -301,7 +301,7 @@ the lane.
 | `0x05` | `CALL_ERROR` | call stream, terminal |
 | `0x06` | `JOIN` | emit stream, server to client only |
 | `0x07` | `LEAVE` | emit stream, server to client only |
-| `0x08`–`0xFF` | reserved | — |
+| `0x08`–`0xFF` | reserved | - |
 
 Receiving a reserved or contextually invalid type is a protocol error.
 
@@ -326,7 +326,7 @@ The **first four bytes of SHA-256 of the event's name**, big-endian, as a `u32`.
 
 Identity is derived from the name, never from position. Two peers computing an ID for the
 same name therefore always agree, and adding, removing or reordering events changes no
-existing identifier — which is what makes a contract change survivable during a rolling
+existing identifier - which is what makes a contract change survivable during a rolling
 deploy. See ADR 0010.
 
 Two names in one contract whose hashes collide are a **contract construction error**,
@@ -334,7 +334,7 @@ reported when the contract is built, naming both events. The fix is an explicit 
 of them, which becomes part of the contract and is therefore shared by both peers.
 
 `0x00000000` means **not applicable** and is used by `HANDSHAKE`, `CALL_RESPONSE`, `CALL_ERROR`,
-`JOIN` and `LEAVE` — every frame whose meaning comes from the stream or from its own
+`JOIN` and `LEAVE` - every frame whose meaning comes from the stream or from its own
 payload rather than from the event table. A room name is not a contract event, so `JOIN`
 and `LEAVE` have no event identity to carry.
 
@@ -364,7 +364,7 @@ response payload. Event ID is `0x0000`.
 A version 0 responder MUST write **exactly one** `CALL_RESPONSE`, or one `CALL_ERROR`, and
 never zero of both. A receiver MUST nonetheless accept a sequence of any length, so that
 <!-- norm: call-response-sequence-any-length -> packages/core/src/call.test.ts -->
-incremental responses can be added later without a protocol break — that asymmetry is
+incremental responses can be added later without a protocol break - that asymmetry is
 deliberate and is what keeps the door open for streaming responses.
 
 ### 6.4 `CALL_ERROR`
@@ -433,8 +433,8 @@ A zero-length payload is a protocol error, as on streams (§5.1).
 session host that owns that peer and is never rewritten in transit.
 
 Origin is **allocated, not derived**. A hash of the `PeerId` would carry the same birthday
-problem as a hashed event ID — roughly 0.01% at 1,000 concurrent peers and 1.2% at 10,000
-— and a collision here is close to undebuggable from outside: two peers silently share a
+problem as a hashed event ID: roughly 0.01% at 1,000 concurrent peers and 1.2% at 10,000.
+A collision here is close to undebuggable from outside: two peers silently share a
 sequence space and each discards the other's datagrams as stale. Allocation removes the
 class of failure instead of making it rare.
 
@@ -444,7 +444,7 @@ The normative requirements are:
    before any datagram is sent.
 2. **Uniqueness scope.** An origin MUST be unique among all peers concurrently connected to
 <!-- norm: origin-unique-and-quarantined -> packages/core/src/protocol-layers.test.ts -->
-   the same deployment — not merely to the same process. Uniqueness within one process is
+   the same deployment - not merely to the same process. Uniqueness within one process is
    not uniqueness across a bus.
 3. **Reuse, via quarantine.** An origin MUST NOT be reissued while any peer that observed
    it may still hold sequence state for it. It MAY be reissued once that is impossible.
@@ -465,8 +465,8 @@ The normative requirements are:
      (§9, 150 ms) is never transmitted, so an in-flight datagram cannot outlive that TTL
      plus network transit.
 
-   **A released origin is therefore quarantined for at least `120` seconds** — twice the
-   longer of the two bounds — before returning to the pool. There is no mechanism by which
+   **A released origin is therefore quarantined for at least `120` seconds** - twice the
+   longer of the two bounds - before returning to the pool. There is no mechanism by which
    a datagram or a sequence entry survives that interval.
 
    With quarantine, steady-state occupancy is `concurrent + churn × 120s`. At 500 sessions
@@ -495,7 +495,7 @@ The normative requirements are:
    1,024-value space would otherwise exhaust for the same reason the counter would. When a
    host leaves, every session it owned ends, and receivers discard the corresponding
    sequence state within the 60-second retention window. An ordinal is therefore
-   quarantined for at least `300` seconds before reallocation — longer than the
+   quarantined for at least `300` seconds before reallocation - longer than the
    per-origin quarantine because host departure is detected less promptly than session
    close, and because ordinal churn is slow enough that the extra margin costs nothing.
 
@@ -520,13 +520,13 @@ the newcomer's datagrams are discarded **forever** as "not greater than the high
 seen". Keying on the origin makes one encoding correct for every recipient and keeps each
 sender's stream independent.
 
-Origin is **allocated by the server, never hashed** — see the top of this section, which
+Origin is **allocated by the server, never hashed** - see the top of this section, which
 this paragraph contradicted for as long as both existed. The collision analysis that used
 to sit here described a design that was rejected precisely because it had one; it is kept
 below only as the argument against, and applies to no conforming implementation.
 
 Were Origin a 32-bit hash, distinct peers would collide with probability approximately
-`n² / 2³³` — about one in eight thousand at 1,000 concurrent peers, and about 1% at 10,000.
+`n² / 2³³` - about one in eight thousand at 1,000 concurrent peers, and about 1% at 10,000.
 A collision degrades rather than corrupts: two peers share a last-write-wins slot for one
 event, so one of them loses updates it should have kept. The datagram lane already permits
 loss, which is why this is an acceptable trade against four more header bytes on the lane
@@ -538,7 +538,7 @@ by treating the comparison as circular over the 32-bit space, with a difference 
 than `0x7FFFFFFF` read as wrap rather than regression.
 
 This is in the protocol rather than left to applications because every realistic datagram
-payload — a cursor position, a presence beat, an object transform — is last-write-wins, and
+payload - a cursor position, a presence beat, an object transform - is last-write-wins, and
 requiring each application to rebuild it is exactly the too-raw-primitive mistake this
 library exists to avoid. An application that genuinely wants unfiltered delivery disables
 the check per event; the field remains on the wire either way.
@@ -546,7 +546,7 @@ the check per event; the field remains on the wire either way.
 ### 7.4 Size ceiling
 
 The usable datagram size is a **runtime property of the path, not a constant.** It varies
-with path MTU, and some hosting platforms reduce it further — Fly.io, for example,
+with path MTU, and some hosting platforms reduce it further - Fly.io, for example,
 documents taking roughly two dozen bytes off the MTU for its UDP routing. Implementations
 MUST query the transport at send time rather than assuming a fixed value.
 <!-- norm: datagram-max-queried-at-send-time -> packages/core/src/protocol-layers.test.ts -->
@@ -644,9 +644,9 @@ operator can distinguish a slow network from a slow consumer.
 One byte. Sent as the QUIC application error code on `RESET_STREAM` or `STOP_SENDING`.
 
 **A reset carries a code and nothing else, so it is used only where there is no stream
-left to explain on.** Everything a responder can say about a *call* — the handler threw,
+left to explain on.** Everything a responder can say about a *call* - the handler threw,
 the event is not in the contract, the payload failed validation, the handshake had not
-completed — is sent as a `CALL_ERROR` frame (§6.4) carrying both a code and a message, on
+completed - is sent as a `CALL_ERROR` frame (§6.4) carrying both a code and a message, on
 the stream the call already owns. That is strictly more than a reset can express, and it
 is why this table is three rows rather than ten.
 
@@ -655,7 +655,7 @@ is why this table is three rows rather than ten.
 | `0` | `WT_NO_ERROR` | Normal termination. Implicit in a clean FIN; never sent explicitly. |
 | `1` | `WT_ABORTED` | The initiator cancelled. Abandon the work; this is routine. |
 | `9` | `WT_TOO_MANY_STREAMS` | Over 256 concurrent call streams on this session. The receiver resets the excess stream **without reading it**; the session stays open. Reduce concurrency and retry. |
-| `2`–`8`, `10`–`255` | reserved | — |
+| `2`–`8`, `10`–`255` | reserved | - |
 
 ### 10.2 Session close codes
 

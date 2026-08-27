@@ -1,5 +1,5 @@
 /**
- * The parity suite against the moq transport. One transport per process — see
+ * The parity suite against the moq transport. One transport per process - see
  * `parity-suite.ts` for why.
  */
 import { test } from 'node:test'

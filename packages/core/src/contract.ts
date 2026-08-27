@@ -16,7 +16,7 @@ export type Schema = StandardSchemaV1
  * property checking against a *union* admits any property present on any member, so
  * `{ lane: 'datagram', payload, returns }` compiled happily, `CallableOf` admitted it, and
  * `call()` served it over a bidirectional stream. A contract that says "may be dropped"
- * produced a guaranteed ordered message with the type system agreeing — a direct violation
+ * produced a guaranteed ordered message with the type system agreeing - a direct violation
  * of D1, the first decision this project made.
  */
 export type EventDef =
@@ -39,7 +39,7 @@ export type Infer<S extends StandardTypedV1> = StandardTypedV1.InferOutput<S>
 
 /**
  * The plain payload/returns map every public signature is written against, so that no
- * method hover ever has to print a validator's internal types. See D57 — declaring
+ * method hover ever has to print a validator's internal types. See D57 - declaring
  * `interface AppMap extends MapOf<typeof contract> {}` is what keeps hover at 126
  * characters instead of 303.
  */
@@ -96,7 +96,7 @@ export interface EventTable {
 }
 
 /**
- * PROTOCOL.md §5.4 — the first four bytes of SHA-256 of the event name, big-endian.
+ * PROTOCOL.md §5.4 - the first four bytes of SHA-256 of the event name, big-endian.
  *
  * Async because `crypto.subtle` is, and because writing SHA-256 by hand would mean typing
  * its round constants from memory, which is the one thing D58 forbids. Both `connect()`

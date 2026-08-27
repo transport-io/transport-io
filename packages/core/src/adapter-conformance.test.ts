@@ -3,7 +3,7 @@
  *
  * An interface with one implementor is usually wrong, and `MemoryAdapter` is the
  * misleading kind: synchronous, infallible, object-passing, omniscient about membership.
- * Every test below runs twice — once against it, once against `HostileAdapter`, which is
+ * Every test below runs twice - once against it, once against `HostileAdapter`, which is
  * none of those things. A rule that only holds for the easy one is not a rule core can
  * rely on.
  */
@@ -86,7 +86,7 @@ for (const impl of IMPLEMENTATIONS) {
       expect(got.except).toEqual(['peer-1'])
     })
 
-    test('a rejected broadcast does not crash core — the session stays up', async () => {
+    test('a rejected broadcast does not crash core - the session stays up', async () => {
       // The server's OWN adapter must fail, not a bystander. Failing a separate instance
       // would assert nothing about how core handles rejection.
       const adapter = impl.make('n1')
@@ -151,7 +151,7 @@ for (const impl of IMPLEMENTATIONS) {
       await server.to('lobby').emit('chat', { body: 'once' })
       await settle(40)
 
-      // The adapter echoes the publish back — and duplicates it, in the hostile case.
+      // The adapter echoes the publish back - and duplicates it, in the hostile case.
       // Core must recognise its own node and deliver exactly one copy locally.
       expect(got).toEqual(['once'])
     })
@@ -188,7 +188,7 @@ describe('hostility the memory adapter cannot express', () => {
     await settle(40)
 
     // Local delivery does not round-trip the bus, so ordering here is ours, not the
-    // adapter's — which is exactly why the reordering does not corrupt it.
+    // adapter's - which is exactly why the reordering does not corrupt it.
     expect(got).toEqual(['a', 'b', 'c'])
   })
 
