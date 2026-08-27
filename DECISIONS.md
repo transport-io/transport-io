@@ -2060,8 +2060,9 @@ reader saw was seven headings explaining why not to use this, before a single li
 it does. Honest and self-defeating are not mutually exclusive.
 
 Nothing was softened and nothing was cut. Every word moved to `KNOWN-ISSUES.md`, which now
-also separates the two kinds of entry that were previously mixed: six design positions that
-will not change, and one measured defect. The README links it as "read this before you
+also separates the two kinds of entry that were previously mixed: the design positions that
+will not change, and the one measured defect. The count is deliberately not stated, because
+a count in a document is a number that goes stale silently. The README links it as "read this before you
 start", and `packages/core/README.md`, `CONTRIBUTING.md` and `SECURITY.md` all point at it,
 because a page nobody links to is where a limitation goes to be forgotten - the same failure
 mode as `OPEN-QUESTIONS.md`.
