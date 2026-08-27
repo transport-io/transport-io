@@ -71,9 +71,10 @@ import { connectBrowser } from 'transport-io/browser-transport'
 import { HostileAdapter } from 'transport-io/testing'
 
 export const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number; y: number }>() },
-  save: { lane: 'stream', payload: type$<{ text: string }>(), returns: type$<{ n: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
+  save: { lane: 'reliable', payload: type$<{ text: string }>(), returns: type$<{ n: number }>() },
+  ask: { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
 })
 export interface AppMap extends MapOf<typeof contract> {}
 
@@ -82,12 +83,17 @@ export const version: string = VERSION
 export async function probe(url: string): Promise<number> {
   const server = createServer<AppMap>({ contract, adapter: new HostileAdapter('probe') })
   server.handle('save', async ({ text }) => ({ n: text.length }))
+  server.handle('ask', async function* ({ prompt }) {
+    yield prompt
+  })
 
   const client = new Client<AppMap>({ contract, connect: () => connectBrowser({ url }) })
   client.emit('chat', { body: 'hello' })
   client.emit('cursor', { x: 1, y: 2 })
   const { n } = await client.call('save', { text: 'hi' })
-  return n
+  const tokens = await client.stream('ask', { prompt: 'hi' }).collect()
+  for await (const token of client.stream('ask', { prompt: 'hi' })) void token.length
+  return n + tokens.length
 }
 TS
 
@@ -95,7 +101,7 @@ cat > bad.ts <<'TS'
 import { Client, defineContract, type MapOf, type$ } from 'transport-io'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 
