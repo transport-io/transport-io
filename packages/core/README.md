@@ -1,4 +1,9 @@
-# transport-io
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/transport-io/transport-io/main/assets/brand/transport-io-lockup-bone.svg">
+    <img alt="transport-io" src="https://raw.githubusercontent.com/transport-io/transport-io/main/assets/brand/transport-io-lockup-ink.svg" width="340">
+  </picture>
+</p>
 
 Real-time apps over WebTransport. Socket.IO's shape, on a transport with multiple streams
 and datagrams, without Socket.IO's mistakes.
