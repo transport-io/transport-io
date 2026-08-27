@@ -1,14 +1,20 @@
 # Repository scripts
 
-## `protect-branch.sh` - run this immediately after creating the remote
+## `protect-branch.sh` - the branch protection, as one command
 
 Branch protection cannot be expressed in a workflow file, so until it is applied the
 pairing rule in D61 (no hook may be the only place a check exists) is asserted but not
-enforced. This script closes that window in one command.
+enforced. This script closes that window.
+
+It is already applied to `transport-io/transport-io`. Re-run it whenever a job name in
+`ci.yml` changes: a required check is matched by name, so a renamed job silently stops
+gating the merge button.
 
 ```bash
-gh repo create <your-account>/transport-io --private --source=. --push
-./scripts/protect-branch.sh
+./scripts/protect-branch.sh              # the current repository
+./scripts/protect-branch.sh owner/repo   # or a fork
+gh api repos/transport-io/transport-io/branches/main/protection \
+  --jq '.required_status_checks.contexts'   # what is actually applied
 ```
 
 It sets the eight required status checks, requires linear history, blocks force-pushes and
@@ -21,7 +27,7 @@ Re-running is safe.
 
 ## `check-docs.ts` - the documentation gates
 
-Compiles every ` ```ts ` block in API.md and README.md, and compares every normative
+Compiles every ` ```ts ` block in API.md, README.md and AGENTS.md, and compares every normative
 constant and error code in PROTOCOL.md against `packages/core/src/protocol.ts`. Blocks
 tagged ` ```ts ignore ` are counted against a ceiling that may only go down.
 
@@ -33,16 +39,15 @@ title - written by whoever opens the PR - is arbitrary code on the runner unless
 bound through `env:` and read as `"$NAME"`. See D74; the repository shipped exactly that
 defect. Line-based, no YAML dependency.
 
-## Publishing - a thing a human does, deliberately, from their own machine
+## Publishing
 
-Nothing in `.github/workflows/` publishes: there is no publish job, no `NPM_TOKEN`, no
-`changesets/action`, no `registry-url`. That is the design, not an omission.
-
-Preflight, all verified before the first release:
+Publishing is a human running a command on their own machine. Nothing in
+`.github/workflows/` publishes: there is no publish job, no `NPM_TOKEN`, no
+`changesets/action`, no `registry-url`. That is deliberate.
 
 | check | state |
 |---|---|
-| `transport-io` on npm | **404 - unclaimed** |
+| `transport-io` on npm | published, latest `0.1.0` |
 | root `package.json` | `private: true` (never publishes) |
 | `examples/chat` | `private: true` |
 | `packages/core` | not private - the one package that publishes |
@@ -52,17 +57,30 @@ Preflight, all verified before the first release:
 The sequence:
 
 ```bash
-npx changeset version        # consumes the changesets; lands on 0.1.0 from 0.0.0
-npm run verify:pack          # attw + publint + the consumer TypeScript floor
+npx changeset                # describe the change
+npx changeset version        # consumes them: bumps the version and writes the changelog
+npm run preflight            # gate inputs, install lines, attw, publint, the TS floor
 npm -w packages/core publish # deliberate, from your machine
 ```
 
-**One thing must change in the same commit as the first publish.** README.md and
-`packages/core/README.md` both say the package is not on npm and give a
-`github:transport-io/transport-io` install line. That is true until it is not. Swap both to
-`npm install transport-io` when the name exists, and not before - an install line that
-points at a name nobody owns is how a reader ends up installing a stranger's package on this
-project's authority.
+`VERSION` in `packages/core/src/index.ts` must match the manifest after a version bump. A
+unit test enforces it.
+
+Both READMEs say `npm install transport-io`. `check-install-line.ts` runs that command on
+every preflight and checks what actually lands, so the line cannot drift out of date.
+
+## `check-ts-floor.sh` - the published types, at the version we claim
+
+Packs the tarball, installs it into a temporary directory with `typescript@5.0.4`, and type
+checks a consumer probe against it under both `bundler` and `node16` resolution, with
+`types: []` and no `--skipLibCheck`. A negative probe asserts that a wrong event name is
+still rejected, so the gate fails if the checking stops happening.
+
+The isolation is the whole design. This check has been wrong twice: once with
+`--skipLibCheck`, which skips the file named on the command line and so could never fail,
+and once without it but running in the repository root, where it type checked the entire dev
+tree's ambient declarations under a five-year-old compiler and turned main red for three
+commits. See D91.
 
 ## `check-gate-inputs.ts` - the gates we do not own must have something to look at
 
