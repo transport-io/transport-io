@@ -844,7 +844,8 @@ and `emit-stream-multiplexing` (D32, carrying the cross-room cost and revisit tr
 ## Part 7 - Audit resolutions and final pre-implementation decisions
 
 The pre-implementation audit raised 54 findings; 49 were upheld. Full detail in
-`AUDIT.md`. The decisions below resolve them.
+`AUDIT.md`, which is a historical record rather than a live tracker: every finding in it was
+resolved, and the decisions below are where the resolutions live.
 
 ### D52. Event identity is a name hash, not a position
 An event's wire identifier is the **first four bytes of SHA-256 of its name**, big-endian,

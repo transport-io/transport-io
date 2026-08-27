@@ -1,5 +1,20 @@
 # Pre-implementation audit
 
+> **Historical record. Nothing here is outstanding.**
+>
+> This was an adversarial pass over the design in 2026-08, before any code existed. Every
+> finding was resolved, and the resolutions live in `DECISIONS.md` as numbered entries from
+> D52 onward, not here. This file is kept because the reasoning is worth reading and because
+> a project that deletes its own audit has deleted the evidence.
+>
+> The section headed "Blocking" below means blocking *at the time*. All six were fixed
+> before implementation began. B6 in particular became D13, and the lesson in it (a
+> threshold expressed as a proportion of an unmeasured baseline certifies the very defect it
+> exists to catch) went on to recur twice more in different forms, recorded as D76 and D85.
+>
+> For the current state of the project, read `DECISIONS.md`, `PROTOCOL.md` and `README.md`.
+> Do not read this file as a to-do list.
+
 Adversarial pass over 42 decisions and 13 documents, before any code exists.
 **54 findings raised, 49 upheld, 5 rejected.** Four passes: internal contradictions,
 decisions resting on corrected evidence, superseded but not withdrawn, and normative prose
@@ -10,7 +25,7 @@ findings were recomputed rather than accepted.
 
 ---
 
-## Blocking (6)
+## Blocking at the time (6, all resolved before implementation)
 
 ### B1. `numeric-event-ids` - the most consequential wire decision has no decision record
 PROTOCOL.md §5.4 identifies events on the wire by 1-based positional index into the
