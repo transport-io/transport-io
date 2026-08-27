@@ -89,9 +89,14 @@ second that is about 209 MB an hour. It is not this library's leak - the same co
 in-memory transport costs 0.045 KB per call, and the binding leaks the same amount with
 none of this library's code present - but it is what you get if you deploy this today.
 
-It is reported upstream. An alternative transport measures flat on the same benchmark and
-is wired up behind an internal seam, but it cannot shut a server down gracefully and does
-not deliver call cancellation to the responder, so it is not the default yet.
+**It is not tracked upstream.** An issue describing it was opened against the binding and
+then withdrawn before any maintainer replied, so nobody upstream has seen this. Do not plan
+around a fix arriving. The measurement is ours and is reproducible from
+`packages/core/src/bench/stream-churn.node.ts`; that is the whole of its provenance.
+
+An alternative transport measures flat on the same benchmark and is wired up behind an
+internal seam, but it cannot shut a server down gracefully and does not deliver call
+cancellation to the responder, so it is not the default yet.
 
 If your workload is mostly `emit` and datagrams, this does not affect you: both are flat,
 and you can check that yourself rather than taking it on trust - `npm run soak:lanes` runs
