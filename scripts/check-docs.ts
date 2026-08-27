@@ -25,6 +25,8 @@ import {
   DATAGRAM_CONSERVATIVE_FLOOR,
   DATAGRAM_CONSERVATIVE_PAYLOAD_MAX,
   DATAGRAM_HEADER_BYTES,
+  DATAGRAM_QUEUE_MAX,
+  EMIT_QUEUE_MAX,
   FrameType,
   HANDSHAKE_DEADLINE_MS,
   HOST_ORDINAL_QUARANTINE_MS,
@@ -33,6 +35,7 @@ import {
   ResetCode,
   SEQUENCE_STATE_RETENTION_MS,
   STREAM_FRAME_OVERHEAD_BYTES,
+  STREAM_INITIAL_CREDIT,
 } from '../packages/core/src/protocol.ts'
 
 const OUT = '.docs-check'
@@ -92,6 +95,13 @@ const MAX_IGNORED_BLOCKS = 1
  */
 const MIN_BLOCKS = 15
 const MIN_CONSTANT_ROWS = 3
+
+/**
+ * Numbers with units that must appear in a PROTOCOL.md table for the sweep below to be
+ * looking at anything. Four is the count today; a parser that stopped matching would
+ * otherwise report a clean sweep over nothing.
+ */
+const MIN_TABLE_CONSTANTS = 4
 
 rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
@@ -246,6 +256,84 @@ for (const [name, rows] of [
     )
   }
 }
+
+/**
+ * Every number-with-a-unit in a PROTOCOL.md table must be pinned to the constant it means.
+ *
+ * The checks above are an allowlist: each hunts one constant with its own regex, so the
+ * gate's coverage is exactly the set somebody remembered to add. `16 frames high-water` sat
+ * in the §9 table for the life of this project, matched no exported constant, and was never
+ * checked - because nothing asked the opposite question. Not "is this constant documented"
+ * but "is this documented number real". A gate whose scope is what it already knows cannot
+ * report what it does not know about, which is the green-on-empty shape again.
+ *
+ * Membership in the set of exported values is not enough, and the first draft of this proved
+ * it: `16 frames` passed, because 16 is `STREAM_CREDIT_REFILL` and the row is about
+ * something else entirely. So each number is pinned to the constant it is supposed to be,
+ * and the coverage runs in both directions:
+ *
+ *   - every number-with-a-unit in a table must be claimed by an expectation below, so a new
+ *     normative number cannot appear unchecked;
+ *   - every expectation must match exactly one line, so a renamed or deleted row makes the
+ *     gate fail loudly instead of quietly checking nothing.
+ */
+interface TableConstant {
+  readonly row: RegExp
+  readonly expect: number
+  readonly name: string
+}
+const TABLE_CONSTANTS: readonly TableConstant[] = [
+  { row: /Datagram, per peer/, expect: DATAGRAM_QUEUE_MAX, name: 'DATAGRAM_QUEUE_MAX' },
+  { row: /Emit, per peer/, expect: EMIT_QUEUE_MAX, name: 'EMIT_QUEUE_MAX' },
+  { row: /^\|\s*Call stream/, expect: STREAM_INITIAL_CREDIT, name: 'STREAM_INITIAL_CREDIT' },
+  { row: /WT_HANDSHAKE_TIMEOUT/, expect: HANDSHAKE_DEADLINE_MS, name: 'HANDSHAKE_DEADLINE_MS' },
+  { row: /WT_PEER_TOO_SLOW/, expect: EMIT_QUEUE_MAX, name: 'EMIT_QUEUE_MAX' },
+]
+
+const withoutFences = proto.replace(/```[\s\S]*?```/g, '')
+const UNITS = /(?<![\w.])(\d[\d,]*)\s*(frames?|bytes?|ms|seconds?|KiB|MiB|streams?)\b/g
+const fired = new Set<TableConstant>()
+let tableConstants = 0
+
+for (const [n, line] of withoutFences.split('\n').entries()) {
+  if (!line.trim().startsWith('|')) continue
+  if (/^\s*\|[\s\-:|]+\|\s*$/.test(line)) continue
+  for (const m of line.matchAll(UNITS)) {
+    tableConstants++
+    const value = Number((m[1] ?? '').replace(/,/g, ''))
+    const pin = TABLE_CONSTANTS.find((c) => c.row.test(line.trim()))
+    if (pin === undefined) {
+      fail(
+        `PROTOCOL.md:${n + 1} states "${m[0]}" in a table and no check claims it.\n` +
+          `         ${line.trim().slice(0, 92)}\n` +
+          '         Add it to TABLE_CONSTANTS in check-docs.ts, pinned to the constant it means.',
+      )
+      continue
+    }
+    fired.add(pin)
+    if (value !== pin.expect) {
+      fail(
+        `PROTOCOL.md:${n + 1} states "${m[0]}" where ${pin.name} is ${pin.expect}.\n` +
+          `         ${line.trim().slice(0, 92)}`,
+      )
+    }
+  }
+}
+for (const c of TABLE_CONSTANTS) {
+  if (!fired.has(c)) {
+    fail(
+      `no PROTOCOL.md table row matched ${c.row} for ${c.name}. ` +
+        'The row was renamed or removed and this check silently stopped checking it.',
+    )
+  }
+}
+if (tableConstants < MIN_TABLE_CONSTANTS) {
+  fail(
+    `only ${tableConstants} table constant(s) swept, expected at least ${MIN_TABLE_CONSTANTS}. ` +
+      'A sweep that matches nothing agrees with everything.',
+  )
+}
+console.log(`protocol: ${tableConstants} table constant(s), each pinned to a named constant`)
 
 compare('reset code', resetCodes, ResetCode)
 compare('close code', closeCodes, CloseCode)
