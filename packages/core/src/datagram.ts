@@ -123,6 +123,11 @@ export class SequenceGate {
   }
 
   /** A receiver discards (origin, event) state after this idle, so origins can be reused. */
+  /** Forget every origin. A disposed session has no business suppressing anyone's dupes. */
+  clear(): void {
+    this.#seen.clear()
+  }
+
   sweep(now: number, retentionMs: number): void {
     for (const [key, v] of this.#seen) {
       if (now - v.at >= retentionMs) this.#seen.delete(key)

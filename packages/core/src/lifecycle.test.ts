@@ -23,6 +23,8 @@ import { loopbackPair } from './transport/loopback.ts'
 
 const contract = defineContract({
   chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  ask: { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number }>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 
@@ -205,5 +207,102 @@ describe('closing twice is not two closes', () => {
     // disconnecting while the server tears the same session down is ordinary, so this fired
     // routinely under the soak - a protocol-level complaint we generated and ignored.
     expect(closes).toBe(1)
+  })
+})
+
+/**
+ * Everything a session owns, released in one place.
+ *
+ * `dispose()` has now been incomplete twice, and both times the missing item was invisible
+ * because no test enumerated the set. The first left a `setInterval` alive, holding the
+ * whole object graph through its callback. The second left a streaming responder parked for
+ * credit, holding one of 256 stream slots and whatever its handler had open, with nothing
+ * left that could ever wake it.
+ *
+ * Two defects, one shape: a partial teardown that looks complete because the parts nobody
+ * listed are the parts nobody checked. So this test is the list. Anything a session starts
+ * to own belongs here, and the test fails until it is released.
+ */
+describe('disposal releases everything a session owns', () => {
+  test('the interval, the handlers, the writer, the queues, the peer state and the work in flight', async () => {
+    const table = await buildEventTable(contract)
+    const [serverSide, clientSide] = loopbackPair()
+
+    let handlerCalls = 0
+    let generatorClosed = false
+    let live = 0
+
+    const realSet = globalThis.setInterval
+    const realClear = globalThis.clearInterval
+    const handles = new Set<unknown>()
+    globalThis.setInterval = ((fn: () => void, ms: number) => {
+      const h = realSet(fn, ms)
+      handles.add(h)
+      return h
+    }) as typeof globalThis.setInterval
+    globalThis.clearInterval = ((h: never) => {
+      handles.delete(h)
+      realClear(h)
+    }) as typeof globalThis.clearInterval
+
+    let session: Session
+    try {
+      session = new Session(serverSide, { table, origin: 0x1000_0001 })
+      const peer = new Session(clientSide, { table, origin: 0x1000_0002 })
+      await Promise.all([session.start(), peer.start()])
+
+      session.on('chat', () => {
+        handlerCalls++
+      })
+      session.handle('ask', async function* () {
+        try {
+          for (;;) yield 'token'
+        } finally {
+          generatorClosed = true
+        }
+      })
+
+      // Work in flight: a stream whose consumer takes one element and then stops asking,
+      // so the responder spends its window and parks.
+      const it = peer.stream('ask', { prompt: 'x' })[Symbol.asyncIterator]()
+      await it.next()
+      // Peer state accumulates on the unreliable lane only: an outbound sequence counter
+      // per origin sent to, and duplicate suppression per origin heard from.
+      session.emit('cursor', { x: 1 })
+      peer.emit('cursor', { x: 2 })
+      await new Promise((r) => setTimeout(r, 60))
+
+      expect(session.retainedPeerState).toBeGreaterThan(0)
+      expect(generatorClosed).toBe(false)
+      live = handles.size
+      expect(live).toBeGreaterThan(0)
+
+      session.dispose()
+      await new Promise((r) => setTimeout(r, 60))
+
+      // 1. the sweep interval. One remains: the peer session's own, which is not the
+      // subject here and is still running. Two sessions started, one was disposed.
+      expect(live).toBe(2)
+      expect(handles.size).toBe(1)
+      // 2. event handlers
+      session.emit('chat', { body: 'ignored' })
+      expect(handlerCalls).toBe(0)
+      // 3. call and stream handlers
+      expect(session.handlerCount).toBe(0)
+      // 4. responses in flight, and the generators behind them
+      expect(generatorClosed).toBe(true)
+      // 5. the emit writer
+      expect(session.hasWriter).toBe(false)
+      // 6. queued frames on both lanes
+      expect(session.emitQueueDepth).toBe(0)
+      expect(session.stats().queueDepth).toBe(0)
+      // 7. per-peer duplicate-suppression and sequence state
+      expect(session.retainedPeerState).toBe(0)
+      // 8. disposal is observable, so a caller can tell
+      expect(session.disposed).toBe(true)
+    } finally {
+      globalThis.setInterval = realSet
+      globalThis.clearInterval = realClear
+    }
   })
 })

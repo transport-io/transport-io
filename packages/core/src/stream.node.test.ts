@@ -187,12 +187,18 @@ test('credit bounds how far the producer runs ahead of a slow consumer', async (
     if (state.consumed >= 20) break
   }
 
-  // Before the credit window this was 83,461 for 16-byte elements against a consumer that
-  // had taken 20, and it grew linearly with the run, because the binding's `writer.ready`
-  // resolves unconditionally and the language was holding nothing back (D93).
+  // THIS is the gate for the credit scheme, and it is here rather than over the loopback
+  // transport deliberately: the loopback applies backpressure of its own, so the same
+  // assertion there passes with the credit window widened to ten million. It only fails
+  // where the lie is, which is the binding whose `writer.ready` resolves unconditionally.
+  // Verified in that direction: widen the window and this test, alone, goes red.
+  //
+  // Absolute, not `STREAM_INITIAL_CREDIT + 1`: a ceiling expressed in terms of the constant
+  // under test cannot fail when that constant moves (D13).
+  assert.equal(STREAM_INITIAL_CREDIT, 32, 'the window moved; update the ceiling deliberately')
   assert.ok(
-    state.peakAhead <= STREAM_INITIAL_CREDIT + 1,
-    `producer ran ${state.peakAhead} ahead, window is ${STREAM_INITIAL_CREDIT}`,
+    state.peakAhead <= 33,
+    `producer ran ${state.peakAhead} ahead of a consumer that took 20; the window is 32`,
   )
   assert.ok(state.produced < 200, `produced ${state.produced} for 20 consumed`)
   client.disconnect()

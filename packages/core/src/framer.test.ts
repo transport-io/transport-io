@@ -71,7 +71,11 @@ describe('wire layout', () => {
   test('Length counts the bytes after itself, never itself', () => {
     const bytes = encodeFrame(emit(new Uint8Array(5)))
     const declared = new DataView(bytes.buffer).getUint32(0, false)
-    expect(declared).toBe(STREAM_HEADER_BYTES + 5)
+    // 13, not `STREAM_HEADER_BYTES + 5`. The encoder computes the length from that same
+    // constant, so writing the expectation in terms of it asserts that the encoder agrees
+    // with itself - true for any header size, including a wrong one. The wire says 8 + 5.
+    expect(STREAM_HEADER_BYTES).toBe(8)
+    expect(declared).toBe(13)
     expect(bytes.byteLength).toBe(4 + declared)
   })
 })

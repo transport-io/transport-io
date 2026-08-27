@@ -20,6 +20,8 @@
    stream-initiator-must-send-credit
    stream-isolated-per-stream
    streaming-initiator-does-not-fin
+   stream-zero-credit-parks
+   stream-parked-producer-released-on-close
  */
 import { describe, expect, test } from 'bun:test'
 import { Client } from './client.ts'
@@ -295,7 +297,16 @@ describe('cancelling from outside the loop', () => {
 })
 
 describe('backpressure is bounded by something we count', () => {
-  test('a slow consumer holds the producer to the credit window', async () => {
+  /**
+   * This one proves the mechanism runs, NOT the bound.
+   *
+   * Measured: with the credit window widened past anything a run can spend, this test still
+   * passes, because the loopback transport applies backpressure of its own. A gate that is
+   * green whether or not the thing it gates exists is not a gate. The bound is proved in
+   * `stream.node.test.ts`, over the transport whose `writer.ready` is the reason any of this
+   * exists.
+   */
+  test('the producer parks at the window and resumes when the consumer takes more', async () => {
     const server = createServer<AppMap>({ contract })
     await server.listen()
     const [serverSide, clientSide] = loopbackPair()
@@ -319,10 +330,12 @@ describe('backpressure is bounded by something we count', () => {
       if (consumed >= 12) break
     }
 
-    // Not `writer.ready`, which resolves unconditionally on the reference binding and let
-    // a producer run 136,523 frames ahead of a consumer that had taken 40. The bound is
-    // the credit window, which is a quantity this library counts (D77, D93).
-    expect(peakAhead).toBeLessThanOrEqual(STREAM_INITIAL_CREDIT + 1)
+    // Absolute, not `STREAM_INITIAL_CREDIT + 1`. A ceiling written in terms of the constant
+    // it is testing cannot fail when that constant moves - widen the window and the
+    // assertion widens with it. That is D13's rule, and this file broke it on the first
+    // draft: with the window at ten million, `<= STREAM_INITIAL_CREDIT + 1` passed.
+    expect(STREAM_INITIAL_CREDIT).toBe(32)
+    expect(peakAhead).toBeLessThanOrEqual(33)
     expect(produced).toBeLessThan(200)
   })
 
@@ -389,6 +402,67 @@ describe('the initiator keeps its send side open', () => {
     await until(() => cleanedUp)
     expect(cleanedUp).toBe(true)
     // At most the initial window, never the unbounded run a missing credit check allows.
-    expect(produced).toBeLessThanOrEqual(STREAM_INITIAL_CREDIT + 1)
+    expect(produced).toBeLessThanOrEqual(33)
+  })
+})
+
+describe('a producer with no credit', () => {
+  test('parks indefinitely rather than dropping, timing out, or racing ahead', async () => {
+    const server = createServer<AppMap>({ contract })
+    await server.listen()
+    const [serverSide, clientSide] = loopbackPair()
+    const client = new Client<AppMap>({ contract, connect: async () => clientSide })
+
+    let produced = 0
+    server.handle('ask', async function* () {
+      for (;;) {
+        produced++
+        yield 'token'
+      }
+    })
+    await Promise.all([server.accept(serverSide), client.connect()])
+
+    // One element, then stop asking. The consumer is slow, not gone, and there is no way
+    // for the responder to tell those apart - which is the point: it waits.
+    const it = client.stream('ask', { prompt: 'x' })[Symbol.asyncIterator]()
+    await it.next()
+    await new Promise((r) => setTimeout(r, 150))
+    const parked = produced
+    await new Promise((r) => setTimeout(r, 250))
+
+    expect(STREAM_INITIAL_CREDIT).toBe(32)
+    expect(parked).toBeLessThanOrEqual(33)
+    // Still parked a quarter of a second later. No timeout fires, nothing is dropped.
+    expect(produced).toBe(parked)
+    await it.return?.(undefined)
+  })
+
+  test('is released when the session closes, so it cannot outlive its peer', async () => {
+    const server = createServer<AppMap>({ contract })
+    await server.listen()
+    const [serverSide, clientSide] = loopbackPair()
+    const client = new Client<AppMap>({ contract, connect: async () => clientSide })
+
+    let cleanedUp = false
+    server.handle('ask', async function* () {
+      try {
+        for (;;) yield 'token'
+      } finally {
+        cleanedUp = true
+      }
+    })
+    await Promise.all([server.accept(serverSide), client.connect()])
+
+    const it = client.stream('ask', { prompt: 'x' })[Symbol.asyncIterator]()
+    await it.next()
+    await new Promise((r) => setTimeout(r, 150))
+    expect(cleanedUp).toBe(false) // parked, waiting for credit that will never come
+
+    // The peer goes away without breaking the loop. Nothing in the credit scheme can
+    // detect that, so session liveness has to, or the generator waits for ever holding one
+    // of 256 stream slots.
+    client.disconnect()
+    await until(() => cleanedUp)
+    expect(cleanedUp).toBe(true)
   })
 })

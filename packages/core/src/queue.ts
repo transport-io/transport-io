@@ -49,6 +49,11 @@ export class DatagramQueue<T> {
     this.#items.push({ item, at: now })
   }
 
+  /** Drop everything, for a session that is going away with frames still queued. */
+  clear(): void {
+    this.#items.length = 0
+  }
+
   /** Drains what is still fresh. Anything past its TTL is discarded here, not on entry. */
   drain(now: number): T[] {
     const out: T[] = []
@@ -109,5 +114,10 @@ export class EmitQueue<T> {
 
   get depth(): number {
     return this.#items.length
+  }
+
+  /** Drop everything, for a session that is going away with frames still queued. */
+  clear(): void {
+    this.#items.length = 0
   }
 }

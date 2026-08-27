@@ -131,6 +131,14 @@ export class Session {
   readonly #sequences = new Map<number, number>()
   readonly #controlHandlers = new Set<(type: number, body: unknown) => void>()
   readonly #callHandlers = new Map<string, CallHandler | StreamHandler>()
+  /**
+   * Every inbound call or stream currently being served. A streaming responder parked for
+   * credit is waiting on a peer that may never come back, and nothing in the credit scheme
+   * can tell "slow" from "gone" - that is what session liveness is for. Without this, a
+   * parked generator outlives its session, holding a stream slot and whatever the handler
+   * had open. Measured: it did.
+   */
+  readonly #inflight = new Set<AbortController>()
   #openCalls = 0
   #inboundCalls = 0
 
@@ -474,7 +482,13 @@ export class Session {
       return
     }
     this.#inboundCalls++
-    void this.#serveCall(stream).finally(() => {
+    // Owned here rather than inside `#serveCall` so that its removal has exactly one home.
+    // `#serveCall` returns from eight places, and a set entry leaked from any of them is a
+    // controller that never gets collected.
+    const controller = new AbortController()
+    this.#inflight.add(controller)
+    void this.#serveCall(stream, controller).finally(() => {
+      this.#inflight.delete(controller)
       this.#inboundCalls--
     })
   }
@@ -488,8 +502,17 @@ export class Session {
     this.sendEncodedFrame(encodeFrame(frame))
   }
 
-  /** Forward an already-encoded frame. The hub encodes once and fans the same bytes out. */
+  /**
+   * Forward an already-encoded frame. The hub encodes once and fans the same bytes out.
+   *
+   * A disposed session drops rather than queueing. Queueing was the old behaviour and it
+   * was a quiet lie in two directions: the frame is retained by a queue that will never
+   * drain, and the caller is told nothing while believing it sent something. Dropping
+   * rather than throwing because the hub fans out to every peer in a room and one that died
+   * mid-broadcast is routine, not an error for the other twenty.
+   */
   sendEncodedFrame(bytes: Uint8Array): void {
+    if (this.#disposed) return
     try {
       this.#emitQueue.push(bytes)
     } catch (e) {
@@ -503,6 +526,7 @@ export class Session {
   }
 
   sendDatagramBytes(bytes: Uint8Array): void {
+    if (this.#disposed) return
     this.#dgQueue.push(bytes, this.#now())
     this.#flushDatagrams()
   }
@@ -546,6 +570,16 @@ export class Session {
   dispose(): void {
     if (this.#disposed) return
     this.#disposed = true
+    for (const c of this.#inflight) c.abort()
+    this.#inflight.clear()
+    // Queued frames on both lanes. Bounded, so this is not unbounded growth, but 256 emit
+    // frames and 64 datagrams are retained references to payloads the peer will never see.
+    this.#emitQueue.clear()
+    this.#dgQueue.clear()
+    // Per-peer state: duplicate suppression for everyone heard from, and an outbound
+    // sequence counter for everyone sent to. Both grow with peer count.
+    this.#gate.clear()
+    this.#sequences.clear()
     if (this.#sweepTimer !== undefined) clearInterval(this.#sweepTimer)
     this.#sweepTimer = undefined
     this.#handlers.clear()
@@ -724,10 +758,9 @@ export class Session {
     }
   }
 
-  async #serveCall(stream: BidiStream): Promise<void> {
+  async #serveCall(stream: BidiStream, controller: AbortController): Promise<void> {
     const reader = stream.readable.getReader()
     const writer = stream.writable.getWriter()
-    const controller = new AbortController()
     const decoder = new FrameDecoder()
     let request: Frame | undefined
 
@@ -1050,6 +1083,29 @@ export class Session {
   }
 
   /** Frames written to the contract but not yet accepted by the transport. */
+  /**
+   * Per-peer state a session accumulates and must not keep after it ends: duplicate
+   * suppression for every origin it has heard from, and the outbound sequence counter for
+   * every origin it has sent to. Both grow with the number of peers, so both are things a
+   * disposed session has no business still holding.
+   *
+   * Exposed for the disposal test. `Session` is internal - `index.ts` exports its stats
+   * type and nothing else - so this is not public surface.
+   */
+  get retainedPeerState(): number {
+    return this.#gate.tracked + this.#sequences.size
+  }
+
+  /** Registered callbacks of every kind. Zero after disposal, or something still routes. */
+  get handlerCount(): number {
+    return this.#handlers.size + this.#callHandlers.size + this.#controlHandlers.size
+  }
+
+  /** The emit stream's writer, which retains the transport's send side. */
+  get hasWriter(): boolean {
+    return this.#writer !== undefined
+  }
+
   get emitQueueDepth(): number {
     return this.#emitQueue.depth
   }

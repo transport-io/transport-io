@@ -87,6 +87,13 @@ describe('the ring drops OLDEST under a burst', () => {
     const burst = DATAGRAM_QUEUE_MAX + 40
     for (let n = 1; n <= burst; n++) r.client.emit('cursor', { n })
 
+    // The cap, absolutely. Every other number here is derived from `DATAGRAM_QUEUE_MAX`,
+    // including the burst, so raising the constant raises the expectations with it and this
+    // test stays green for any value - which is the pattern that let a credit window of ten
+    // million satisfy `<= STREAM_INITIAL_CREDIT + 1`. One absolute assertion fixes it: the
+    // documented cap is 64, and changing it fails here first, deliberately.
+    expect(DATAGRAM_QUEUE_MAX).toBe(64)
+
     const before = r.client.stats()
     expect(before?.overflowDropped).toBe(40)
     expect(before?.queueDepth).toBe(DATAGRAM_QUEUE_MAX)
