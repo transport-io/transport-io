@@ -2143,3 +2143,42 @@ the time and are not rewritten.
 
 **Reconsider when:** never, absent a third lane. If one arrives, it is named for what it
 promises.
+
+### D93. `stream()` ships, and the backpressure it claimed had to be built
+An async iterable on the client, an async generator on the server. The shape and its three
+reasons are ADR 0012; this entry records what the implementation changed about the design.
+
+**The design claim was false and the measurement caught it.** `stream()` was justified partly
+on the grounds that flow control falls out of the language: a generator does not resume until
+its frame is accepted, so nothing accumulates. Measured against the reference binding, a
+producer ran **136,523 frames and roughly 53 MB** ahead of a consumer that had taken 40, and
+the gap grew linearly with the run at every element size tried. `writer.ready` resolves
+unconditionally there, so awaiting it applies no backpressure at all.
+
+That is D77 exactly: a bound is only a bound if something stays in the bounded thing, and
+nothing was staying anywhere. Shipping it as designed would have documented a guarantee the
+transport does not provide, which is the same defect class as the four unimplemented promises
+in D69, arriving through a different door.
+
+So the accounting is ours. `CALL_CREDIT`, PROTOCOL.md §6.6: 32 frames of initial credit,
+spent one per response frame, refilled in batches of 16 by the consumer as it takes elements.
+The same measurement with the window is **33 frames, flat**, unchanged when the run doubles.
+The number in the ADR is the measured one, not the target.
+
+**Two things the implementation found that no amount of design would have.**
+
+`writer.abort()` cannot interrupt a producer parked inside `writer.write()`. Per the streams
+contract the abort queues behind the write already in flight, so a generator blocked writing
+to a consumer that has stopped reading stays blocked for ever and its `finally` never runs.
+The write is now raced against the abort signal. Found by the cancellation test hanging, not
+by reading the code.
+
+A streaming initiator cannot half-close after its request, because its send side carries the
+credit. FIN from one therefore means "no more credit is coming", and the responder treats it
+as cancellation rather than stalling once its window is spent. Without that rule a
+`returns`-shaped peer calling a `yields` event holds a generator and a stream slot open until
+the session dies.
+
+**Reconsider when:** a transport with honest flow control becomes the default. The window
+stays regardless - a responder is entitled to stop at zero and cannot know which transport it
+is talking to - but its size becomes a tuning question rather than the only defence.

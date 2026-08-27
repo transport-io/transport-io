@@ -5,10 +5,16 @@
  * scope, so importing this on a server - which Next.js will do - is safe. Feature
  * detection happens inside connect().
  */
-import { type AnyMap, buildEventTable, type CallableOf, type Contract } from './contract.ts'
+import {
+  type AnyMap,
+  buildEventTable,
+  type CallableOf,
+  type Contract,
+  type StreamableOf,
+} from './contract.ts'
 import { TransportError } from './errors.ts'
 import { CloseCode, FrameType } from './protocol.ts'
-import { Session, type SessionStats } from './session.ts'
+import { Session, type SessionStats, type StreamResult } from './session.ts'
 import type { Connection } from './transport/types.ts'
 
 export type Status = 'idle' | 'connecting' | 'connected' | 'closing' | 'closed'
@@ -126,6 +132,21 @@ export class Client<M extends AnyMap = AnyMap> {
     options?: { readonly signal?: AbortSignal },
   ): Promise<M[K]['returns']> {
     return (await this.#requireSession().call(event, payload, options)) as M[K]['returns']
+  }
+
+  /**
+   * Available only on events declaring `yields`. Iterate it, or `.collect()` the whole
+   * sequence. Leaving the loop with `break` resets the QUIC stream, which is what reaches
+   * the responder's `ctx.signal`; there is no separate cancel call and none is needed.
+   */
+  stream<K extends StreamableOf<M> & string>(
+    event: K,
+    payload: M[K]['payload'],
+    options?: { readonly signal?: AbortSignal },
+  ): StreamResult<M[K]['yields']> {
+    return this.#requireSession().stream(event, payload, options) as StreamResult<
+      M[K]['yields']
+    >
   }
 
   stats(): SessionStats | undefined {

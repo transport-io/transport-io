@@ -128,6 +128,40 @@ export async function run(url: string): Promise<number> {
 }
 ```
 
+An event can answer with a **sequence** instead of a value. Declare `yields` instead of
+`returns`, write an async generator, consume an async iterable:
+
+```ts standalone
+import { Client, createServer, defineContract, type MapOf, type$ } from 'transport-io'
+
+export const gen = defineContract({
+  ask: { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
+})
+export interface GenMap extends MapOf<typeof gen> {}
+
+export async function serve(model: (p: string) => AsyncIterable<string>): Promise<void> {
+  const server = createServer<GenMap>({ contract: gen })
+  await server.listen()
+  server.handle('ask', async function* ({ prompt }) {
+    for await (const token of model(prompt)) yield token
+  })
+}
+
+export async function render(client: Client<GenMap>, prompt: string): Promise<string[]> {
+  const out: string[] = []
+  for await (const token of client.stream('ask', { prompt })) {
+    out.push(token)
+    if (out.length === 20) break // resets the stream, and the handler's `finally` runs
+  }
+  return out
+}
+```
+
+`break` is the cancel: leaving the loop resets the QUIC stream, which fires the handler's
+`ctx.signal`. There is no cancel method because there is nothing for one to do. The
+generator does not resume until its frame is accepted, and the producer may be at most 32
+frames ahead of what the consumer has taken.
+
 A wrong event name or payload fails to compile, and the error names the event rather than
 unrolling the contract type.
 

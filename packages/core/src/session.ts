@@ -18,6 +18,8 @@ import {
   MAX_CONCURRENT_CALL_STREAMS,
   ResetCode,
   SEQUENCE_STATE_RETENTION_MS,
+  STREAM_CREDIT_REFILL,
+  STREAM_INITIAL_CREDIT,
 } from './protocol.ts'
 import { DatagramQueue, EmitQueue, PeerTooSlowError, type QueueStats } from './queue.ts'
 import type { BidiStream, Connection } from './transport/types.ts'
@@ -31,6 +33,21 @@ export type CallHandler = (
   payload: unknown,
   ctx: { readonly signal: AbortSignal },
 ) => Promise<unknown>
+
+/**
+ * A responder for an event declaring `yields`. The generator shape is the design: the loop
+ * cannot advance until the body returns and `yield` does not resume until the write is
+ * accepted, so flow control is the language's rather than a queue we would have to bound.
+ */
+export type StreamHandler = (
+  payload: unknown,
+  ctx: { readonly signal: AbortSignal },
+) => AsyncIterable<unknown>
+
+/** What `stream()` returns: iterate it, or take the whole sequence with `collect()`. */
+export interface StreamResult<T> extends AsyncIterable<T> {
+  collect(): Promise<T[]>
+}
 
 export interface SessionOptions {
   readonly table: EventTable
@@ -113,7 +130,7 @@ export class Session {
   readonly #emitQueue = new EmitQueue<Uint8Array>()
   readonly #sequences = new Map<number, number>()
   readonly #controlHandlers = new Set<(type: number, body: unknown) => void>()
-  readonly #callHandlers = new Map<string, CallHandler>()
+  readonly #callHandlers = new Map<string, CallHandler | StreamHandler>()
   #openCalls = 0
   #inboundCalls = 0
 
@@ -274,7 +291,7 @@ export class Session {
   }
 
   /** Register a responder. Only events declaring `returns` are callable. */
-  handle(event: string, handler: CallHandler): () => void {
+  handle(event: string, handler: CallHandler | StreamHandler): () => void {
     // D1 at the registration point, which is the one that actually turns a droppable
     // message into an acknowledged one. Guarding `call()` alone would leave a responder
     // happily answering over a bidirectional stream for an event whose contract says the
@@ -342,6 +359,13 @@ export class Session {
     // reached the wire without the types - and it names the actual problem instead of
     // travelling to the responder to come back as "no handler registered", which is a
     // different fault with a different remedy.
+    if (entry.def.yields !== undefined) {
+      throw new TransportError(
+        'WT_PROTOCOL_ERROR',
+        `'${event}' declares \`yields\`, so its response is a sequence`,
+        'Use stream(), or stream(...).collect() if you want the whole sequence as one value.',
+      )
+    }
     if (entry.lane === 'reliable' && entry.def.returns === undefined) {
       throw new TransportError(
         'WT_UNKNOWN_EVENT',
@@ -378,6 +402,54 @@ export class Session {
     } finally {
       this.#openCalls--
     }
+  }
+
+  /**
+   * The streaming form of `call()`, on the same wire shape: one bidirectional stream, one
+   * CALL_REQUEST, then a sequence of CALL_RESPONSE frames terminated by stream close.
+   * PROTOCOL.md §6.3 always required receivers to accept a sequence, so this adds no frame
+   * type and breaks no version 0 peer.
+   *
+   * Every guard `call()` applies is applied here, synchronously, before any stream is
+   * opened. A method returning an iterable cannot report a bad event name by rejecting a
+   * promise the caller has not awaited yet.
+   */
+  stream(
+    event: string,
+    payload: unknown,
+    opts?: { readonly signal?: AbortSignal },
+  ): StreamResult<unknown> {
+    const entry = this.#table.byName(event)
+    if (entry === undefined) {
+      throw new TransportError(
+        'WT_UNKNOWN_EVENT',
+        `'${event}' is not in the contract`,
+        'Add it to the contract, or check the spelling.',
+      )
+    }
+    if (this.#disposed) {
+      throw new TransportError(
+        'WT_SESSION_CLOSED',
+        'the session is closed, so no call stream can be opened on it',
+        'Reconnect. A reconnect is a new session and does not restore room membership (D4).',
+      )
+    }
+    if (opts?.signal?.aborted === true) throw abortToTransportError(opts.signal.reason)
+    if (entry.def.yields === undefined) {
+      throw new TransportError(
+        'WT_UNKNOWN_EVENT',
+        `'${event}' declares no \`yields\`, so it answers with one value and not a sequence`,
+        'Use call(), or add `yields` to the event in the contract.',
+      )
+    }
+    if (this.#openCalls >= MAX_CONCURRENT_CALL_STREAMS) {
+      throw new TransportError(
+        'WT_TOO_MANY_STREAMS',
+        `${this.#openCalls} call streams are already open on this session`,
+        `Reduce concurrency below ${MAX_CONCURRENT_CALL_STREAMS} and retry; the session stays open.`,
+      )
+    }
+    return this.#doStream(entry.id, encodePayload(payload), opts?.signal)
   }
 
   get openCalls(): number {
@@ -544,6 +616,114 @@ export class Session {
     }
   }
 
+  /**
+   * An async generator is the implementation as well as the API, because `return()` is
+   * what makes `break` mean "reset the stream". The consumer leaving the loop runs the
+   * `finally` below, which resets, which the responder sees as STOP_SENDING, which fires
+   * its `ctx.signal` and runs its own generator's `finally`. No cancellation message
+   * exists anywhere in the protocol and none is needed.
+   *
+   * Receive-side flow control is the absence of a read: `reader.read()` is only reached
+   * when the consumer asks for the next element, so an unconsumed stream stops reading,
+   * the receive window fills, and the producer's `writer.ready` stops resolving.
+   */
+  #doStream(eventId: number, body: Uint8Array, signal?: AbortSignal): StreamResult<unknown> {
+    const open = (): Promise<BidiStream> => this.#conn.openBidi()
+    const released = (): void => {
+      this.#openCalls--
+    }
+    this.#openCalls++
+
+    async function* run(): AsyncGenerator<unknown> {
+      const stream = await open()
+      const writer = stream.writable.getWriter()
+      const reader = stream.readable.getReader()
+      let ended = false
+      const reset = (): void => {
+        const e = new Error(`code:${ResetCode.WT_ABORTED}`)
+        void writer.abort(e).catch(() => undefined)
+        void reader.cancel(e).catch(() => undefined)
+      }
+      const onAbort = (): void => reset()
+      signal?.addEventListener('abort', onAbort, { once: true })
+
+      try {
+        await writer.write(
+          encodeFrame({
+            type: FrameType.CALL_REQUEST,
+            codec: Codec.JSON,
+            eventId,
+            payload: body,
+          }),
+        )
+        // No FIN here, unlike a call. The write side stays open for the life of the stream
+        // because it carries the credit the responder spends. §6.2.
+
+        let taken = 0
+        let acknowledged = 0
+        const payCredit = async (): Promise<void> => {
+          const owed = taken - acknowledged
+          if (owed < STREAM_CREDIT_REFILL) return
+          acknowledged = taken
+          await writer.write(
+            encodeFrame({
+              type: FrameType.CALL_CREDIT,
+              codec: Codec.JSON,
+              eventId: EVENT_ID_NOT_APPLICABLE,
+              payload: encodePayload({ credit: owed }),
+            }),
+          )
+        }
+
+        const decoder = new FrameDecoder()
+        for (;;) {
+          const { value, done } = await reader.read()
+          if (done) break
+          if (value === undefined) continue
+          for (const f of decoder.push(value)) {
+            if (f.type === FrameType.CALL_ERROR) {
+              const b = decodePayload(f.payload) as { code?: string; message?: string }
+              throw new TransportError(
+                (b.code ?? 'WT_HANDLER_ERROR') as TransportError['code'],
+                b.message ?? 'the responder returned an error',
+                "Elements yielded before the error were delivered. The code is the responder's.",
+              )
+            }
+            if (f.type !== FrameType.CALL_RESPONSE) continue
+            yield decodePayload(f.payload)
+            // Reached only when the consumer asks for the next element, which is what
+            // makes this an acknowledgement of consumption rather than of arrival.
+            taken++
+            await payCredit()
+          }
+        }
+        signal?.throwIfAborted()
+        ended = true
+        await writer.close()
+      } catch (e) {
+        // Same conversion `call()` makes. Aborting is the most-documented failure this
+        // library has and it must not arrive as a DOMException with no code and no remedy.
+        throw isAbort(e) || signal?.aborted === true ? abortToTransportError(e) : e
+      } finally {
+        signal?.removeEventListener('abort', onAbort)
+        // Not ended means the consumer broke, threw, or was aborted. Either way the
+        // responder is still producing and has to be told.
+        if (!ended) reset()
+        released()
+      }
+    }
+
+    const gen = run()
+    return {
+      [Symbol.asyncIterator]: () => gen,
+      async collect(): Promise<unknown[]> {
+        const out: unknown[] = []
+        for await (const v of gen) out.push(v)
+        return out
+      },
+    }
+  }
+
   async #serveCall(stream: BidiStream): Promise<void> {
     const reader = stream.readable.getReader()
     const writer = stream.writable.getWriter()
@@ -551,12 +731,22 @@ export class Session {
     const decoder = new FrameDecoder()
     let request: Frame | undefined
 
+    let streaming = false
     try {
       for (;;) {
         const { value, done } = await reader.read()
         if (done) break // the initiator half-closed: the request is complete
         if (value === undefined) continue
         for (const f of decoder.push(value)) if (request === undefined) request = f
+        // A streaming initiator never sends FIN: its write side carries credit for the
+        // life of the stream. Waiting for `done` here would hang for ever.
+        if (
+          request !== undefined &&
+          this.#table.byId(request.eventId)?.def.yields !== undefined
+        ) {
+          streaming = true
+          break
+        }
       }
     } catch {
       // A reset before the request completed is a cancellation, not a fault.
@@ -613,7 +803,27 @@ export class Session {
     try {
       let value = decodePayload(request.payload)
       if (this.#validateInbound) value = await validate(entry.def.payload, value)
-      const result = await handler(value, { signal: controller.signal })
+
+      if (entry.def.yields !== undefined) {
+        await this.#serveStream(
+          handler as StreamHandler,
+          value,
+          entry.name,
+          writer,
+          controller,
+          {
+            readNext: async () => {
+              const r = await reader.read()
+              return r.done ? undefined : (r.value as Uint8Array)
+            },
+            decoder,
+            streaming,
+          },
+        )
+        return
+      }
+
+      const result = await (handler as CallHandler)(value, { signal: controller.signal })
       await writer.write(
         encodeFrame({
           type: FrameType.CALL_RESPONSE,
@@ -626,6 +836,144 @@ export class Session {
     } catch (e) {
       const code = e instanceof TransportError ? e.code : 'WT_HANDLER_ERROR'
       await this.#failCall(writer, code, e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  /**
+   * One yielded element is one CALL_RESPONSE frame. No coalescing: batching would mean a
+   * buffer and a timer, which is the thing the generator shape exists to avoid. A caller
+   * who wants fewer, larger frames batches inside their own generator and pays the 12-byte
+   * frame overhead once per batch instead of once per element.
+   *
+   * `writer.ready` before every write is where the bound lives. If it resolves
+   * unconditionally the language is not holding anything back and this is a lie, which is
+   * why the number is measured rather than asserted (D77).
+   */
+  async #serveStream(
+    handler: StreamHandler,
+    payload: unknown,
+    name: string,
+    writer: WritableStreamDefaultWriter<Uint8Array>,
+    controller: AbortController,
+    inbound: {
+      // A closure rather than the reader itself: the Node and DOM spellings of
+      // `ReadableStreamDefaultReader` differ, and this only ever needs the next chunk.
+      readNext: () => Promise<Uint8Array | undefined>
+      decoder: FrameDecoder
+      streaming: boolean
+    },
+  ): Promise<void> {
+    const produced = handler(payload, { signal: controller.signal })
+    if (
+      produced === null ||
+      typeof produced !== 'object' ||
+      !(Symbol.asyncIterator in produced)
+    ) {
+      await this.#failCall(
+        writer,
+        'WT_HANDLER_ERROR',
+        `the handler for '${name}' declares \`yields\` but did not return an async iterable`,
+      )
+      return
+    }
+
+    // The window, and the loop that refills it. `writer.ready` is not load-bearing here:
+    // it resolves unconditionally on the reference binding, which is the whole reason this
+    // accounting exists (D93). It is still awaited, because a transport that does honour it
+    // should be allowed to.
+    let credit = STREAM_INITIAL_CREDIT
+    let wake: (() => void) | undefined
+    const nudge = (): void => {
+      wake?.()
+      wake = undefined
+    }
+    controller.signal.addEventListener('abort', nudge, { once: true })
+
+    /**
+     * Cancellation has to be able to interrupt a write, not only the credit wait.
+     *
+     * `writer.abort()` cannot do it: per the streams contract an abort request queues
+     * behind the write already in flight, so a producer parked in `writer.write()` for a
+     * consumer that has stopped reading stays parked, and its generator's `finally` never
+     * runs. Measured on the loopback transport, which is the honest one here. So the write
+     * is raced against the signal instead: the frame may still be in the transport's hands
+     * afterwards, which is fine, because the stream is being torn down either way.
+     */
+    let abortWaiter: (() => void) | undefined
+    const aborted = new Promise<never>((_, rej) => {
+      abortWaiter = (): void => rej(abortToTransportError(controller.signal.reason))
+      controller.signal.addEventListener('abort', abortWaiter, { once: true })
+    })
+    void aborted.catch(() => undefined)
+    if (inbound.streaming) {
+      void (async () => {
+        try {
+          for (;;) {
+            const chunk = await inbound.readNext()
+            if (chunk === undefined) break
+            for (const f of inbound.decoder.push(chunk)) {
+              if (f.type !== FrameType.CALL_CREDIT) continue
+              const b = decodePayload(f.payload) as { credit?: number }
+              if (typeof b.credit === 'number' && b.credit > 0) {
+                credit += b.credit
+                nudge()
+              }
+            }
+          }
+        } catch {
+          // The stream was reset. The write path sees it too and aborts the generator.
+        }
+        controller.abort()
+      })()
+    }
+
+    const it = produced[Symbol.asyncIterator]()
+    try {
+      for (;;) {
+        const next = await it.next()
+        if (next.done === true) break
+        if (controller.signal.aborted) break
+        // The initiator half-closed before we ever started: it is a `returns`-shaped peer,
+        // or one that has given up. Either way no credit is coming, and the alternative to
+        // stopping is holding a generator and a stream slot open until the session dies.
+        if (!inbound.streaming) {
+          controller.abort()
+          break
+        }
+        while (credit <= 0 && !controller.signal.aborted) {
+          await new Promise<void>((res) => {
+            wake = res
+          })
+        }
+        if (controller.signal.aborted) break
+        credit--
+        await writer.ready
+        await Promise.race([
+          writer.write(
+            encodeFrame({
+              type: FrameType.CALL_RESPONSE,
+              codec: Codec.JSON,
+              eventId: EVENT_ID_NOT_APPLICABLE,
+              payload: encodePayload(next.value),
+            }),
+          ),
+          aborted,
+        ])
+      }
+      if (!controller.signal.aborted) await writer.close()
+    } catch (e) {
+      // A reset arriving mid-production is a cancellation, not a fault, and there is
+      // nothing left to write a CALL_ERROR onto anyway.
+      if (!controller.signal.aborted) {
+        const code = e instanceof TransportError ? e.code : 'WT_HANDLER_ERROR'
+        await this.#failCall(writer, code, e instanceof Error ? e.message : String(e))
+      }
+    } finally {
+      controller.signal.removeEventListener('abort', nudge)
+      if (abortWaiter !== undefined) controller.signal.removeEventListener('abort', abortWaiter)
+      // The reason this file's first test exists. Without it a handler's `finally` never
+      // runs on cancellation, and every resource it holds open stays open.
+      await it.return?.(undefined).catch?.(() => undefined)
     }
   }
 

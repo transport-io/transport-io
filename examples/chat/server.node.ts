@@ -50,6 +50,16 @@ server.handle('setName', async ({ name }) => {
   return { accepted: true, name: trimmed }
 })
 
+// Streaming: one word at a time, on the same kind of stream a call uses. `break` on the
+// client resets it, which fires `ctx.signal` here, which ends the loop below.
+server.handle('say', async function* ({ text }, ctx) {
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    ctx.signal.throwIfAborted()
+    await new Promise((r) => setTimeout(r, 80))
+    yield word
+  }
+})
+
 server.onSession((peer) => {
   void peer.join(ROOM)
   names.set(peer.id, `guest-${peer.origin.toString(16).slice(-4)}`)

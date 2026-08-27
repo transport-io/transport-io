@@ -6,6 +6,7 @@ import {
   type CallableOf,
   type Contract,
   type EventTable,
+  type StreamableOf,
 } from './contract.ts'
 import { Hub } from './hub.ts'
 import { OriginAllocator } from './origin.ts'
@@ -79,7 +80,17 @@ export class Server<M extends AnyMap = AnyMap> {
   handle<K extends CallableOf<M> & string>(
     event: K,
     handler: (payload: M[K]['payload'], ctx: CallContext) => Promise<M[K]['returns']>,
-  ): () => void {
+  ): () => void
+  /**
+   * Register a responder for a streaming event. The handler is an async generator: each
+   * `yield` is one frame, and it does not resume until that frame has been accepted, so a
+   * slow consumer slows the generator instead of filling a queue.
+   */
+  handle<K extends StreamableOf<M> & string>(
+    event: K,
+    handler: (payload: M[K]['payload'], ctx: CallContext) => AsyncIterable<M[K]['yields']>,
+  ): () => void
+  handle(event: string, handler: (payload: never, ctx: CallContext) => never): () => void {
     this.#callHandlers.set(event, handler as never)
     for (const { session } of this.#peers.values()) {
       session.handle(event, handler as never)

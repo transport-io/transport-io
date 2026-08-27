@@ -10,7 +10,15 @@ export type Lane = 'reliable' | 'unreliable'
 export type Schema = StandardSchemaV1
 
 /**
- * `returns` is meaningful only on the reliable lane: a datagram has no response path.
+ * `returns` is meaningful only on the reliable lane: an unreliable event has no response
+ * path. `yields` is the streaming form of `returns` and excludes it: an event answers with
+ * one value or with a sequence, never with a choice made at the call site.
+ *
+ * The choice cannot be per call site, and the reason is on the wire rather than in taste. A
+ * handler that yields nothing closes the stream with zero CALL_RESPONSE frames, which is
+ * exactly the byte sequence a `call()` responder produces when it is broken. Identical
+ * bytes, two meanings: a protocol error for `call()`, a clean empty iteration for
+ * `stream()`. Only the contract, which both peers exchange at handshake, tells them apart.
  *
  * The `returns?: never` on the datagram branch does real work. Excess
  * property checking against a *union* admits any property present on any member, so
@@ -25,12 +33,21 @@ export type EventDef =
       readonly payload: Schema
       readonly id?: number
       readonly returns?: never
+      readonly yields?: never
     }
   | {
       readonly lane: 'reliable'
       readonly payload: Schema
       readonly returns?: Schema
       readonly id?: number
+      readonly yields?: never
+    }
+  | {
+      readonly lane: 'reliable'
+      readonly payload: Schema
+      readonly yields: Schema
+      readonly id?: number
+      readonly returns?: never
     }
 
 export type Contract = Readonly<Record<string, EventDef>>
@@ -49,18 +66,25 @@ export type MapOf<C extends Contract> = {
     readonly returns: C[K] extends { readonly returns: infer R extends Schema }
       ? Infer<R>
       : never
+    readonly yields: C[K] extends { readonly yields: infer Y extends Schema } ? Infer<Y> : never
   }
 }
 
 export interface EventShape {
   readonly payload: unknown
   readonly returns: unknown
+  readonly yields: unknown
 }
 export type AnyMap = Readonly<Record<string, EventShape>>
 
 /** Events declaring `returns`, and therefore callable. */
 export type CallableOf<M extends AnyMap> = {
   [K in keyof M]: [M[K]['returns']] extends [never] ? never : K
+}[keyof M]
+
+/** Events declaring `yields`, and therefore streamable. Disjoint from `CallableOf`. */
+export type StreamableOf<M extends AnyMap> = {
+  [K in keyof M]: [M[K]['yields']] extends [never] ? never : K
 }[keyof M]
 
 export function defineContract<const C extends Contract>(contract: C): C {

@@ -221,10 +221,59 @@ against an in-memory map has not been tested.
 Every method may reject; core degrades rather than crashing. Frames cross as bytes, never
 live objects. No node may assume it knows a room's full membership.
 
+## Streaming responses
+
+An event declaring `yields` instead of `returns` answers with a sequence. Server writes an
+async generator, client consumes an async iterable:
+
+```ts standalone
+import { Client, createServer, defineContract, type MapOf, type$ } from 'transport-io'
+
+export const c = defineContract({
+  ask: { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
+})
+export interface AskMap extends MapOf<typeof c> {}
+
+export async function serveAsk(): Promise<void> {
+  const server = createServer<AskMap>({ contract: c })
+  await server.listen()
+  server.handle('ask', async function* ({ prompt }, ctx) {
+    for (const word of prompt.split(' ')) {
+      ctx.signal.throwIfAborted()
+      yield word
+    }
+  })
+}
+
+export async function consume(client: Client<AskMap>): Promise<string[]> {
+  const out: string[] = []
+  for await (const token of client.stream('ask', { prompt: 'a b c' })) {
+    out.push(token)
+    if (out.length === 2) break
+  }
+  return out
+}
+```
+
+Rules that will bite you if you guess:
+
+- `yields` and `returns` are **mutually exclusive**. `call()` on a `yields` event throws and
+  names `stream()`; `stream()` on a `returns` event throws and names `call()`.
+- **`break` is the cancel.** It resets the QUIC stream, fires the handler's `ctx.signal`, and
+  runs any `finally` in the generator. There is no `.cancel()`. `{ signal }` does the same
+  from outside the loop.
+- `.collect()` gives the whole sequence as one array. It **rejects** on a mid-stream error
+  rather than resolving with the partial.
+- An error partway through delivers the elements that preceded it, then throws. Elements are
+  never retracted.
+- A yielding handler may run at most **32 frames** ahead of what the consumer has taken. That
+  window is this library's own accounting, not the transport's.
+- A stream holds one of the session's 256 stream slots for its whole life, not for a round
+  trip.
+
 ## Not implemented
 
-`stream()` for token streaming (protocol space reserved, `AbortSignal` already works),
-namespaces, presence, middleware chains, binary codecs, framework bindings, the Redis
+Namespaces, presence, middleware chains, binary codecs, framework bindings, the Redis
 adapter.
 
 ## Where to look next

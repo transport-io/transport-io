@@ -24,13 +24,15 @@ const surface = $<HTMLDivElement>('surface')
 const me = `guest-${Math.trunc(performance.now()).toString(36).slice(-4)}`
 const cursors = new Map<string, HTMLDivElement>()
 
-function append(from: string, body: string, at: number): void {
+/** Returns the line, so a streaming response can keep writing into it. */
+function append(from: string, body: string, at: number): HTMLDivElement {
   const line = document.createElement('div')
   line.className = 'line'
   const time = new Date(at).toLocaleTimeString()
   line.textContent = `${time}  ${from}: ${body}`
   log.append(line)
   log.scrollTop = log.scrollHeight
+  return line
 }
 
 function moveCursor(from: string, x: number, y: number): void {
@@ -91,6 +93,19 @@ form.addEventListener('submit', (e) => {
   const body = input.value.trim()
   if (body.length === 0) return
   input.value = ''
+
+  // A streaming call: the response arrives a word at a time and the line grows as it
+  // does. Nothing here manages a buffer or a subscription; the loop is the whole API.
+  if (body.startsWith('/say ')) {
+    void (async () => {
+      const line = append('stream', '', Date.now())
+      for await (const word of client.stream('say', { text: body.slice(5) })) {
+        line.textContent = `${line.textContent ?? ''}${word} `
+      }
+    })()
+    return
+  }
+
   // Reliable lane. This will arrive.
   client.emit('chat', { from: named.name, body, at: Date.now() })
 })

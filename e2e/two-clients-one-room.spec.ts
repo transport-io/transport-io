@@ -132,3 +132,22 @@ test('a dropped datagram never becomes a dropped chat message', async ({ browser
     .toBeGreaterThan(0)
   await page.context().close()
 })
+
+test('a streaming call renders a word at a time in a real browser', async ({ browser }) => {
+  const alice = await (await browser.newContext()).newPage()
+  await alice.goto('/')
+  await connected(alice)
+
+  // `/say` opens a streaming call. The server yields one word every 80 ms, so the line
+  // grows in place: this is the multi-frame response shape actually crossing real QUIC,
+  // not a loopback standing in for it.
+  await alice.fill('#body', '/say one two three four five')
+  await alice.press('#body', 'Enter')
+
+  const line = lines(alice).filter({ hasText: 'stream:' })
+  await expect(line).toHaveCount(1)
+  // Partway through: some words have arrived and the rest have not, which is the whole
+  // difference between a stream and a call that happens to return an array.
+  await expect(line).toContainText('one', { timeout: 5_000 })
+  await expect(line).toContainText('five', { timeout: 10_000 })
+})

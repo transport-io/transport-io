@@ -167,7 +167,85 @@ export async function serve(): Promise<void> {
 A handler that throws produces a `CALL_ERROR` frame. Throw a `TransportError` to choose the
 code; anything else becomes `WT_HANDLER_ERROR`.
 
-### 2.3 Observable state
+### 2.3 `stream()`
+
+An event declaring `yields` instead of `returns` answers with a **sequence**. The client
+gets an async iterable, the server writes an async generator.
+
+```ts
+import { defineContract as dcs, type MapOf as Ms, type$ as ts$, Client as Cs, createServer as css } from 'transport-io'
+
+export const gen = dcs({
+  ask: { lane: 'reliable', payload: ts$<{ prompt: string }>(), yields: ts$<string>() },
+})
+export interface GenMap extends Ms<typeof gen> {}
+
+export async function serveTokens(): Promise<void> {
+  const server = css<GenMap>({ contract: gen })
+  await server.listen()
+  server.handle('ask', async function* ({ prompt }, ctx) {
+    for (const token of prompt.split(' ')) {
+      ctx.signal.throwIfAborted()
+      yield token
+    }
+  })
+}
+
+export async function render(client: Cs<GenMap>): Promise<string[]> {
+  const out: string[] = []
+  for await (const token of client.stream('ask', { prompt: 'one two three' })) {
+    out.push(token)
+    if (out.length === 2) break // resets the stream; the handler's `finally` runs
+  }
+  return out
+}
+```
+
+**`break` is the cancel.** Leaving the loop calls the iterator's `return()`, which resets the
+QUIC stream, which fires the handler's `ctx.signal` and runs any `finally` inside the
+generator. There is no cancel method because there is nothing for one to do. An
+`AbortSignal` option does the same thing from outside the loop, which is what a React effect
+cleanup will call:
+
+```ts
+export async function withDeadline(client: Cs<GenMap>): Promise<number> {
+  let n = 0
+  const s = client.stream('ask', { prompt: 'a b c' }, { signal: AbortSignal.timeout(5_000) })
+  for await (const _ of s) n++
+  return n
+}
+```
+
+**`collect()`** takes the whole sequence as one value, for callers who do not want a loop:
+
+```ts
+export async function whole(client: Cs<GenMap>): Promise<string[]> {
+  return await client.stream('ask', { prompt: 'a b c' }).collect()
+}
+```
+
+An error partway through is delivered after the elements that preceded it: the loop yields
+what arrived, then throws. `collect()` rejects and discards the partial, because a partial
+array returned as if it were the whole answer is worse than an error.
+
+**Backpressure is accounted for, not assumed.** The generator does not resume until its
+frame has been accepted, and the responder may be at most **32 frames** ahead of what the
+consumer has taken. That window is this library's own accounting rather than the
+transport's: measured on the reference binding, a `WritableStreamDefaultWriter`'s `ready`
+resolves unconditionally, and without the window a producer ran 136,523 frames and roughly
+53 MB ahead of a consumer that had taken 40. See ADR 0012.
+
+`yields` and `returns` are mutually exclusive, and the choice is in the contract rather than
+at the call site. `call()` on a streaming event refuses and names `stream()`; `stream()` on a
+call event refuses and names `call()`. The reason is not symmetry: a handler that yields
+nothing closes the stream with zero response frames, which is byte for byte what a broken
+`call()` responder produces, so only the contract can tell an empty sequence from a fault.
+
+A streaming call holds one of the session's 256 stream slots **for as long as it runs**,
+rather than for a round trip. Ten concurrent generations use ten slots for minutes, which is
+fine; ten thousand is not.
+
+### 2.4 Observable state
 
 ```ts
 import type { ClientState } from 'transport-io'

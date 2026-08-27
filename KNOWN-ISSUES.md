@@ -76,6 +76,22 @@ If your workload is mostly `emit` and datagrams, this does not affect you: both 
 and you can check for yourself: `npm run soak:lanes` runs the memory soak over those two
 lanes and passes.
 
+**`stream()` is the cheaper shape for the same work.** The leak is per bidirectional stream,
+not per message, so one generation that streams a thousand tokens down one stream costs 5.95
+KB in total. The same thousand tokens fetched as a thousand `call()`s cost 5.95 KB each. If
+you are building an agent, streaming is both the better interface and the smaller leak.
+
+## A session is capped at 256 concurrent streams
+
+`call()` and `stream()` share it, and the 257th open is refused with `WT_TOO_MANY_STREAMS`
+while the session stays up.
+
+The unit matters more now that streams exist. A `call()` holds a slot for a round trip; a
+`stream()` holds one for as long as it runs. An agent app running ten generations at once
+occupies ten slots for minutes at a time, which is fine and well inside the cap. Ten
+thousand concurrent generations on one session is not, and the failure is a clean refusal
+rather than a degradation.
+
 ## Protocol versioning
 
 The handshake carries a version. **A major mismatch refuses the session; the minor surface

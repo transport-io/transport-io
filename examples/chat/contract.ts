@@ -15,6 +15,15 @@ export const contract = defineContract({
     lane: 'unreliable',
     payload: type$<{ from: string; x: number; y: number }>(),
   },
+  /**
+   * Streaming: it declares `yields`, so the answer is a sequence rather than a value. The
+   * client gets an async iterable and the server writes an async generator.
+   */
+  say: {
+    lane: 'reliable',
+    payload: type$<{ text: string }>(),
+    yields: type$<string>(),
+  },
   /** Callable: it declares `returns`. */
   setName: {
     lane: 'reliable',

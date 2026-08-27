@@ -84,28 +84,29 @@ part of version 0.
 
 ### 3.2 Call streams
 
-Each call opens a **new bidirectional stream**. The initiator writes one `CALL_REQUEST`
-frame and then closes its send side (sends FIN), which signals end of request. The
-responder writes exactly one `CALL_RESPONSE` frame, or exactly one `CALL_ERROR` frame, and
-then closes its send side. Receivers accept any number (§6.3).
-
-There are no correlation identifiers, because the stream **is** the correlation. A stalled
-call therefore cannot block another call: QUIC flow control applies per stream.
+Each call opens a **new bidirectional stream**. There are no correlation identifiers,
+because the stream **is** the correlation. A stalled call therefore cannot block another
+call: QUIC flow control applies per stream.
 
 **The response is a sequence of frames terminated by stream close, not a single frame with
-a length.**
+a length.** How long that sequence may be, and whether the initiator keeps its send side
+open, is decided by the event's contract entry and not by the call site:
 
-> **Reserved, not implemented.** No version 0 sender emits more than one `CALL_RESPONSE`,
-> and nothing in this implementation produces the multi-frame shape. It exists so that
-> token streaming can be added without a protocol break (D7). Do not build a receive loop
-> expecting a second frame from a version 0 peer - it will not arrive. Do build one that
-> *tolerates* a second frame, because that tolerance is what keeps the future addition from
-> being a break, and it is required below.
+| the event declares | the initiator | the responder |
+|---|---|---|
+| `returns` | one `CALL_REQUEST`, then FIN | exactly one `CALL_RESPONSE`, or one `CALL_ERROR`, then close |
+| `yields` | one `CALL_REQUEST`, no FIN, then `CALL_CREDIT` frames | zero or more `CALL_RESPONSE`, optionally one `CALL_ERROR`, then close |
 
-Version 0 senders emit exactly one `CALL_RESPONSE` frame, but receivers MUST
+Both peers know which shape applies before any response frame arrives, because the event
+table is exchanged at handshake (§4.3). **This is why the choice cannot be per call site.**
+A responder that yields nothing closes the stream with zero `CALL_RESPONSE` frames, which is
+byte for byte what a broken `returns` responder produces. Identical bytes, two meanings: a
+protocol error in one shape and a clean empty sequence in the other. Only the contract
+separates them.
+
+Receivers MUST accept a `CALL_RESPONSE` sequence of any length regardless of shape, so that
 <!-- norm: receiver-accepts-multi-frame-response -> packages/core/src/reserved-and-limits.test.ts -->
-accept any number, so that incremental responses can be added later without a protocol
-break.
+a peer implementing only `returns` events is not broken by one that implements both.
 
 ---
 
@@ -117,7 +118,7 @@ Each peer writes exactly one `HANDSHAKE` frame as frame 0 of its emit stream, im
 on session establishment. The payload is a JSON object:
 
 ```json
-{ "v": 0, "feat": [], "events": [["chat", 836792189, "stream"]] }
+{ "v": 0, "feat": [], "events": [["chat", 836792189, "reliable"]] }
 ```
 
 | field | type | meaning |
@@ -168,7 +169,7 @@ ascending by name by Unicode code point:
 
 ```json
 { "v": 0, "feat": [],
-  "events": [["chat", 836792189, "stream"], ["cursor", 1185214141, "datagram"], ["save", 360565394, "stream"]] }
+  "events": [["chat", 836792189, "reliable"], ["cursor", 1185214141, "unreliable"], ["save", 360565394, "reliable"]] }
 ```
 
 Each peer compares the two tables entry by entry:
@@ -304,7 +305,8 @@ the lane.
 | `0x05` | `CALL_ERROR` | call stream, terminal |
 | `0x06` | `JOIN` | emit stream, server to client only |
 | `0x07` | `LEAVE` | emit stream, server to client only |
-| `0x08`–`0xFF` | reserved | - |
+| `0x08` | `CALL_CREDIT` | call stream, initiator to responder, streaming events only |
+| `0x09`–`0xFF` | reserved | - |
 
 Receiving a reserved or contextually invalid type is a protocol error.
 
@@ -356,24 +358,50 @@ acknowledgement and no response.
 
 ### 6.2 `CALL_REQUEST`
 
-The first and only frame the initiator writes on a call stream, followed by FIN. Payload is
-the encoded request payload.
+The first frame the initiator writes on a call stream. Payload is the encoded request
+payload.
+
+For an event declaring `returns`, it is also the last: the initiator sends FIN immediately,
+<!-- norm: streaming-initiator-does-not-fin -> packages/core/src/stream.test.ts -->
+which is what tells the responder the request is complete. For an event declaring `yields`
+the initiator MUST NOT send FIN, because its send side carries `CALL_CREDIT` (§6.6) for the
+life of the stream. A responder that received a `CALL_REQUEST` for a `yields` event begins
+work on that frame alone and does not wait for FIN.
+
+FIN from the initiator of a streaming call therefore means "no further credit is coming".
+The responder MUST treat it as cancellation and stop producing, rather than stalling for
+ever once its window is spent.
 
 ### 6.3 `CALL_RESPONSE`
 
 Written by the responder on the call stream, then stream close. Payload is the encoded
 response payload. Event ID is `0x0000`.
 
-A version 0 responder MUST write **exactly one** `CALL_RESPONSE`, or one `CALL_ERROR`, and
-never zero of both. A receiver MUST nonetheless accept a sequence of any length, so that
+For an event declaring `returns`, a responder MUST write **exactly one** `CALL_RESPONSE`, or
+one `CALL_ERROR`, and never zero of both. A receiver MUST nonetheless accept a sequence of
 <!-- norm: call-response-sequence-any-length -> packages/core/src/call.test.ts -->
-incremental responses can be added later without a protocol break - that asymmetry is
-deliberate and is what keeps the door open for streaming responses.
+any length in this shape too, so that a peer is never broken by a sequence it did not
+expect.
+
+For an event declaring `yields`, a responder writes **zero or more** `CALL_RESPONSE` frames,
+<!-- norm: stream-empty-terminates-cleanly -> packages/core/src/stream.test.ts -->
+one per element, and terminates by closing its send side. Zero frames followed by close is a
+complete and empty sequence, not an error. Each element is exactly one frame: a responder
+<!-- norm: stream-elements-are-frames -> packages/core/src/stream.test.ts -->
+MUST NOT coalesce two elements into one frame, because the receiver has no way to split them
+again.
 
 ### 6.4 `CALL_ERROR`
 
-Written by the responder instead of any `CALL_RESPONSE`, then stream close. Terminal.
-Event ID is `0x0000`. Payload is a JSON object:
+Written by the responder, then stream close. Terminal. Event ID is `0x0000`.
+
+For a `returns` event it replaces the `CALL_RESPONSE`. For a `yields` event it MAY follow
+<!-- norm: stream-error-after-elements -> packages/core/src/stream.test.ts -->
+any number of `CALL_RESPONSE` frames: a producer that fails partway through has already
+delivered what came before, and a receiver MUST surface those elements to the application
+and then raise the error. Elements are not retracted, because they cannot be.
+
+Payload is a JSON object:
 
 ```json
 { "code": "WT_VALIDATION_FAILED", "message": "field 'body' must be a string" }
@@ -383,6 +411,38 @@ Event ID is `0x0000`. Payload is a JSON object:
 |---|---|---|
 | `code` | string | A code from §10.1. Local codes (§10.3) are never transmitted. |
 | `message` | string | Human-readable, stating what to do about it. |
+
+### 6.6 `CALL_CREDIT`
+
+Written by the **initiator** of a streaming call, on the call stream, at any point after the
+`CALL_REQUEST`. Event ID is `0x0000`. Payload is a JSON object:
+
+```json
+{ "credit": 16 }
+```
+
+| field | type | meaning |
+|---|---|---|
+| `credit` | number | Additional `CALL_RESPONSE` frames the responder may send. Positive integer. |
+
+A responder begins with **32** frames of credit and spends one per `CALL_RESPONSE` written.
+A responder MUST NOT write a `CALL_RESPONSE` while its credit is zero; it waits instead.
+<!-- norm: stream-producer-bounded-by-credit -> packages/core/src/stream.test.ts -->
+An initiator MUST grant credit for elements the application has consumed, in batches of 16.
+<!-- norm: stream-initiator-must-send-credit -> packages/core/src/stream.test.ts -->
+Without that, a responder stops at 32 elements and never resumes.
+
+A frame with a non-positive or non-numeric `credit` is ignored, not a protocol error.
+
+**Why this exists rather than relying on transport flow control.** It was measured. On the
+reference binding a `WritableStreamDefaultWriter`'s `ready` resolves unconditionally, so a
+generator yielding as fast as it could ran 136,523 frames and roughly 53 MB ahead of a
+consumer that had taken 40, and the gap grew linearly with the run at every element size. An
+implementation that trusts the transport here is not applying backpressure, it is buffering
+without a bound. With the credit window the same measurement is 33 frames, flat. See D93.
+
+This holds even over a transport whose own flow control is honest: the responder is
+entitled to stop at zero and has no way to know which transport it is talking to.
 
 ### 6.5 `JOIN` and `LEAVE`
 

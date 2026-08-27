@@ -18,6 +18,7 @@ export const FrameType = {
   CALL_ERROR: 0x05,
   JOIN: 0x06,
   LEAVE: 0x07,
+  CALL_CREDIT: 0x08,
 } as const
 export type FrameType = (typeof FrameType)[keyof typeof FrameType]
 
@@ -25,6 +26,19 @@ const FRAME_TYPES: ReadonlySet<number> = new Set(Object.values(FrameType))
 export function isFrameType(v: number): v is FrameType {
   return FRAME_TYPES.has(v)
 }
+
+/**
+ * PROTOCOL.md §6.6. How many response frames a streaming responder may have in flight
+ * beyond what the consumer has taken, and how much the consumer tops up at a time.
+ *
+ * These exist because the transport does not provide the bound. Measured on the quiche
+ * binding: `writer.ready` resolves unconditionally, so a generator yielding as fast as it
+ * could ran 136,523 frames and roughly 53 MB ahead of a consumer that had taken 40, and the
+ * gap grew linearly with the run rather than plateauing. A bound is only a bound if
+ * something stays in the bounded thing (D77), so the accounting is ours. See D93.
+ */
+export const STREAM_INITIAL_CREDIT = 32
+export const STREAM_CREDIT_REFILL = 16
 
 /** PROTOCOL.md §5.3. `0x00` is permanently reserved so a zero-filled buffer cannot parse. */
 export const Codec = { JSON: 0x01 } as const
