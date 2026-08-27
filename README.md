@@ -125,11 +125,11 @@ npm install transport-io
 
 A git install does **not** work, and it is worth saying why rather than letting you find
 out: this is a monorepo whose root package is `transport-io-monorepo` and is `private`, so
-`npm install github:v0id-user/transport-io` installs that root and `import … from
+`npm install github:transport-io/transport-io` installs that root and `import … from
 'transport-io'` then fails. Verified, not assumed. To work on the library instead, clone it:
 
 ```bash
-git clone https://github.com/v0id-user/transport-io
+git clone https://github.com/transport-io/transport-io
 cd transport-io && npm install && npm run build
 ```
 

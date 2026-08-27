@@ -8,7 +8,7 @@ hidden. Reliability is not: an event declares `stream` or `datagram` in the cont
 "this message may be dropped" is a property of your data that lives in the type system.
 
 **Full documentation, and the limitations you should read before installing, are in the
-[repository README](https://github.com/v0id-user/transport-io#readme).** The short version:
+[repository README](https://github.com/transport-io/transport-io#readme).** The short version:
 
 - **WebTransport only.** No WebSocket fallback, deliberately — a fallback would silently
   make the datagram lane reliable and ordered, which is a lie about your data.

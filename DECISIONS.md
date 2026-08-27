@@ -1923,7 +1923,7 @@ contributor's first `npm run e2e` failed with `Could not resolve: "transport-io/
 `e2e:server` now builds the library first.
 
 **The install line was wrong, and it was wrong in the commit that fixed the install line.**
-The README said `npm install github:v0id-user/transport-io`. That resolves the repository
+The README said `npm install github:v0id-user/transport-io` (the repository's address at the time). That resolves the repository
 root, whose package is `transport-io-monorepo` and is `private`, so what a consumer actually
 installs is the monorepo root and `import … from 'transport-io'` fails. Verified by running
 it into a scratch directory: `node_modules/transport-io-monorepo`, no `transport-io`.

@@ -9,7 +9,7 @@
  *
  *   1. `npm install transport-io` — named an unpublished package, so a reader would either
  *      get a 404 or, worse, whatever stranger claimed the name.
- *   2. `npm install github:v0id-user/transport-io` — resolves the repository *root*, whose
+ *   2. `npm install github:v0id-user/transport-io` (the repository's address at the time) — resolves the repository *root*, whose
  *      package is `transport-io-monorepo` and is private. What lands in `node_modules` is
  *      the monorepo, and `import … from 'transport-io'` fails.
  *

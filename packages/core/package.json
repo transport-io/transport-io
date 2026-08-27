@@ -49,7 +49,7 @@
   "author": "#V0ID <hey@v0id.me>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/v0id-user/transport-io.git",
+    "url": "git+https://github.com/transport-io/transport-io.git",
     "directory": "packages/core"
   }
 }

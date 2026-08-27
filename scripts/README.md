@@ -59,7 +59,7 @@ npm -w packages/core publish # deliberate, from your machine
 
 **One thing must change in the same commit as the first publish.** README.md and
 `packages/core/README.md` both say the package is not on npm and give a
-`github:v0id-user/transport-io` install line. That is true until it is not. Swap both to
+`github:transport-io/transport-io` install line. That is true until it is not. Swap both to
 `npm install transport-io` when the name exists, and not before — an install line that
 points at a name nobody owns is how a reader ends up installing a stranger's package on this
 project's authority.
