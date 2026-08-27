@@ -4,6 +4,13 @@
 
 ### Minor Changes
 
+- First release. `0.0.1` was published from the same tree to claim the name on the registry,
+  carries no release notes, and was never meant to be used.
+
+  One runtime-visible change since that publish: `TransportError.message` separates the remedy
+  with a hyphen rather than an em dash, so the shape to match on is `code: message - remedy`.
+  Everything else since is documentation, brand assets and comments.
+
 - b52a4fd: Add call() with AbortSignal-to-stream-reset and the concurrent stream cap. Fix the
   datagram flush to be coalesced rather than synchronous, which made the bounded ring and
   the TTL reachable, and add tests that force loss, duplication, reordering and both drop
