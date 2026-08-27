@@ -2075,3 +2075,38 @@ question from whether it tells the truth.
 README, or an entry is added that is neither a position nor a measurement. Both are visible
 in review rather than by tooling, which is a weaker guarantee than this repository usually
 accepts, and is recorded as such.
+
+### D91. The consumer floor gate was wrong in both directions, and nobody was watching CI
+The gate that checks the published `.d.ts` against TypeScript 5.0 has now failed twice, in
+opposite directions, and the second failure was introduced by the commit that fixed the
+first.
+
+**Direction one: it could not fail.** The command was
+`tsc --skipLibCheck packages/core/dist/index.d.ts`. That flag skips checking every
+declaration file *including the one named on the command line*, so only parse-level
+diagnostics ever surfaced. The gate had been green for its whole life without ever checking
+a type.
+
+**Direction two: it failed on nothing that mattered.** Removing the flag left the command
+running in the repository root, where `npm ci` has installed the full dev tree. With library
+checking on, TypeScript 5.0 type checked `bun-types` and `@types/node` against its own
+`lib.dom.d.ts` and produced about forty errors, none of them from this package. Main went
+red and stayed red for three commits.
+
+The fix is `scripts/check-ts-floor.sh`, and its shape is the point: **a consumer gate must
+run where a consumer stands.** The packed tarball, a temporary directory, `types: []` so no
+ambient package is auto-included, an explicit `lib`, and `skipLibCheck` off so our
+declarations and our declared dependencies are checked and nothing else is. Both consumer
+resolution modes, because D56 records that `bundler` and `node16` disagree about
+extensionless imports. Plus a negative probe: a wrong event name must still be rejected at
+5.0, so the gate fails loudly if the checking silently stops happening.
+
+**The process failure is the more expensive one.** Three commits were pushed to main after
+the breakage, two of them by an agent that had run every gate locally and never once looked
+at the run it had just triggered. Local green is not CI green, and the difference between
+them is exactly the class of defect that this gate was in: an environment the local run does
+not have. **Pushing is not finishing.** Check the run.
+
+**Reconsider when:** the floor moves off 5.0, or `attw` grows the ability to check a
+tarball's declarations under a named compiler version, which would make most of this script
+redundant.

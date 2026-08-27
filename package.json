@@ -18,6 +18,7 @@
     "check:install": "bun run scripts/check-install-line.ts",
     "check:node": "./scripts/check-node.sh",
     "check:norms": "bun run scripts/check-norms.ts",
+    "check:ts-floor": "./scripts/check-ts-floor.sh",
     "check:workflows": "bun run scripts/check-workflows.ts",
     "commitlint": "commitlint",
     "deadcode": "knip",
@@ -35,7 +36,7 @@
     "test:node": "./scripts/run-node-tests.sh",
     "test:unit": "bun test --path-ignore-patterns=\"**/*.node.test.ts\" --path-ignore-patterns=\"e2e/**\"",
     "typecheck": "tsc --build && tsc -p tsconfig.test.json",
-    "verify:pack": "bun run scripts/check-gate-inputs.ts && npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core"
+    "verify:pack": "bun run scripts/check-gate-inputs.ts && npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core && ./scripts/check-ts-floor.sh"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

@@ -129,19 +129,12 @@ jobs:
       - run: npx tsc --build
       - run: npx attw --pack packages/core --profile esm-only
       - run: npx publint packages/core
-      # The emitted .d.ts must be consumable by the oldest TypeScript we claim.
-      # Floor measured, not assumed: 4.9 fails on `const` type parameters, 5.0 passes.
-      #
-      # No --skipLibCheck. That flag skips type checking of every declaration file
-      # INCLUDING the one named on the command line, so only parse-level diagnostics
-      # survived and this gate could not fail on anything a consumer would actually hit.
-      # Verified that it passes without the flag, so nothing is being papered over.
+      # The emitted .d.ts must be consumable by the oldest TypeScript we claim (D55).
+      # Against the packed tarball in a temporary directory, both consumer resolution
+      # modes, no --skipLibCheck. The two earlier in-repo shapes of this check were wrong
+      # in opposite directions and the script's header records both.
       - name: consumer TypeScript floor (5.0)
-        run: |
-          npm i --no-save --no-audit --no-fund typescript@5.0.4
-          ./node_modules/typescript/bin/tsc --noEmit --strict \
-            --module esnext --moduleResolution bundler --target es2022 \
-            packages/core/dist/index.d.ts
+        run: ./scripts/check-ts-floor.sh
 
   changeset:
     name: changeset present
