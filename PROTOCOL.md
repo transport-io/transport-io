@@ -434,6 +434,23 @@ Without that, a responder stops at 32 elements and never resumes.
 
 A frame with a non-positive or non-numeric `credit` is ignored, not a protocol error.
 
+An initiator's refill batch MUST NOT exceed the initial window. A responder stops at zero
+having sent fewer elements than a larger batch requires before it is granted, and both sides
+then wait for ever. Measured, by setting a window of 4 against a batch of 16: it deadlocks.
+
+**A responder whose credit is zero waits.** It MUST NOT drop elements, and MUST NOT impose a
+<!-- norm: stream-zero-credit-parks -> packages/core/src/stream.test.ts -->
+deadline of its own: a slow consumer is the case backpressure exists to serve, and waiting is
+what serving it looks like. An application that wants a deadline supplies one, which on this
+implementation is an `AbortSignal` passed to `stream()`.
+
+Nothing in this scheme distinguishes a consumer that is slow from one that is gone, and it is
+not meant to. That distinction belongs to session liveness, so an implementation MUST abort
+<!-- norm: stream-parked-producer-released-on-close -> packages/core/src/stream.test.ts -->
+every response it is still serving when the session ends. Without it a parked responder
+outlives its own session, holding a stream slot and whatever its handler had open, with
+nothing left that could ever wake it.
+
 **Why this exists rather than relying on transport flow control.** It was measured. On the
 reference binding a `WritableStreamDefaultWriter`'s `ready` resolves unconditionally, so a
 generator yielding as fast as it could ran 136,523 frames and roughly 53 MB ahead of a

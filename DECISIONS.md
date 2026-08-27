@@ -2218,3 +2218,88 @@ numbers belong to.
 
 **Reconsider when:** TypeScript 7.1 lands the compiler API, which would make this a few lines
 instead of an LSP client. The gate should shrink then, not disappear.
+
+### D95. Four corrections to `stream()`, all from measuring things that were assumed
+Follow-up to D93, and every entry here came from a check that was asked for rather than one
+that was volunteered.
+
+**The ADR carried a reason the measurement had already falsified.** ADR 0012's second
+justification for the async iterable was "backpressure falls out of the language". D93
+recorded that the measurement disproved it, and the ADR kept saying it anyway. The reason is
+now `next()` is the credit signal, which is a stronger argument because it rests on the
+measurement instead of contradicting it, and the falsified claim is struck in place rather
+than quietly rewritten. A record that silently replaces a disproved claim teaches nothing;
+the next person builds on it again.
+
+**32 and 16 were inputs presented as though they were results.** "33 frames, flat" is a
+measurement; the 32 that produced it was a guess. Swept: the bound is always window + 1, a
+window of 4 costs 29% throughput, 8 through 32 are indistinguishable, and 128 buys 28% for
+four times the memory ceiling, which at 64 KiB elements and 256 streams is 2 GiB against 512
+MiB. 32 is the top of the flat region. Every number is localhost, which understates the case
+for a larger window, and that caveat is the revisit trigger. The sweep also found that a
+refill batch larger than the window deadlocks both sides, which is now normative.
+
+**A parked producer outlived its session.** With no timeout on the credit wait, a consumer
+that stops taking elements without breaking the loop leaves the responder waiting for ever -
+correct, and the point of backpressure. But `dispose()` cleared handlers and never aborted
+the responses in flight, so when the peer disappeared entirely the generator stayed parked,
+holding one of 256 stream slots and whatever the handler had open, with nothing left that
+could wake it. Every in-flight response is now aborted when the session ends.
+
+**The bound was gated over the wrong transport.** The credit test ran over the loopback, and
+the loopback applies backpressure of its own: widen the window to ten million and that test
+still passes. It was green whether or not the mechanism existed, which is the D87 failure
+shape in a test rather than a tool. The bound is now asserted in `stream.node.test.ts` over
+real QUIC, verified to go red when the window is widened, and the loopback test is scoped to
+what it can honestly show.
+
+A fifth thing, found on the way: the ceilings were written as `<= STREAM_INITIAL_CREDIT + 1`,
+so widening the constant widened the assertion. That is D13's rule broken again in a new
+file - a threshold must be an absolute quantity, never a proportion of the thing under test.
+They are absolute now, with a companion assertion on the constant so a deliberate change
+fails loudly in one place.
+
+**Reconsider when:** the window is measured over a link with real round-trip time.
+
+### D96. Two sweeps: assertions that cannot fail, and everything `dispose()` owns
+Both were asked for after `stream()` landed, and both found things.
+
+**Sweep one: a bound that references the constant under test is not an assertion.** Nine test
+files import a protocol constant. Six use it to build an input and assert something
+independent, which is the correct shape. Three did not:
+
+- `stream.test.ts` and `stream.node.test.ts` compared against `STREAM_INITIAL_CREDIT + 1`,
+  so widening the window to ten million widened the assertion with it. Already fixed in D95.
+- `datagram-lane.test.ts` derives the burst from `DATAGRAM_QUEUE_MAX` *and* expects
+  `DATAGRAM_QUEUE_MAX`, so the drop-oldest behaviour is proved for any cap and the cap itself
+  for none.
+- `framer.test.ts` asserted the declared length equals `STREAM_HEADER_BYTES + 5`, which the
+  encoder computes from the same constant. It asserts the encoder agrees with itself, which
+  is true for any header size including a wrong one.
+
+Fixed the same way in each: one absolute assertion pinning the constant next to the
+behavioural ones, so a deliberate change fails in one obvious place and an accidental one
+cannot pass. `protocol-layers.test.ts` compares two constants to each other -
+`ORIGIN_QUARANTINE_MS > SEQUENCE_STATE_RETENTION_MS` - and that is not this pattern: the
+relationship is the whole content of the claim.
+
+**Sweep two: `dispose()` was incomplete for the third time.** It had already been caught
+leaving an interval alive and a parked producer holding a stream slot. The enumeration found
+two more:
+
+- **Queues and per-peer state were never released.** 256 emit frames, 64 datagrams, the
+  duplicate-suppression map for every origin heard from and the sequence counter for every
+  origin sent to, all retained by a session that had ended. Bounded, so not a leak that
+  grows, but retained references to payloads nobody will ever receive.
+- **A disposed session still accepted emits.** `sendEncodedFrame` queued into a queue that
+  would never drain and told the caller nothing, so the hub fanning a broadcast at a peer
+  that died mid-broadcast quietly grew the dead peer's queue. It drops now, rather than
+  throwing, because one dead peer is not an error for the other twenty in the room.
+
+The list is now a test: `disposal releases everything a session owns`, naming the interval,
+the handlers of all three kinds, the writer, both queues, the peer state, the work in flight
+and the disposed flag. Three incomplete teardowns in a row is not carelessness repeated, it
+is the absence of an enumeration. Anything a session starts owning goes in that test.
+
+**Reconsider when:** a session acquires something new. The test is the checklist, and it
+fails until the new thing is in it.

@@ -81,6 +81,36 @@ not per message, so one generation that streams a thousand tokens down one strea
 KB in total. The same thousand tokens fetched as a thousand `call()`s cost 5.95 KB each. If
 you are building an agent, streaming is both the better interface and the smaller leak.
 
+## The reference transport applies no write backpressure
+
+Also upstream, also in the QUIC binding, and unlike the leak above it is invisible until you
+look for it: `WritableStreamDefaultWriter.ready` resolves unconditionally. Awaiting it, which
+is what the streams contract says to do before writing, holds nothing back at all.
+
+Measured with a producer writing as fast as it can against a consumer taking one element
+every 20 ms:
+
+| consumer took | producer got ahead | in flight |
+|---|---|---|
+| 20 | 77,273 frames | growing |
+| 40 | 127,998 frames | growing |
+
+No plateau at any element size tried, from 16 bytes to 64 KiB, and roughly 53 MB resident at
+the large end. The same probe against `@moq/web-transport` plateaus at about 20,800 frames,
+so this is the binding rather than something inherent.
+
+**This library does not rely on it.** `stream()` carries its own credit window, so a
+streaming responder is held to 32 frames ahead of what the consumer has taken regardless of
+what the transport does. The entry is here because it is a fact about the binding you are
+depending on, and because anything you write that talks to that transport directly is
+affected. Reproducible from `packages/core/src/bench/stream-credit-window.node.ts`.
+
+The window costs throughput: 27,470 elements per second against 67,616 without it. Worth
+stating what that is a percentage *of*, because 59% sounds like a lot. A language model
+emits on the order of 200 tokens per second, so the bounded path still carries about a
+hundred times what the workload this exists for can produce. Both numbers are measured over
+localhost, where a credit round trip is nearly free.
+
 ## A session is capped at 256 concurrent streams
 
 `call()` and `stream()` share it, and the 257th open is refused with `WT_TOO_MANY_STREAMS`
