@@ -699,15 +699,23 @@ Normative for a conforming sender, because these choices are observable to the p
 |---|---|---|
 | Datagram, per peer | 64 frames | Discard **oldest**, count it, do not error. |
 | Emit, per peer | 256 frames | Close the session with `WT_PEER_TOO_SLOW`. |
-| Call stream | 16 frames high-water | Apply backpressure to the producer. Never discard. |
+| Call stream | 32 frames of credit (§6.6) | Producer waits for credit. Never discard. |
 
 The emit lane never discards. A lane that advertises reliable, ordered delivery and then
 drops silently is a lie about the application's data; a peer 256 frames behind has already
 failed, and disconnecting it is the honest outcome.
 
-Call streams neither queue unboundedly nor discard. Because each call owns its own QUIC
-stream, awaiting the writer applies flow control to that call's producer alone, so one slow
-consumer cannot stall another call.
+Call streams neither queue unboundedly nor discard. A streaming responder holds at most the
+credit its consumer has granted (§6.6) and waits at zero; a single-response call writes one
+frame and is done. One slow consumer therefore stalls only its own stream, because each call
+owns its own QUIC stream.
+
+**Do not read that bound as the transport's.** An earlier draft of this section said that
+awaiting the writer applies flow control to the producer, which is the natural reading of the
+streams contract and is false on at least one shipping implementation: `ready` resolves
+unconditionally there, and a producer awaiting it ran 136,523 frames ahead of a consumer that
+had taken 40. The credit window in §6.6 exists because the transport cannot be relied on for
+this, and a conforming sender MUST NOT substitute the transport's flow control for it.
 
 **Stale datagrams are a separate concern from overflow.** A queued datagram older than its
 time-to-live is discarded **at dequeue**, default 150 ms. Overflow handles a burst; TTL

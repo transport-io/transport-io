@@ -14,8 +14,9 @@ of this library, stop and check the stage above. There is no older release.
 
 **Hide the mechanism, expose the guarantee.**
 
-Framing, length prefixes, buffer accumulation, stream lifecycle and backpressure queues
-are hidden. Nobody should ever write framing code.
+Framing, length prefixes, buffer accumulation and stream lifecycle are hidden. Nobody
+should ever write framing code. Bounds are not hidden: the credit window is documented
+because an application can reach it.
 
 Reliability semantics are always visible. "This message may be dropped" is a property of
 the app's data, not an implementation detail, and it belongs in the type system.
@@ -52,7 +53,12 @@ Full text in `DECISIONS.md`; this is the summary a fresh session needs so it can
   the default; core never references Redis.
 - **D6 abort-via-stream-reset.** `AbortSignal` maps to a QUIC stream reset.
 - **D7 multi-frame-response.** A call response is a sequence of frames terminated by
-  stream close, so token streaming is addable without a protocol break.
+  stream close. `stream()` shipped on it in 0.2.0 with no protocol break, as D7 predicted.
+- **D92 lanes name guarantees**, `reliable` and `unreliable`, never `stream` and `datagram`.
+  The rename touched the wire: 0.1.0 and 0.2.0 peers refuse each other.
+- **D93 streaming backpressure is ours, not the transport's.** A responder runs at most 32
+  frames ahead of what its consumer has taken. `writer.ready` resolves unconditionally on the
+  reference binding, so anything relying on it is buffering without a bound.
 - **D10 the fallback is disabled server-side.** Construct only `Http3Server`. The
   dependency ships an HTTP/2 fallback that is on by default; we refuse it. The client
   check is defence in depth, because Chrome supports neither `requireUnreliable` nor
@@ -86,6 +92,9 @@ Part 2.
 - **Bun segfaults on exit** when the native addon is loaded, 3/3 runs. Node, 0/3.
 - **Safari cannot talk to a quiche-backed server** and is unsupported in v1. Chrome and
   Firefox only.
+- **The reference transport applies no write backpressure.** `writer.ready` resolves
+  unconditionally, measured: a producer ran 136,523 frames ahead of a consumer that had taken
+  40, growing with the run. `stream()` carries its own credit window because of it.
 - **The reference transport leaks per bidirectional stream**, unbounded, upstream: 5.95 KB
   on the server half and 5.88 KB on the client half. Not ours - our own path over a
   loopback costs 0.045 KB. The soak fails and Stage 1 is blocked. See D65.

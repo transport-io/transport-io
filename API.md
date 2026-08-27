@@ -147,9 +147,11 @@ Aborting resets the QUIC stream. It is immediate, costs no application message, 
 responder's `ctx.signal` fires without the client sending anything. On a WebSocket this
 would need an app-level protocol and the peer would keep working until it heard you.
 
-A session is capped at 256 concurrent call streams. The 257th open is refused with
-`WT_TOO_MANY_STREAMS` and **the session stays up** - a leaking handler must not take the
-other 256 calls down with it.
+A session is capped at 256 concurrent streams, shared by `call()` and `stream()`. The 257th
+open is refused with `WT_TOO_MANY_STREAMS` and **the session stays up** - a leaking handler
+must not take the other 256 down with it. A call holds its slot for a round trip; a
+`stream()` holds one for as long as it runs, which is the unit that matters once §2.3 is in
+use.
 
 ### 2.2 Responding
 

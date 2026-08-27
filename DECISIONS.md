@@ -11,6 +11,12 @@ Status: Phase 1a in progress. Entries below are settled unless marked OPEN.
 
 ## Part 1 - Fixed design decisions (from the kickoff, not relitigated)
 
+> **These rows are the kickoff as it was written and are not updated in place.** Two have
+> since moved: D1's lane values are now `reliable` and `unreliable` (D92), and `stream()` is
+> shipped rather than a non-goal (D93). The rows below keep their original wording because
+> this table is a record of what was decided, not a description of the current API. For that,
+> read `API.md`.
+
 | id | decision |
 |----|----------|
 | D1 | **lane-in-contract.** Events declare `stream` or `datagram` at contract-definition time. The lane is a property of the message type, never of the call site. |
@@ -281,6 +287,10 @@ Recorded in `ADR/runtime-split` with the segfault evidence so nobody simplifies 
 to one runtime.
 
 ### D15. Backpressure: one policy, three lanes, numbers not adjectives
+*The call-stream half of this entry was disproved in 2026-08. It says a stalled consumer
+applies flow control through the transport; it does not, and `stream()` carries an explicit
+credit window instead. Kept as written, because this is a record. See D93 and ADR 0012.*
+
 The three constraints resolve differently because the lanes make different promises.
 
 - **Datagram lane, per peer:** bounded ring of **64 frames**, drop **oldest** on

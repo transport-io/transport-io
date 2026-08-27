@@ -9,8 +9,9 @@ frame and closes its send side; the responder writes frames and closes. The stre
 correlation. There are no acknowledgement identifiers, no pending-callback map and no
 timeout tracking.
 
-The response is a **sequence** of frames terminated by stream close, even though version 0
-sends at most one.
+The response is a **sequence** of frames terminated by stream close. An event declaring
+`returns` sends exactly one frame; an event declaring `yields` sends as many as it likes.
+Both shapes were reserved here and only the first was implemented at the time.
 
 ## Alternative rejected
 
@@ -28,9 +29,10 @@ stream means the transport supplies correlation, ordering, cleanup and isolation
 A stalled call consumes one stream and blocks nothing else. Cancellation becomes a stream
 reset rather than an application-level protocol.
 
-Making the response a frame sequence rather than a single length-prefixed frame costs
-nothing today and is what allows incremental responses to be added later without a
-protocol break.
+Making the response a frame sequence rather than a single length-prefixed frame cost nothing
+at the time and is what let `stream()` arrive in 0.2.0 without a protocol break. The bet paid
+out: no frame type changed, no version moved, and a 0.1.0 caller still works against a 0.2.0
+responder. See ADR 0012.
 
 ## Revisit when
 

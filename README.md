@@ -9,8 +9,9 @@ Real-time apps over WebTransport. Socket.IO's shape, on a transport with multipl
 and datagrams, without Socket.IO's mistakes.
 
 **Hide the mechanism, expose the guarantee.** Framing, length prefixes, buffer
-accumulation, stream lifecycle and backpressure queues are hidden - nobody should ever
-write framing code. Reliability semantics are always visible: "this message may be
+accumulation and stream lifecycle are hidden - nobody should ever write framing code.
+Bounds are not hidden: a streaming responder runs at most 32 frames ahead of its consumer,
+and that number is documented because you can hit it. Reliability semantics are always visible: "this message may be
 dropped" is a property of your data, not an implementation detail, and it lives in the
 type system.
 
@@ -175,6 +176,12 @@ and no timeout tracking - and a stalled call cannot block another one. Cancellat
 QUIC stream reset: immediate, costing no application message, and the responder's signal
 fires without the client sending anything.
 
+**Responses can be sequences, and cancelling one is `break`.** An event declaring `yields`
+answers with an async iterable instead of a value. Leaving the loop resets the QUIC stream,
+which fires the handler's `ctx.signal` and runs its `finally`; there is no cancel method
+because there is nothing for one to do. The producer runs at most 32 frames ahead of what
+the consumer has taken, accounted for by this library rather than assumed of the transport.
+
 **No default call timeout.** A dead peer is detected by the QUIC idle timeout, which
 rejects every pending call - the case a timeout is usually reached for is already handled.
 Pass `AbortSignal.timeout(ms)` when you want one.
@@ -192,9 +199,18 @@ against anything.
 ## Not in this version
 
 Namespaces (a room-name prefix covers it), presence and peer counts, middleware chains
-(auth is one hook), binary payloads (JSON only, with a codec seam reserved), `stream()` for
-token streaming (the protocol space is reserved and `AbortSignal` already works), framework
-bindings, and the Redis adapter.
+(auth is one hook), binary payloads (JSON only, with a codec seam reserved), server-initiated
+streaming (a response shape only), framework bindings, and the Redis adapter.
+
+## Upgrading from 0.1.0
+
+**`0.2.0` breaks the wire.** Lane values were renamed, and the handshake carries the lane as
+a literal string, so a `0.1.0` peer and a `0.2.0` peer fail to negotiate with
+`WT_PROTOCOL_ERROR`. Upgrade both sides together; there is no rolling path between them.
+
+In your contracts, `lane: 'stream'` becomes `lane: 'reliable'` and `lane: 'datagram'` becomes
+`lane: 'unreliable'`. Nothing else changed: no error code, no frame type, and `call()`
+behaves exactly as it did.
 
 ## Documentation
 

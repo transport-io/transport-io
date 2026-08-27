@@ -158,14 +158,14 @@ is never thrown from this library.
 | `WT_HANDLER_ERROR` | a `handle()` callback threw | inspect server logs |
 | `WT_UNKNOWN_EVENT` | event not in the contract | check the spelling, or deploy both sides |
 | `WT_VALIDATION_FAILED` | payload failed its schema | fix the payload |
-| `WT_TOO_MANY_STREAMS` | over 256 concurrent calls on one session | reduce concurrency; the session stays up |
+| `WT_TOO_MANY_STREAMS` | over 256 concurrent streams on one session, calls and `stream()` together | reduce concurrency; the session stays up |
 | `WT_PROTOCOL_VERSION_MISMATCH` | peers disagree on protocol major | deploy both sides together |
 | `WT_CONTRACT_MISMATCH` | an event's lane or id differs across peers | align the contract |
 | `WT_HANDSHAKE_TIMEOUT` | no handshake within 5s | usually an unsupported browser |
 | `WT_PEER_TOO_SLOW` | emit queue hit 256 frames | the peer was disconnected |
 | `WT_RELIABILITY_REFUSED` | session negotiated reliable-only | refused rather than lie about the unreliable lane |
 | `WT_UNSUPPORTED_CODEC` | codec other than JSON | send codec `0x01` |
-| `WT_PAYLOAD_TOO_LARGE` | frame over its cap | use a call, or split |
+| `WT_PAYLOAD_TOO_LARGE` | frame over its cap | use a call or a `stream()`, or split |
 | `WT_PROTOCOL_ERROR` | malformed frame | check against `PROTOCOL.md` |
 | `WT_HANDSHAKE_INCOMPLETE` | traffic before the handshake | await `connect()` first |
 

@@ -6,6 +6,8 @@ Both lanes in one page, so you can watch the difference.
 - **cursor** is `lane: 'unreliable'` - unreliable. Frames are dropped routinely, which is
   fine: a cursor position is stale the moment the next one exists.
 - **setName** is a `call()` - request and response on their own bidirectional stream.
+- **say** is a `stream()` - type `/say some words` and the reply arrives one word at a time,
+  growing the line in place. One bidirectional stream, many response frames.
 
 The contract in [`contract.ts`](contract.ts) is the only place that says which is which.
 

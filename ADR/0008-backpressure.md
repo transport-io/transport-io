@@ -8,7 +8,7 @@
 |---|---|---|
 | Datagram, per peer | 64 frames | Discard **oldest**, count it, never error. |
 | Emit, per peer | 256 frames | Close the session with `WT_PEER_TOO_SLOW`. |
-| Call stream | 16 frames high-water | Await the writer. Never discard. |
+| Call stream | 32 frames of credit | Wait for credit. Never discard. |
 
 Plus a **150 ms time-to-live on queued datagrams, checked at dequeue**, counted separately
 as `staleDropped` from `overflowDropped`.
@@ -32,10 +32,26 @@ Dropping is the lane's advertised contract, so it counts rather than throws.
 and then silently drops is exactly the lie this project exists to avoid. A peer 256 frames
 behind has already failed; disconnecting is the honest outcome.
 
-**Call streams - no queue and no drop.** This one falls out of ADR 0002 rather than being
-designed. Each call owns its own QUIC stream, so awaiting the writer applies flow control
-to that call's own producer. One slow consumer stalls only itself. The requirement that one
-slow consumer must not stall the others is satisfied by the transport, not by our queueing.
+**Call streams - no queue and no drop.**
+
+*Rewritten. The original text said this fell out of ADR 0002 rather than being designed:
+each call owns its own QUIC stream, so awaiting the writer applies flow control to that
+call's own producer, and the requirement was "satisfied by the transport, not by our
+queueing". That was measured in 2026-08 and is false. `ready` resolves unconditionally on
+the reference binding, so awaiting the writer applies nothing; a producer ran 136,523 frames
+and roughly 53 MB ahead of a consumer that had taken 40, growing linearly with the run. The
+paragraph is replaced rather than annotated because this is a document people read to learn
+how backpressure works here, and a live document that is wrong is worse than no document.*
+
+There is no queue and nothing is discarded. A streaming responder spends **credit** granted
+by its consumer: 32 frames to start, refilled 16 at a time as elements are actually taken,
+and it waits at zero. That bound is this library's own accounting, not the transport's, and
+it is the only reason one slow consumer stalls only itself.
+
+What *is* satisfied by the transport is isolation, which is the ADR 0002 property: each call
+owns its own QUIC stream, so a stalled one blocks no other. Isolation was never the part in
+doubt. The size of what a single stream may buffer was, and that part had to be built. See
+ADR 0012 and D93 for the measurement.
 
 ## Two axes, not one
 
