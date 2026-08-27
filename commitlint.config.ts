@@ -7,7 +7,7 @@ import type { UserConfig } from '@commitlint/types'
  * No commit ever has a body. Breaking changes use the `!` marker, because a
  * `BREAKING CHANGE:` footer would require one.
  */
-const scopes = ['core', 'ci', 'docs', 'deps', 'repo']
+const scopes = ['core', 'ci', 'docs', 'deps', 'repo', 'site']
 
 const config: UserConfig = {
   extends: ['@commitlint/config-conventional'],

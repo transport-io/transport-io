@@ -7,3 +7,5 @@ examples/chat/.cert/
 examples/chat/web/dist/
 test-results/
 playwright-report/
+site/.astro/
+site/dist/

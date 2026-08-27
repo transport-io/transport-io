@@ -1,22 +1,22 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreDependencies": [
-    // Loaded by a dynamic import inside the JS glue package, never statically, so no
-    // analysis can see it. Needed by the e2e and the soak; users install it themselves.
     "@fails-components/webtransport-transport-http3-quiche",
-    // Used only by a TypeScript block in README.md, which the docs gate compiles and knip
-    // cannot see through markdown. Removing it breaks scripts/check-docs.ts.
     "zod",
-    // Loaded by the stream-churn benchmark through createRequire with a computed file
-    // path, because the package exports only "." and that entry is raw TypeScript which
-    // Node refuses to strip inside node_modules. No static analysis can see the import.
-    // Kept as the measured alternative behind the transport seam - see D66.
     "@moq/web-transport"
   ],
-  // Used by the e2e and soak harnesses to mint a short-lived certificate.
-  "ignoreBinaries": ["openssl"],
+  "ignoreBinaries": [
+    "openssl"
+  ],
   "workspaces": {
-    ".": { "entry": ["scripts/*.ts"], "project": ["scripts/**/*.ts"] },
+    ".": {
+      "entry": [
+        "scripts/*.ts"
+      ],
+      "project": [
+        "scripts/**/*.ts"
+      ]
+    },
     "packages/core": {
       "entry": [
         "src/bench/*.node.ts",
@@ -24,8 +24,27 @@
         "src/**/*.test-d.ts",
         "src/**/*.node.test.ts"
       ],
-      "project": ["src/**/*.ts"]
+      "project": [
+        "src/**/*.ts"
+      ]
     },
-    "examples/chat": { "entry": ["web/main.ts", "scripts/*.ts"], "project": ["**/*.ts"] }
+    "examples/chat": {
+      "entry": [
+        "web/main.ts",
+        "scripts/*.ts"
+      ],
+      "project": [
+        "**/*.ts"
+      ]
+    },
+    "site": {
+      "entry": [
+        "src/loaders/*.ts",
+        "src/content/**"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ]
+    }
   }
 }

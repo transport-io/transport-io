@@ -1,0 +1,59 @@
+/*
+ * The brand's ink and bone, and one accent. Code samples are the most important element on
+ * every page, so everything here exists to keep them legible: a wider content column than
+ * Starlight's default, and no decoration competing with a fenced block.
+ */
+:root {
+  --tio-ink: #16130f;
+  --tio-bone: #e7e2d6;
+  --tio-accent: #c2551d;
+  --sl-content-width: 50rem;
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent: var(--tio-accent);
+  --sl-color-accent-high: #f0a077;
+  --sl-color-bg: var(--tio-ink);
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent: var(--tio-accent);
+  --sl-color-accent-low: #f5e3d8;
+  --sl-color-bg: #faf8f4;
+}
+
+.expressive-code {
+  margin-block: 1.25rem;
+}
+
+/* A claim with a number in it, used where a figure needs its denominator beside it. */
+.tio-figure {
+  border-inline-start: 3px solid var(--tio-accent);
+  padding-inline-start: 1rem;
+  margin-block: 1.5rem;
+}
+
+/*
+ * The recording slot. The aspect ratio is locked so the page does not shift when the video
+ * is dropped in, and it is deliberately obvious that nothing is running here yet: a
+ * plausible-looking placeholder on a landing page is a fake demo with extra steps.
+ */
+.tio-demo-slot {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: 60rem;
+  margin-inline: auto;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  text-align: center;
+  border: 2px dashed var(--sl-color-gray-4);
+  border-radius: 0.5rem;
+  color: var(--sl-color-gray-2);
+}
+
+.tio-demo-slot video {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.5rem;
+}

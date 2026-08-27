@@ -8,7 +8,8 @@
   },
   "workspaces": [
     "packages/*",
-    "examples/*"
+    "examples/*",
+    "site"
   ],
   "scripts": {
     "bench:stream-churn": "./scripts/check-node.sh && node --expose-gc packages/core/src/bench/stream-churn.node.ts",
