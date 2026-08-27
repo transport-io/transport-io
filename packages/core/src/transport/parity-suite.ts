@@ -22,10 +22,10 @@ import type { TransportError } from '../errors.ts'
 import type { Connection } from './types.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ n: number }>() },
-  echo: { lane: 'stream', payload: type$<{ n: number }>(), returns: type$<{ n: number }>() },
-  slow: { lane: 'stream', payload: type$<null>(), returns: type$<null>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ n: number }>() },
+  echo: { lane: 'reliable', payload: type$<{ n: number }>(), returns: type$<{ n: number }>() },
+  slow: { lane: 'reliable', payload: type$<null>(), returns: type$<null>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 
@@ -150,11 +150,11 @@ export async function runParity(t: UnderTest): Promise<void> {
 
   client.emit('chat', { body: 'reliable' })
   await settle()
-  assert.deepEqual(chat, ['reliable'], `${t.name}: stream lane`)
+  assert.deepEqual(chat, ['reliable'], `${t.name}: reliable lane`)
 
   client.emit('cursor', { n: 7 })
   await settle()
-  assert.deepEqual(cursor, [7], `${t.name}: datagram lane`)
+  assert.deepEqual(cursor, [7], `${t.name}: unreliable lane`)
 
   // Half-close for the request, response read to stream close.
   assert.deepEqual(await client.call('echo', { n: 21 }), { n: 42 }, `${t.name}: call`)

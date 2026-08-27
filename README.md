@@ -19,13 +19,17 @@ import { defineContract } from 'transport-io'
 import { z } from 'zod'
 
 export const teaser = defineContract({
-  chat: { lane: 'stream', payload: z.object({ room: z.string(), body: z.string() }) },
-  cursor: { lane: 'datagram', payload: z.object({ x: z.number(), y: z.number() }) },
+  chat: { lane: 'reliable', payload: z.object({ room: z.string(), body: z.string() }) },
+  cursor: { lane: 'unreliable', payload: z.object({ x: z.number(), y: z.number() }) },
 })
 ```
 
 `chat` will arrive. `cursor` may not. The contract is the only place that says so, and
 both sides infer from it.
+
+The lane names the guarantee, not the machinery: the **reliable** lane is carried on QUIC
+streams, the **unreliable** lane on QUIC datagrams. You write down what your data needs and
+the library picks the mechanism.
 
 ## Install
 
@@ -78,9 +82,9 @@ use WSL.
 import { defineContract, type MapOf, type$ } from 'transport-io'
 
 export const contract = defineContract({
-  chat:   { lane: 'stream',   payload: type$<{ from: string; body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number; y: number }>() },
-  save:   { lane: 'stream',   payload: type$<{ text: string }>(),
+  chat:   { lane: 'reliable',   payload: type$<{ from: string; body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
+  save:   { lane: 'reliable',   payload: type$<{ text: string }>(),
             returns: type$<{ revision: number }>() },
 })
 

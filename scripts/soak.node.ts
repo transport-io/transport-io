@@ -33,12 +33,12 @@ const arg = (name: string, fallback: number): number => {
 }
 
 /**
- * `--lanes emit,datagram` measures only the lanes bound by D13's slope criterion.
+ * `--lanes emit,unreliable` measures only the lanes bound by D13's slope criterion.
  * `--lanes call` measures the exempted lane, whose number is recorded rather than gated.
  * Default is all three, which will fail until the upstream leak is fixed - that is the
  * exemption being visible rather than silent.
  */
-const LANES = argStr('lanes', 'emit,datagram,call').split(',')
+const LANES = argStr('lanes', 'emit,unreliable,call').split(',')
 const MINUTES = arg('minutes', 60)
 const SESSIONS = arg('sessions', 500)
 const PORT = arg('port', 34500)
@@ -49,9 +49,9 @@ const RSS_CEILING_MB = 600
 const TARGET_CALLS = 50_000
 
 const contract = defineContract({
-  ping: { lane: 'stream', payload: type$<{ n: number }>(), returns: type$<{ n: number }>() },
-  tick: { lane: 'datagram', payload: type$<{ n: number }>() },
-  note: { lane: 'stream', payload: type$<{ n: number }>() },
+  ping: { lane: 'reliable', payload: type$<{ n: number }>(), returns: type$<{ n: number }>() },
+  tick: { lane: 'unreliable', payload: type$<{ n: number }>() },
+  note: { lane: 'reliable', payload: type$<{ n: number }>() },
 })
 interface SoakMap extends MapOf<typeof contract> {}
 
@@ -139,7 +139,7 @@ const churn = async (): Promise<void> => {
           callErrors++
         }
       }
-      if (LANES.includes('datagram')) c.emit('tick', { n: i })
+      if (LANES.includes('unreliable')) c.emit('tick', { n: i })
       if (LANES.includes('emit')) c.emit('note', { n: i })
     })
     await Promise.all(batch)

@@ -11,8 +11,8 @@ condition. An unsupported runtime is unsupported and says so with `WT_NO_SUPPORT
 
 A WebSocket fallback for browsers or networks where QUIC is unavailable.
 
-A WebSocket is reliable and ordered. Running the datagram lane over one would silently
-convert every `lane: 'datagram'` event into a reliable, ordered one. The contract would
+A WebSocket is reliable and ordered. Running the unreliable lane over one would silently
+convert every `lane: 'unreliable'` event into a reliable, ordered one. The contract would
 still say the message may be dropped; the transport would guarantee it never is. The
 application would be built on a guarantee that is a lie, and the lie would be invisible
 precisely where it matters - under the network conditions that triggered the fallback.

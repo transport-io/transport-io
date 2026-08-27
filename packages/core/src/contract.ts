@@ -6,28 +6,28 @@ import type { StandardSchemaV1, StandardTypedV1 } from '@standard-schema/spec'
 import { TransportError } from './errors.ts'
 import { EVENT_ID_NOT_APPLICABLE } from './protocol.ts'
 
-export type Lane = 'stream' | 'datagram'
+export type Lane = 'reliable' | 'unreliable'
 export type Schema = StandardSchemaV1
 
 /**
- * `returns` is meaningful only on the stream lane: a datagram has no response path.
+ * `returns` is meaningful only on the reliable lane: a datagram has no response path.
  *
  * The `returns?: never` on the datagram branch does real work. Excess
  * property checking against a *union* admits any property present on any member, so
- * `{ lane: 'datagram', payload, returns }` compiled happily, `CallableOf` admitted it, and
+ * `{ lane: 'unreliable', payload, returns }` compiled happily, `CallableOf` admitted it, and
  * `call()` served it over a bidirectional stream. A contract that says "may be dropped"
  * produced a guaranteed ordered message with the type system agreeing - a direct violation
  * of D1, the first decision this project made.
  */
 export type EventDef =
   | {
-      readonly lane: 'datagram'
+      readonly lane: 'unreliable'
       readonly payload: Schema
       readonly id?: number
       readonly returns?: never
     }
   | {
-      readonly lane: 'stream'
+      readonly lane: 'reliable'
       readonly payload: Schema
       readonly returns?: Schema
       readonly id?: number

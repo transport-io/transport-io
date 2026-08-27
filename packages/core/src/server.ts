@@ -70,7 +70,7 @@ export class Server<M extends AnyMap = AnyMap> {
     this.#table = await buildEventTable(this.#opts.contract)
     this.#adapter = this.#opts.adapter ?? new MemoryAdapter(this.#nodeId)
     this.#hub = new Hub(this.#adapter, this.#table)
-    // The server broadcasts on the datagram lane too, so it needs its own origin.
+    // The server broadcasts on the unreliable lane too, so it needs its own origin.
     // Origin 0 is reserved, so it cannot simply be left unset.
     this.#serverOrigin = this.#origins.allocate(Date.now())
   }

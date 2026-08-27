@@ -8,7 +8,7 @@
  *
  * Everything ugly about the dependency is contained here:
  *   - it ships an HTTP/2 fallback that is on by default, which would silently make the
- *     datagram lane reliable and ordered, so only `Http3Server` is ever constructed
+ *     unreliable lane reliable and ordered, so only `Http3Server` is ever constructed
  *   - oversized and blocked datagrams are accepted, discarded, and reported as success
  *   - `WebTransportError` omits the specification's `streamErrorCode`, so a reset code is
  *     recoverable only by parsing a message string

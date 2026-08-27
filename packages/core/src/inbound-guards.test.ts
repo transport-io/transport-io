@@ -31,8 +31,8 @@ import { loopbackPair } from './transport/loopback.ts'
 import type { Connection } from './transport/types.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number }>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 void (0 as unknown as AppMap)
@@ -108,7 +108,7 @@ describe('a datagram arriving before the handshake is discarded', () => {
     )
     await new Promise((r) => setTimeout(r, 50))
 
-    // The stream lane has had a `#negotiated` guard all along; the datagram lane had none,
+    // The reliable lane has had a `#negotiated` guard all along; the unreliable lane had none,
     // so a pre-handshake datagram was decoded and delivered here while PROTOCOL.md §7 and
     // ADR 0009 both say it is discarded silently. A second implementer drops it; this one
     // rendered it - and the application sees an event from a session it has not agreed a

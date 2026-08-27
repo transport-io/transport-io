@@ -20,9 +20,13 @@ import { loopbackPair } from './transport/loopback.ts'
 import type { BidiStream, CloseInfo, Connection } from './transport/types.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
-  save: { lane: 'stream', payload: type$<{ text: string }>(), returns: type$<{ n: number }>() },
-  slow: { lane: 'stream', payload: type$<null>(), returns: type$<null>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  save: {
+    lane: 'reliable',
+    payload: type$<{ text: string }>(),
+    returns: type$<{ n: number }>(),
+  },
+  slow: { lane: 'reliable', payload: type$<null>(), returns: type$<null>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 

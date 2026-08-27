@@ -7,17 +7,17 @@ import { defineContract, type MapOf, type$ } from 'transport-io'
 export const contract = defineContract({
   /** Reliable and ordered. A chat message that vanishes is a bug. */
   chat: {
-    lane: 'stream',
+    lane: 'reliable',
     payload: type$<{ from: string; body: string; at: number }>(),
   },
   /** Unreliable. A cursor position that vanishes is last week's news. */
   cursor: {
-    lane: 'datagram',
+    lane: 'unreliable',
     payload: type$<{ from: string; x: number; y: number }>(),
   },
   /** Callable: it declares `returns`. */
   setName: {
-    lane: 'stream',
+    lane: 'reliable',
     payload: type$<{ name: string }>(),
     returns: type$<{ accepted: boolean; name: string }>(),
   },

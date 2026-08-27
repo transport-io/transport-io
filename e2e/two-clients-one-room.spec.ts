@@ -30,14 +30,14 @@ test('two clients in one room exchange a message on each lane', async ({ browser
   await expect(lines(alice).filter({ hasText: 'you are' })).toHaveCount(1)
   await expect(lines(bob).filter({ hasText: 'you are' })).toHaveCount(1)
 
-  // ---------- stream lane: reliable, so both must receive it ----------
+  // ---------- reliable lane: reliable, so both must receive it ----------
   await alice.fill('#body', 'reliable hello')
   await alice.press('#body', 'Enter')
 
   await expect(lines(alice).filter({ hasText: 'reliable hello' })).toHaveCount(1)
   await expect(lines(bob).filter({ hasText: 'reliable hello' })).toHaveCount(1)
 
-  // ---------- datagram lane: bob must see alice's cursor ----------
+  // ---------- unreliable lane: bob must see alice's cursor ----------
   const surface = alice.locator('#surface')
   const box = await surface.boundingBox()
   expect(box).not.toBeNull()
@@ -90,8 +90,8 @@ test('a dropped datagram never becomes a dropped chat message', async ({ browser
   await page.goto('/')
   await connected(page)
 
-  // Flood the datagram lane hard enough to force our own ring to drop, then confirm the
-  // stream lane is untouched by it. The two lanes make different promises and this is
+  // Flood the unreliable lane hard enough to force our own ring to drop, then confirm the
+  // reliable lane is untouched by it. The two lanes make different promises and this is
   // where that stops being a claim.
   await page.evaluate(() => {
     const surface = document.getElementById('surface')

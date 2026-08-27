@@ -18,7 +18,7 @@ lands upstream.
 ## There is no fallback
 
 Not to WebSocket, not to anything. A WebSocket is reliable and ordered, so falling back to
-one would silently convert every `lane: 'datagram'` event into a reliable one - your
+one would silently convert every `lane: 'unreliable'` event into a reliable one - your
 contract would still say the message may be dropped while the transport guaranteed it
 never is. Degrading availability is honest. Degrading a guarantee is not. An unsupported
 runtime gets `WT_NO_SUPPORT` and nothing else.
@@ -33,11 +33,11 @@ means silently risking duplicate execution.
 
 ## Datagrams may be dropped, duplicated or reordered
 
-On the datagram lane there is no delivery guarantee, no ordering guarantee, no
+On the unreliable lane there is no delivery guarantee, no ordering guarantee, no
 acknowledgement, no retransmission, and no flow-control feedback. Duplicates are discarded
 for you and stale arrivals are dropped rather than rendered as history, but loss is
 reported to nobody because loss is the contract. Anything that cannot tolerate this belongs
-on the stream lane, and the contract is where you say which.
+on the reliable lane, and the contract is where you say which.
 
 ## It requires raw UDP ingress to your process
 

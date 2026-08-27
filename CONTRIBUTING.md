@@ -48,7 +48,7 @@ set `E2E_PORT`.
 Two soaks exist and are run by hand rather than in CI, because they take an hour:
 
 ```bash
-npm run soak:lanes    # emit and datagram lanes, 500 sessions, 60 minutes
+npm run soak:lanes    # emit and unreliable lanes, 500 sessions, 60 minutes
 npm run soak:churn    # connect and disconnect, measures what a dead session leaves behind
 ```
 

@@ -16,12 +16,16 @@ CI.** When the API changes, the docs stop compiling and the build breaks.
 The contract is the single source of truth. Reading `contract.ts` tells you every event,
 payload and lane in the application without reading anything else.
 
+A lane is a guarantee. `reliable` means the message arrives, in order; it is carried on a
+QUIC stream. `unreliable` means it may be dropped, duplicated or reordered; it is carried on
+a QUIC datagram. The name says what your data gets, not how it travels.
+
 ```ts
 import { defineContract, type MapOf, type$ } from 'transport-io'
 
 export const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ room: string; body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number; y: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ room: string; body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
 })
 
 export interface AppMap extends MapOf<typeof contract> {}
@@ -56,7 +60,7 @@ Two names whose hashes collide are a build-time error naming both events; set an
 
 ```ts
 export const withOverride = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>(), id: 0x31e06f7d },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>(), id: 0x31e06f7d },
 })
 ```
 
@@ -114,7 +118,7 @@ nothing else.
 import { defineContract as dc, type MapOf as M, type$ as t$, Client as C } from 'transport-io'
 
 export const rpc = dc({
-  save: { lane: 'stream', payload: t$<{ text: string }>(), returns: t$<{ revision: number }>() },
+  save: { lane: 'reliable', payload: t$<{ text: string }>(), returns: t$<{ revision: number }>() },
 })
 export interface RpcMap extends M<typeof rpc> {}
 declare const rpcClient: C<RpcMap>
@@ -292,7 +296,7 @@ Two worth knowing:
   write, because the transport accepts an oversized datagram, discards it, and reports
   success.
 - **`WT_RELIABILITY_REFUSED`** means the session negotiated reliable-only transport. The
-  datagram lane would silently become reliable and ordered, so the session is refused
+  unreliable lane would silently become reliable and ordered, so the session is refused
   rather than allowed to lie about your data.
 
 ---
@@ -306,7 +310,7 @@ export const adapter: Adapter = new MemoryAdapter('node-1')
 
 export async function fanOut(a: Adapter, room: string, peer: PeerId): Promise<void> {
   await a.join(room, peer)
-  await a.broadcast(room, new Uint8Array([1, 2, 3]), { lane: 'stream', except: [peer] })
+  await a.broadcast(room, new Uint8Array([1, 2, 3]), { lane: 'reliable', except: [peer] })
 }
 ```
 

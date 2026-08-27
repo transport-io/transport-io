@@ -46,7 +46,7 @@ function isWireEvent(v: unknown): v is WireEvent {
     v.length === 3 &&
     typeof v[0] === 'string' &&
     typeof v[1] === 'number' &&
-    (v[2] === 'stream' || v[2] === 'datagram')
+    (v[2] === 'reliable' || v[2] === 'unreliable')
   )
 }
 

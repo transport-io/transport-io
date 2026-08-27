@@ -56,9 +56,13 @@ const SAMPLE_EVERY = arg('sample-every', 500)
 const BOUND_BYTES_PER_SESSION = arg('bytes-per-session', 2048)
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number; y: number }>() },
-  save: { lane: 'stream', payload: type$<{ text: string }>(), returns: type$<{ n: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
+  save: {
+    lane: 'reliable',
+    payload: type$<{ text: string }>(),
+    returns: type$<{ n: number }>(),
+  },
 })
 interface AppMap extends MapOf<typeof contract> {}
 

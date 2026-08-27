@@ -20,7 +20,7 @@ interface Queued<T> {
 }
 
 /**
- * Datagram lane: bounded ring, drop OLDEST on overflow, TTL checked at DEQUEUE.
+ * Unreliable lane: bounded ring, drop OLDEST on overflow, TTL checked at DEQUEUE.
  *
  * The two axes are different problems. Drop-oldest handles a burst. It does nothing for a
  * peer that stalls two seconds and resumes - the ring never overflows, so a backlog of

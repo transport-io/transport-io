@@ -16,8 +16,8 @@ import { HostileAdapter } from './testing/hostile-adapter.ts'
 import { loopbackPair } from './transport/loopback.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ n: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ n: number }>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 
@@ -46,7 +46,9 @@ for (const impl of IMPLEMENTATIONS) {
       const a = impl.make('n1')
       expect(a.join('r', 'p')).toBeInstanceOf(Promise)
       expect(a.leave('r', 'p')).toBeInstanceOf(Promise)
-      expect(a.broadcast('r', new Uint8Array([1]), { lane: 'stream' })).toBeInstanceOf(Promise)
+      expect(a.broadcast('r', new Uint8Array([1]), { lane: 'reliable' })).toBeInstanceOf(
+        Promise,
+      )
     })
 
     test('frames cross as bytes and survive the round trip intact', async () => {
@@ -54,7 +56,7 @@ for (const impl of IMPLEMENTATIONS) {
       const seen: RemoteEnvelope[] = []
       a.onRemote((e) => seen.push(e))
       const sent = new Uint8Array([0, 1, 2, 250, 255])
-      await a.broadcast('room', sent, { lane: 'stream' })
+      await a.broadcast('room', sent, { lane: 'reliable' })
       await settle()
 
       expect(seen.length).toBeGreaterThan(0)
@@ -69,7 +71,7 @@ for (const impl of IMPLEMENTATIONS) {
       const a = impl.make('self')
       const nodes: string[] = []
       a.onRemote((e) => nodes.push(e.nodeId))
-      await a.broadcast('room', new Uint8Array([1]), { lane: 'stream' })
+      await a.broadcast('room', new Uint8Array([1]), { lane: 'reliable' })
       await settle()
       expect(nodes.length).toBeGreaterThan(0)
       expect(nodes.every((n) => n === 'self')).toBe(true)
@@ -79,10 +81,10 @@ for (const impl of IMPLEMENTATIONS) {
       const a = impl.make('n1')
       const seen: RemoteEnvelope[] = []
       a.onRemote((e) => seen.push(e))
-      await a.broadcast('room', new Uint8Array([9]), { lane: 'datagram', except: ['peer-1'] })
+      await a.broadcast('room', new Uint8Array([9]), { lane: 'unreliable', except: ['peer-1'] })
       await settle()
       const got = seen[0] as RemoteEnvelope
-      expect(got.lane).toBe('datagram')
+      expect(got.lane).toBe('unreliable')
       expect(got.except).toEqual(['peer-1'])
     })
 

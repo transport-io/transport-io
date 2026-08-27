@@ -3,7 +3,7 @@
  * never of the call site. A contract that says "may be dropped" must not be able to produce
  * a guaranteed, ordered, acknowledged message.
  *
- * It could. `{ lane: 'datagram', payload, returns }` compiled - excess property checking
+ * It could. `{ lane: 'unreliable', payload, returns }` compiled - excess property checking
  * against a *union* admits any property present on any member - `CallableOf` then admitted
  * the event, and `Session.call` never looked at the lane, so the request went out over a
  * bidirectional stream and came back answered. The type system agreed with the violation
@@ -32,9 +32,13 @@ import { createServer } from './server.ts'
 import { loopbackPair } from './transport/loopback.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number; y: number }>() },
-  save: { lane: 'stream', payload: type$<{ text: string }>(), returns: type$<{ n: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
+  save: {
+    lane: 'reliable',
+    payload: type$<{ text: string }>(),
+    returns: type$<{ n: number }>(),
+  },
 })
 interface AppMap extends MapOf<typeof contract> {}
 
@@ -108,12 +112,12 @@ describe('a datagram event is not callable, from either side of the wire', () =>
 
   test('a stream event without `returns` is still not callable', async () => {
     const { client } = await wire()
-    // `chat` is on the stream lane but declares no response. Calling it is a different
+    // `chat` is on the reliable lane but declares no response. Calling it is a different
     // mistake from calling a datagram event, and must also fail rather than hang.
     await expect(client.call('chat' as never, { body: 'x' } as never)).rejects.toThrow()
   })
 
-  test('the datagram lane still works normally - the guard is not a blanket refusal', async () => {
+  test('the unreliable lane still works normally - the guard is not a blanket refusal', async () => {
     const { client, peer } = await wire()
     const seen: unknown[] = []
     client.on('cursor', (p) => seen.push(p))

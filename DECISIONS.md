@@ -2110,3 +2110,36 @@ not have. **Pushing is not finishing.** Check the run.
 **Reconsider when:** the floor moves off 5.0, or `attw` grows the ability to check a
 tarball's declarations under a named compiler version, which would make most of this script
 redundant.
+
+### D92. Lanes are named for the guarantee: `reliable` and `unreliable`
+`lane: 'stream'` becomes `lane: 'reliable'`, and `lane: 'datagram'` becomes
+`lane: 'unreliable'`.
+
+The trigger was a collision. `stream()` is a streaming response, `lane: 'stream'` is the
+reliable lane, and `{ lane: 'stream', yields: ... }` would have put both meanings of the word
+in one line of every example forever. But the collision is the symptom. `stream` and
+`datagram` name QUIC streams and UDP datagrams, which are mechanisms, and the thesis of this
+library is that mechanisms are hidden and guarantees are exposed. The lane was the one place
+that said the opposite, and it said it in the single most-read line of every contract.
+
+**This touches the wire.** `WireEvent` is `[name, id, lane]` and the lane travels as its
+literal string; `isWireEvent` validates it. A 0.1.0 peer meeting a 0.2.0 peer fails at
+`parseHandshake` with `WT_PROTOCOL_ERROR` and the message `malformed handshake: 'events' is
+not an array of [name, id, lane] triples`. That is acceptable only because the protocol is
+version 0 with an exact-match handshake and there is no deployed peer to break. It would not
+be acceptable after the first stable release, which is part of why the rename happened now.
+
+**No error code changed.** `WT_TOO_MANY_STREAMS` and `WT_DATAGRAM_TOO_LARGE` are about QUIC
+stream count and path MTU. They name the mechanism because they are about the mechanism,
+which is the same rule pointing the other way.
+
+The mechanism stays visible in the documents rather than being scrubbed: `PROTOCOL.md` §3
+and §7 both state that the reliable lane is carried on QUIC streams and the unreliable lane
+on QUIC datagrams, and `README.md`, `API.md` and `packages/core/README.md` each say it once,
+so a reader searching either word still lands somewhere useful.
+
+Ledger entries before this one use the old spelling. They are records of what was decided at
+the time and are not rewritten.
+
+**Reconsider when:** never, absent a third lane. If one arrives, it is named for what it
+promises.

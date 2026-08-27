@@ -40,12 +40,12 @@ for a coding agent.
 
 Full text in `DECISIONS.md`; this is the summary a fresh session needs so it cannot drift.
 
-- **D1 lane-in-contract.** Events declare `stream` or `datagram` at contract-definition
+- **D1 lane-in-contract.** Events declare `reliable` or `unreliable` at contract-definition
   time. The lane is a property of the message type, never of the call site.
 - **D2 streams-as-acks.** Each `call` opens its own bidirectional stream. No correlation
   IDs, no pending map. A stalled call cannot block another call.
 - **D3 no-fallback.** WebTransport only. A WebSocket fallback would silently make the
-  datagram lane reliable and ordered - a lie about the user's data.
+  unreliable lane reliable and ordered - a lie about the user's data.
 - **D4 new-session-on-reconnect.** Reconnect is a new session. Room membership does not
   survive it.
 - **D5 adapter-boundary.** Frames cross as bytes. Every method async. `MemoryAdapter` is

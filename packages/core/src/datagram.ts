@@ -34,7 +34,7 @@ export function encodeDatagram(dg: Datagram, reportedMax: number): Uint8Array {
   if (dg.eventId === EVENT_ID_NOT_APPLICABLE) {
     throw new TransportError(
       'WT_PROTOCOL_ERROR',
-      'event id 0 is not valid on the datagram lane',
+      'event id 0 is not valid on the unreliable lane',
       'Datagrams always carry a contract event. Check the event table.',
     )
   }
@@ -45,7 +45,7 @@ export function encodeDatagram(dg: Datagram, reportedMax: number): Uint8Array {
     throw new TransportError(
       'WT_DATAGRAM_TOO_LARGE',
       `payload is ${dg.payload.byteLength} bytes and the path allows ${limit}`,
-      'Shorten the payload, or declare this event on the stream lane where size is not capped this tightly.',
+      'Shorten the payload, or declare this event on the reliable lane where size is not capped this tightly.',
     )
   }
 
@@ -80,7 +80,7 @@ export function decodeDatagram(bytes: Uint8Array): Datagram {
   if (eventId === EVENT_ID_NOT_APPLICABLE) {
     throw new TransportError(
       'WT_PROTOCOL_ERROR',
-      'event id 0 is not valid on the datagram lane',
+      'event id 0 is not valid on the unreliable lane',
       'Check the sender against PROTOCOL.md §7.2.',
     )
   }

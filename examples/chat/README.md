@@ -2,8 +2,8 @@
 
 Both lanes in one page, so you can watch the difference.
 
-- **chat** is `lane: 'stream'` - reliable and ordered. Nothing sent here is ever lost.
-- **cursor** is `lane: 'datagram'` - unreliable. Frames are dropped routinely, which is
+- **chat** is `lane: 'reliable'` - reliable and ordered. Nothing sent here is ever lost.
+- **cursor** is `lane: 'unreliable'` - unreliable. Frames are dropped routinely, which is
   fine: a cursor position is stale the moment the next one exists.
 - **setName** is a `call()` - request and response on their own bidirectional stream.
 

@@ -47,7 +47,7 @@ type, bounds concurrent inbound call streams, and discards datagrams that arrive
 handshake. It does not assume good faith. Report anything that gets past those.
 
 **There is no WebSocket fallback, deliberately.** A fallback would silently make the
-datagram lane reliable and ordered, which is a lie about your data that nobody would catch.
+unreliable lane reliable and ordered, which is a lie about your data that nobody would catch.
 If WebTransport is unavailable, the connection fails rather than degrading quietly.
 
 **Each `call()` leaks about 5.95 KB of server memory.** This is upstream, in the QUIC

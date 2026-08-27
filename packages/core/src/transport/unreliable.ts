@@ -3,7 +3,7 @@
  * reordering, duplicating and delayed, on command.
  *
  * Test-only. The plain loopback delivers datagrams reliably and in order, which is
- * convenient and a lie - every guarantee the datagram lane deliberately does not make
+ * convenient and a lie - every guarantee the unreliable lane deliberately does not make
  * goes unexercised against it. This exists so loss, reordering and duplication are forced
  * deliberately rather than waited for.
  *

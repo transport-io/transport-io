@@ -10,7 +10,7 @@
  */
 export type PeerId = string
 export type Frame = Uint8Array
-export type Lane = 'stream' | 'datagram'
+export type Lane = 'reliable' | 'unreliable'
 
 /** The envelope carries the origin node. The frame the peer receives is not these bytes. */
 export interface RemoteEnvelope {

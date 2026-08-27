@@ -51,8 +51,8 @@ import { loopbackPair } from './transport/loopback.ts'
 import type { Connection } from './transport/types.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
-  slow: { lane: 'stream', payload: type$<null>(), returns: type$<null>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  slow: { lane: 'reliable', payload: type$<null>(), returns: type$<null>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 
@@ -113,7 +113,7 @@ describe('§10.2 - a peer must be able to tell these apart from a framing bug', 
     const ours = buildHandshake(await buildEventTable(contract))
     // Same version, same event, opposite lane: a disagreement about a guarantee.
     const flipped = ours.events.map(([n, id, lane]) =>
-      n === 'chat' ? ([n, id, 'datagram'] as const) : ([n, id, lane] as const),
+      n === 'chat' ? ([n, id, 'unreliable'] as const) : ([n, id, lane] as const),
     )
     await sendHandshake(peer, { ...ours, events: flipped })
 
@@ -145,7 +145,7 @@ describe('§10.2 - a peer must be able to tell these apart from a framing bug', 
     const takenId = ours.events[0]?.[1] as number
     await sendHandshake(peer, {
       ...ours,
-      events: [[long, takenId, 'datagram'] as const, ...ours.events],
+      events: [[long, takenId, 'unreliable'] as const, ...ours.events],
     })
 
     const { reason } = await peer.closed

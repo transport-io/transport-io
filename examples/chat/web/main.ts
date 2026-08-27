@@ -91,11 +91,11 @@ form.addEventListener('submit', (e) => {
   const body = input.value.trim()
   if (body.length === 0) return
   input.value = ''
-  // Stream lane. This will arrive.
+  // Reliable lane. This will arrive.
   client.emit('chat', { from: named.name, body, at: Date.now() })
 })
 
-// Datagram lane, at pointer rate. Most of these are redundant the moment they are sent,
+// Unreliable lane, at pointer rate. Most of these are redundant the moment they are sent,
 // which is exactly why losing one costs nothing.
 surface.addEventListener('pointermove', (e) => {
   const r = surface.getBoundingClientRect()

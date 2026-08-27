@@ -28,7 +28,7 @@ import { Session } from './session.ts'
 import type { BidiStream, CloseInfo, Connection } from './transport/types.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 void (0 as unknown as AppMap)

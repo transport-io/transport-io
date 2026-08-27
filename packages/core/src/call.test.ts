@@ -13,14 +13,18 @@ import { createServer, type Server } from './server.ts'
 import { loopbackPair } from './transport/loopback.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
   save: {
-    lane: 'stream',
+    lane: 'reliable',
     payload: type$<{ docId: string; text: string }>(),
     returns: type$<{ revision: number }>(),
   },
-  slow: { lane: 'stream', payload: type$<{ ms: number }>(), returns: type$<{ done: true }>() },
-  boom: { lane: 'stream', payload: type$<null>(), returns: type$<null>() },
+  slow: {
+    lane: 'reliable',
+    payload: type$<{ ms: number }>(),
+    returns: type$<{ done: true }>(),
+  },
+  boom: { lane: 'reliable', payload: type$<null>(), returns: type$<null>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 

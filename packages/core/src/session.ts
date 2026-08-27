@@ -254,7 +254,7 @@ export class Session {
       )
     }
     const bytes = encodePayload(payload)
-    if (entry.lane === 'datagram') {
+    if (entry.lane === 'unreliable') {
       const seq = ((this.#sequences.get(entry.id) ?? 0) + 1) >>> 0 || 1
       this.#sequences.set(entry.id, seq)
       const dg = encodeDatagram(
@@ -280,11 +280,11 @@ export class Session {
     // happily answering over a bidirectional stream for an event whose contract says the
     // message may be dropped.
     const entry = this.#table.byName(event)
-    if (entry !== undefined && entry.lane === 'datagram') {
+    if (entry !== undefined && entry.lane === 'unreliable') {
       throw new TransportError(
         'WT_PROTOCOL_ERROR',
         `'${event}' is a datagram event, so it has no response path to handle`,
-        'Move the event to the stream lane and give it `returns`, or handle it with on().',
+        'Move the event to the reliable lane and give it `returns`, or handle it with on().',
       )
     }
     this.#callHandlers.set(event, handler)
@@ -342,18 +342,18 @@ export class Session {
     // reached the wire without the types - and it names the actual problem instead of
     // travelling to the responder to come back as "no handler registered", which is a
     // different fault with a different remedy.
-    if (entry.lane === 'stream' && entry.def.returns === undefined) {
+    if (entry.lane === 'reliable' && entry.def.returns === undefined) {
       throw new TransportError(
         'WT_UNKNOWN_EVENT',
         `'${event}' declares no \`returns\`, so there is nothing to await`,
         'Add `returns` to the event in the contract, or use emit() if it is fire-and-forget.',
       )
     }
-    if (entry.lane === 'datagram') {
+    if (entry.lane === 'unreliable') {
       throw new TransportError(
         'WT_PROTOCOL_ERROR',
         `'${event}' is a datagram event and cannot be called`,
-        'A datagram may be dropped, so there is no response to await. Use emit(), or move the event to the stream lane.',
+        'A datagram may be dropped, so there is no response to await. Use emit(), or move the event to the reliable lane.',
       )
     }
     if (this.#openCalls >= MAX_CONCURRENT_CALL_STREAMS) {
@@ -588,7 +588,7 @@ export class Session {
       )
       return
     }
-    if (entry.lane === 'datagram') {
+    if (entry.lane === 'unreliable') {
       // A peer is not bound by our types. A second implementation written from
       // PROTOCOL.md can open a bidirectional stream for any event id it likes, and
       // answering one for a datagram event would silently upgrade a droppable message to a
@@ -596,7 +596,7 @@ export class Session {
       await this.#failCall(
         writer,
         'WT_PROTOCOL_ERROR',
-        `event '${entry.name}' is on the datagram lane and is not callable`,
+        `event '${entry.name}' is on the unreliable lane and is not callable`,
       )
       return
     }
@@ -751,7 +751,7 @@ export class Session {
 
   #onDatagram(bytes: Uint8Array): void {
     // PROTOCOL.md §7 and ADR 0009: a datagram before the handshake is discarded silently.
-    // The stream lane has had this guard all along; the datagram lane had none, so an
+    // The reliable lane has had this guard all along; the unreliable lane had none, so an
     // early packet was decoded and handed to the application for a session whose contract
     // had not been agreed. A second implementation drops it, and this one rendered it.
     if (this.#negotiated === undefined) return

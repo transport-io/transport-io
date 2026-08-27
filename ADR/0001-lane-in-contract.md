@@ -4,12 +4,12 @@
 
 ## Decision
 
-Every event declares `lane: 'stream' | 'datagram'` where the event itself is declared. The
+Every event declares `lane: 'reliable' | 'datagram'` where the event itself is declared. The
 lane is never chosen at the call site, and there is no per-call override.
 
 ## Alternative rejected
 
-A lane argument on `emit`, as in `emit('cursor', data, { lane: 'datagram' })`.
+A lane argument on `emit`, as in `emit('cursor', data, { lane: 'unreliable' })`.
 
 That makes reliability a property of an individual send rather than of the data. Two call
 sites for the same event can then disagree, and the disagreement is invisible until

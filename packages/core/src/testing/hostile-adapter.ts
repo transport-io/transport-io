@@ -97,7 +97,7 @@ export class HostileAdapter implements Adapter {
     const parsed = JSON.parse(wire) as {
       room: string
       frame: number[]
-      lane: 'stream' | 'datagram'
+      lane: 'reliable' | 'unreliable'
       nodeId: string
       except: string[]
     }

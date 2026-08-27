@@ -31,7 +31,7 @@ resets a stream or closes the session is specified per case in §10.
 transport-io runs over **WebTransport on HTTP/3 (QUIC) only**.
 
 A peer MUST NOT establish or accept a session over WebTransport on HTTP/2. That mapping
-retransmits lost data, which would make the datagram lane (§7) reliable and ordered while
+retransmits lost data, which would make the unreliable lane (§7) reliable and ordered while
 the contract continues to advertise it as unreliable. Silently changing a guarantee the
 application declared is the specific failure this protocol exists to prevent.
 
@@ -50,11 +50,16 @@ There is no fallback to WebSocket or any other transport, under any condition.
 
 A session uses two kinds of QUIC stream, plus datagrams.
 
+**Lane names describe the guarantee; this section describes the mechanism that carries it.**
+The **reliable** lane is carried on QUIC streams. The **unreliable** lane is carried on QUIC
+datagrams. A contract says `lane: 'reliable'` or `lane: 'unreliable'` because that is the
+property an application depends on; everything below is how it is delivered.
+
 | purpose | stream kind | lifetime |
 |---|---|---|
-| Emit lane | one **unidirectional** stream per direction | whole session |
-| Call | one **bidirectional** stream per call | one request/response exchange |
-| Datagram lane | not a stream | - |
+| Emit, reliable lane | one **unidirectional** stream per direction | whole session |
+| Call, reliable lane | one **bidirectional** stream per call | one request/response exchange |
+| Unreliable lane | QUIC datagrams, not a stream | - |
 
 ### 3.1 The emit lane
 
@@ -177,7 +182,7 @@ Each peer compares the two tables entry by entry:
 
 A refusal MUST name the offending event in the close reason, for example
 <!-- norm: refusal-names-the-event -> packages/core/src/protocol-promises.test.ts -->
-`event 'cursor' is 'datagram' here and 'stream' at the peer`.
+`event 'cursor' is 'unreliable' here and 'reliable' at the peer`.
 
 **Property worth knowing before you deploy: the server sends its event table to every peer
 that completes a handshake.** Anyone who can open a session learns the full set of event
@@ -391,7 +396,10 @@ subscription implements it as a call, which is already the authenticated path.
 
 ---
 
-## 7. Datagram lane
+## 7. Unreliable lane
+
+Carried on QUIC datagrams. Everything in this section is about datagrams as a transport
+mechanism; the lane is named for what it promises the application, which is nothing.
 
 ### 7.1 Layout
 
@@ -526,7 +534,7 @@ below only as the argument against, and applies to no conforming implementation.
 Were Origin a 32-bit hash, distinct peers would collide with probability approximately
 `n² / 2³³` - about one in eight thousand at 1,000 concurrent peers, and about 1% at 10,000.
 A collision degrades rather than corrupts: two peers share a last-write-wins slot for one
-event, so one of them loses updates it should have kept. The datagram lane already permits
+event, so one of them loses updates it should have kept. The unreliable lane already permits
 loss, which is why this is an acceptable trade against four more header bytes on the lane
 whose whole purpose is being small.
 
@@ -566,10 +574,10 @@ the transport to report an oversized datagram, because at least one widely used
 implementation accepts the write, discards the datagram, and reports success. Exceeding the
 limit raises `WT_DATAGRAM_TOO_LARGE` locally and transmits nothing.
 
-### 7.5 What the datagram lane does not guarantee
+### 7.5 What the unreliable lane does not guarantee
 
 Stated explicitly, because inference is not good enough for a guarantee this load-bearing.
-On the datagram lane:
+On the unreliable lane:
 
 - **Delivery is not guaranteed.** Any datagram may be lost, and loss is not reported.
 - **Ordering is not guaranteed.** Datagrams may arrive in any order relative to each other.
@@ -577,12 +585,12 @@ On the datagram lane:
   them at the receiver.
 - **There is no acknowledgement**, no retransmission and no delivery receipt.
 - **There is no flow control feedback.** A sender cannot learn that a receiver is behind.
-- **Ordering relative to the stream lane is not guaranteed.** A datagram sent after an emit
+- **Ordering relative to the reliable lane is not guaranteed.** A datagram sent after an emit
   may arrive before it, and vice versa.
 - **A datagram arriving before the handshake completes is discarded silently.** This is
   consistent with every point above and is not an error condition.
 
-Applications requiring any of these properties MUST declare the event on the stream lane
+Applications requiring any of these properties MUST declare the event on the reliable lane
 <!-- norm: datagram-guarantees-need-stream-lane -> packages/core/src/lane-integrity.test.ts -->
 instead. The lane is declared in the contract precisely so this choice is explicit and
 visible in the type system.
@@ -678,7 +686,7 @@ Raised by an implementation to its own application and never transmitted.
 | name | meaning and remedy |
 |---|---|
 | `WT_NO_SUPPORT` | The runtime has no WebTransport. There is no fallback; the browser is unsupported. |
-| `WT_DATAGRAM_TOO_LARGE` | Payload exceeded §7.4. Shorten it, or move the event to the stream lane. |
+| `WT_DATAGRAM_TOO_LARGE` | Payload exceeded §7.4. Shorten it, or move the event to the reliable lane. |
 | `WT_ROOM_NOT_JOINED` | Broadcast to a room this session is not in. Join first. |
 | `WT_SESSION_CLOSED` | The session closed while the operation was pending. Reconnect and retry. |
 

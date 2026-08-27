@@ -30,7 +30,11 @@ import { createServer } from './server.ts'
 import { loopbackPair } from './transport/loopback.ts'
 
 const contract = defineContract({
-  save: { lane: 'stream', payload: type$<{ text: string }>(), returns: type$<{ n: number }>() },
+  save: {
+    lane: 'reliable',
+    payload: type$<{ text: string }>(),
+    returns: type$<{ n: number }>(),
+  },
 })
 interface AppMap extends MapOf<typeof contract> {}
 

@@ -1,5 +1,5 @@
 /**
- * The datagram lane's failure behaviour, forced deliberately.
+ * The unreliable lane's failure behaviour, forced deliberately.
  *
  * Until this file existed the lane had never dropped anything: the loopback is reliable
  * and the real-QUIC test is one happy-path message, so the ring, the TTL, stale-drop,
@@ -24,8 +24,8 @@ import type { Connection } from './transport/types.ts'
 import { UnreliableConnection, type UnreliableOptions } from './transport/unreliable.ts'
 
 const contract = defineContract({
-  cursor: { lane: 'datagram', payload: type$<{ n: number }>() },
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ n: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 
@@ -186,7 +186,7 @@ describe('loss, duplication and reordering on the wire', () => {
     expect(r.peer.stats().staleReceived).toBe(1)
   })
 
-  test('the stream lane is untouched by any of it', async () => {
+  test('the reliable lane is untouched by any of it', async () => {
     const r = await rig({
       unreliable: { dropAt: new Set([1, 2, 3]), duplicateAt: new Set([4]) },
     })

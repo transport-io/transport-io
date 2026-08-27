@@ -50,15 +50,15 @@ describe('event identity', () => {
   test('is stable under insertion - the whole reason it is not positional', async () => {
     const before = await buildEventTable(
       defineContract({
-        chat: { lane: 'stream', payload: type$<unknown>() },
-        cursor: { lane: 'datagram', payload: type$<unknown>() },
+        chat: { lane: 'reliable', payload: type$<unknown>() },
+        cursor: { lane: 'unreliable', payload: type$<unknown>() },
       }),
     )
     const after = await buildEventTable(
       defineContract({
-        archive: { lane: 'stream', payload: type$<unknown>() }, // sorts first
-        chat: { lane: 'stream', payload: type$<unknown>() },
-        cursor: { lane: 'datagram', payload: type$<unknown>() },
+        archive: { lane: 'reliable', payload: type$<unknown>() }, // sorts first
+        chat: { lane: 'reliable', payload: type$<unknown>() },
+        cursor: { lane: 'unreliable', payload: type$<unknown>() },
       }),
     )
     // Positional ids would have shifted both existing events by one.
@@ -69,8 +69,8 @@ describe('event identity', () => {
   test('a collision is a build-time error naming both events and the fix', async () => {
     const id = await eventIdOf('chat')
     const contract = defineContract({
-      chat: { lane: 'stream', payload: type$<unknown>() },
-      other: { lane: 'stream', payload: type$<unknown>(), id },
+      chat: { lane: 'reliable', payload: type$<unknown>() },
+      other: { lane: 'reliable', payload: type$<unknown>(), id },
     })
     try {
       await buildEventTable(contract)
@@ -86,26 +86,26 @@ describe('event identity', () => {
   test('the reserved id 0 is refused', async () => {
     await expect(
       buildEventTable(
-        defineContract({ x: { lane: 'stream', payload: type$<unknown>(), id: 0 } }),
+        defineContract({ x: { lane: 'reliable', payload: type$<unknown>(), id: 0 } }),
       ),
     ).rejects.toThrow(TransportError)
   })
 
   test('entries expose name, id and lane for the wire table', async () => {
     const t = await buildEventTable(
-      defineContract({ chat: { lane: 'stream', payload: type$<unknown>() } }),
+      defineContract({ chat: { lane: 'reliable', payload: type$<unknown>() } }),
     )
     const entry = t.byName('chat') as EventEntry
-    expect(entry.lane).toBe('stream')
-    expect(t.wire()).toEqual([['chat', entry.id, 'stream']])
+    expect(entry.lane).toBe('reliable')
+    expect(t.wire()).toEqual([['chat', entry.id, 'reliable']])
   })
 })
 
 describe('handshake negotiation', () => {
   const table = async (c: Parameters<typeof buildEventTable>[0]) => await buildEventTable(c)
   const base = defineContract({
-    chat: { lane: 'stream', payload: type$<unknown>() },
-    cursor: { lane: 'datagram', payload: type$<unknown>() },
+    chat: { lane: 'reliable', payload: type$<unknown>() },
+    cursor: { lane: 'unreliable', payload: type$<unknown>() },
   })
 
   test('reserved feature tokens are declared, not invented at the call site', () => {
@@ -117,7 +117,7 @@ describe('handshake negotiation', () => {
   test('an added event is NOT a mismatch - additive change is rolling-deploy safe', async () => {
     const local = buildHandshake(await table(base))
     const peer = buildHandshake(
-      await table({ ...base, typing: { lane: 'stream', payload: type$<unknown>() } }),
+      await table({ ...base, typing: { lane: 'reliable', payload: type$<unknown>() } }),
     )
     const n = negotiate(local, peer)
     expect(n.peerOnly).toEqual(['typing'])
@@ -129,7 +129,7 @@ describe('handshake negotiation', () => {
   test('negotiate() rejects a lane disagreement - it is a guarantee, not a detail', async () => {
     const local = buildHandshake(await table(base))
     const peer = buildHandshake(
-      await table({ ...base, cursor: { lane: 'stream', payload: type$<unknown>() } }),
+      await table({ ...base, cursor: { lane: 'reliable', payload: type$<unknown>() } }),
     )
     try {
       negotiate(local, peer)
@@ -143,7 +143,7 @@ describe('handshake negotiation', () => {
   test('an id disagreement for the same name IS a mismatch', async () => {
     const local = buildHandshake(await table(base))
     const events = local.events.map((e) =>
-      e[0] === 'chat' ? (['chat', 999, 'stream'] as WireEvent) : e,
+      e[0] === 'chat' ? (['chat', 999, 'reliable'] as WireEvent) : e,
     )
     expect(() => negotiate(local, { ...local, events })).toThrow(TransportError)
   })
@@ -172,7 +172,7 @@ describe('handshake negotiation', () => {
   })
 })
 
-describe('datagram lane', () => {
+describe('unreliable lane', () => {
   test('header is 13 bytes and the payload budget derives from the path', () => {
     expect(maxDatagramPayload(1024)).toBe(1024 - DATAGRAM_HEADER_BYTES)
     expect(maxDatagramPayload(1211)).toBe(1211 - DATAGRAM_HEADER_BYTES)
@@ -246,7 +246,7 @@ describe('sequence gate keys on origin, not session', () => {
 })
 
 describe('backpressure', () => {
-  test('datagram lane drops OLDEST and never throws', () => {
+  test('unreliable lane drops OLDEST and never throws', () => {
     const q = new DatagramQueue<number>(4, 1000)
     for (let i = 0; i < 6; i++) q.push(i, 0)
     expect(q.drain(0)).toEqual([2, 3, 4, 5])
@@ -319,7 +319,7 @@ describe('adapter boundary', () => {
     const a = new MemoryAdapter('node-1')
     const seen: string[] = []
     a.onRemote((e) => seen.push(e.nodeId))
-    await a.broadcast('lobby', new Uint8Array([1]), { lane: 'stream' })
+    await a.broadcast('lobby', new Uint8Array([1]), { lane: 'reliable' })
     expect(seen).toEqual(['node-1'])
   })
 
@@ -327,7 +327,7 @@ describe('adapter boundary', () => {
     const a = new MemoryAdapter('n')
     expect(a.join('r', 'p')).toBeInstanceOf(Promise)
     expect(a.leave('r', 'p')).toBeInstanceOf(Promise)
-    expect(a.broadcast('r', new Uint8Array([1]), { lane: 'stream' })).toBeInstanceOf(Promise)
+    expect(a.broadcast('r', new Uint8Array([1]), { lane: 'reliable' })).toBeInstanceOf(Promise)
   })
 
   test('the write-only Publisher shape is satisfied by an Adapter', async () => {
@@ -335,7 +335,7 @@ describe('adapter boundary', () => {
     // implementation arrives with the Redis adapter.
     const p: Publisher = new MemoryAdapter('n')
     await expect(
-      p.broadcast('r', new Uint8Array([1]), { lane: 'stream' }),
+      p.broadcast('r', new Uint8Array([1]), { lane: 'reliable' }),
     ).resolves.toBeUndefined()
   })
 })

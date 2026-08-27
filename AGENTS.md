@@ -39,9 +39,9 @@ it from a file named `*.node.ts`.
 import { defineContract, type MapOf, type$ } from 'transport-io'
 
 export const contract = defineContract({
-  chat:   { lane: 'stream',   payload: type$<{ from: string; body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number; y: number }>() },
-  save:   { lane: 'stream',   payload: type$<{ text: string }>(),
+  chat:   { lane: 'reliable',   payload: type$<{ from: string; body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
+  save:   { lane: 'reliable',   payload: type$<{ text: string }>(),
             returns: type$<{ revision: number }>() },
 })
 
@@ -58,8 +58,11 @@ for inference with no runtime validation. Inbound payloads are validated; outbou
 
 ### Rules the contract enforces
 
-- `returns` is valid **only** on `lane: 'stream'`. A datagram has no response path, and the
-  type refuses it.
+- Lanes name guarantees. `reliable` is carried on QUIC streams, `unreliable` on QUIC
+  datagrams. Never write `lane: 'stream'` or `lane: 'datagram'`: those were the 0.1.0
+  spellings and they no longer exist.
+- `returns` is valid **only** on `lane: 'reliable'`. An unreliable event has no response
+  path, and the type refuses it.
 - An event's wire id is the first four bytes of SHA-256 of its **name**, so adding or
   removing events is rolling-deploy safe. Two names that collide are a build-time error
   naming both; set an explicit `id` on one rather than renaming.
@@ -147,7 +150,7 @@ is never thrown from this library.
 | code | means | do |
 |---|---|---|
 | `WT_NO_SUPPORT` | runtime has no WebTransport | nothing - there is no fallback |
-| `WT_DATAGRAM_TOO_LARGE` | payload past the path limit | shorten it, or use the stream lane |
+| `WT_DATAGRAM_TOO_LARGE` | payload past the path limit | shorten it, or use the reliable lane |
 | `WT_ROOM_NOT_JOINED` | broadcast to a room this session is not in | join first |
 | `WT_SESSION_CLOSED` | session closed while an operation was pending | reconnect and retry |
 | `WT_ABORTED` | the caller aborted | routine, not a fault |
@@ -159,7 +162,7 @@ is never thrown from this library.
 | `WT_CONTRACT_MISMATCH` | an event's lane or id differs across peers | align the contract |
 | `WT_HANDSHAKE_TIMEOUT` | no handshake within 5s | usually an unsupported browser |
 | `WT_PEER_TOO_SLOW` | emit queue hit 256 frames | the peer was disconnected |
-| `WT_RELIABILITY_REFUSED` | session negotiated reliable-only | refused rather than lie about the datagram lane |
+| `WT_RELIABILITY_REFUSED` | session negotiated reliable-only | refused rather than lie about the unreliable lane |
 | `WT_UNSUPPORTED_CODEC` | codec other than JSON | send codec `0x01` |
 | `WT_PAYLOAD_TOO_LARGE` | frame over its cap | use a call, or split |
 | `WT_PROTOCOL_ERROR` | malformed frame | check against `PROTOCOL.md` |

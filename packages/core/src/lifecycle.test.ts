@@ -22,7 +22,7 @@ import { HostileAdapter } from './testing/hostile-adapter.ts'
 import { loopbackPair } from './transport/loopback.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 

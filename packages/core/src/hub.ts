@@ -147,7 +147,7 @@ export class Hub {
     const except = args.except ?? []
 
     const bytes =
-      entry.lane === 'datagram'
+      entry.lane === 'unreliable'
         ? encodeDatagram(
             {
               eventId: entry.id,
@@ -192,7 +192,7 @@ export class Hub {
     if (members === undefined) return // no local members is not an error
     for (const m of members.values()) {
       if (except.includes(m.id)) continue
-      if (lane === 'datagram') m.session.sendDatagramBytes(bytes)
+      if (lane === 'unreliable') m.session.sendDatagramBytes(bytes)
       else m.session.sendEncodedFrame(bytes)
     }
   }

@@ -25,7 +25,7 @@ import { HostileAdapter } from './testing/hostile-adapter.ts'
 import { loopbackPair } from './transport/loopback.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ body: string }>() },
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 
@@ -123,7 +123,7 @@ describe('a broadcast on one node reaches a peer on another', () => {
     await new Promise((r) => setTimeout(r, 150))
 
     // A real bus is at-least-once, so the duplicate is expected on the wire. What must not
-    // happen is the stream lane losing it entirely.
+    // happen is the reliable lane losing it entirely.
     expect(seenOnB.length).toBeGreaterThanOrEqual(1)
     expect(seenOnB[0]).toEqual({ body: 'hostile' })
   })

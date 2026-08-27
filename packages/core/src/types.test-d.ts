@@ -11,10 +11,10 @@ import { type CallableOf, defineContract, type MapOf, type$ } from './contract.t
 import type { ServerPeer } from './server.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ room: string; body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number; y: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ room: string; body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
   save: {
-    lane: 'stream',
+    lane: 'reliable',
     payload: type$<{ docId: string }>(),
     returns: type$<{ revision: number }>(),
   },
@@ -59,7 +59,11 @@ client.on('cursor', (p: { room: string }) => void p)
 // and `CallableOf` then made the event callable.
 const _badLane = defineContract({
   // @ts-expect-error a datagram event has no response path, so `returns` is not a thing
-  cursor: { lane: 'datagram', payload: type$<{ x: number }>(), returns: type$<{ ok: true }>() },
+  cursor: {
+    lane: 'unreliable',
+    payload: type$<{ x: number }>(),
+    returns: type$<{ ok: true }>(),
+  },
 })
 void _badLane
 

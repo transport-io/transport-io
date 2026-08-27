@@ -5,8 +5,8 @@ import { createServer, type ServerPeer } from './server.ts'
 import { loopbackPair } from './transport/loopback.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ room: string; body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number; y: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ room: string; body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
 })
 
 const settle = async (): Promise<void> => {
@@ -68,13 +68,13 @@ describe('two clients in one room, a message on each lane', () => {
     expect(b.client.getSnapshot().rooms).toEqual(['lobby'])
     expect(server.memberCount('lobby')).toBe(2)
 
-    // --- stream lane ---
+    // --- reliable lane ---
     a.client.emit('chat', { room: 'lobby', body: 'hello from a' })
     await settle()
     expect(aChat).toEqual([{ room: 'lobby', body: 'hello from a' }])
     expect(bChat).toEqual([{ room: 'lobby', body: 'hello from a' }])
 
-    // --- datagram lane ---
+    // --- unreliable lane ---
     a.client.emit('cursor', { x: 12, y: 40 })
     await settle()
     expect(aCursor).toEqual([{ x: 12, y: 40 }])

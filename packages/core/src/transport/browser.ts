@@ -109,7 +109,7 @@ export async function connectBrowser(opts: BrowserConnectOptions): Promise<Conne
     throw new TransportError(
       'WT_NO_SUPPORT',
       'this runtime has no WebTransport',
-      'There is no fallback: a WebSocket would silently make the datagram lane reliable. Use Chrome or Firefox.',
+      'There is no fallback: a WebSocket would silently make the unreliable lane reliable. Use Chrome or Firefox.',
     )
   }
   const session = new WT(opts.url, {

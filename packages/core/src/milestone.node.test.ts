@@ -18,8 +18,8 @@ import { createServer } from './server.ts'
 import { connectHttp3, type Http3Listener, listenHttp3 } from './transport/fails.node.ts'
 
 const contract = defineContract({
-  chat: { lane: 'stream', payload: type$<{ room: string; body: string }>() },
-  cursor: { lane: 'datagram', payload: type$<{ x: number; y: number }>() },
+  chat: { lane: 'reliable', payload: type$<{ room: string; body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
 })
 // The canonical two-line pattern, exactly as a user writes it.
 interface AppMap extends MapOf<typeof contract> {}
@@ -103,7 +103,7 @@ test('two clients in one room exchange a message on each lane over real QUIC', a
   assert.equal(a.getSnapshot().status, 'connected')
   assert.equal(b.getSnapshot().status, 'connected')
 
-  // The datagram lane must be genuinely unreliable, not an HTTP/2 fallback wearing the
+  // The unreliable lane must be genuinely unreliable, not an HTTP/2 fallback wearing the
   // same API. The server only ever constructs Http3Server, so this is belt and braces.
   const chat: unknown[] = []
   const cursor: unknown[] = []
@@ -115,12 +115,12 @@ test('two clients in one room exchange a message on each lane over real QUIC', a
   }
   await settle(600) // both peers joined by the server on session
 
-  // --- stream lane ---
+  // --- reliable lane ---
   a.emit('chat', { room: 'lobby', body: 'over real quic' })
   await settle()
   assert.deepEqual(chat, [{ room: 'lobby', body: 'over real quic' }])
 
-  // --- datagram lane ---
+  // --- unreliable lane ---
   a.emit('cursor', { x: 7, y: 9 })
   await settle()
   assert.deepEqual(cursor, [{ x: 7, y: 9 }])
