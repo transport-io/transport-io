@@ -136,9 +136,13 @@ first stable release.
 
 ## The package is `0.x`, and a minor bump may break you
 
-The first release is `0.1.0`. (`0.0.1` is on the registry to claim the name, from the same
+The first release was `0.1.0`. (`0.0.1` is on the registry to claim the name, from the same
 tree, and is not a release.) Under `0.x` a **minor** bump is allowed to contain breaking
-changes - pin an exact version, or accept that `^0.1.0` can move under you.
+changes - pin an exact version, or accept that `^0.2.0` can move under you.
+
+`0.2.0` is the demonstration: it renamed both lane values and changed the handshake, so a
+`0.1.0` peer and a `0.2.0` peer refuse each other. That is what a minor bump is permitted to
+do here.
 
 Every breaking change still gets a version bump and a changelog entry. What `0.x` withholds
 is the promise that a minor bump is safe, and that is deliberate: `call()` ships with a

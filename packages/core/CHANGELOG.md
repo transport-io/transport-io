@@ -1,5 +1,48 @@
 # transport-io
 
+## 0.2.0
+
+### Minor Changes
+
+- 975cfa8: Lane values are renamed for what they guarantee: `lane: 'stream'` becomes `lane: 'reliable'`
+  and `lane: 'datagram'` becomes `lane: 'unreliable'`. Breaking, and it touches the wire: the
+  handshake carries the lane as a literal string, so a 0.1.0 peer and a 0.2.0 peer refuse each
+  other with `WT_PROTOCOL_ERROR`.
+
+  `stream` and `datagram` named the mechanism. This library's whole position is that the
+  mechanism is hidden and the guarantee is exposed, and the lane was the one place saying
+  otherwise. No error code changed: `WT_TOO_MANY_STREAMS` and `WT_DATAGRAM_TOO_LARGE` really
+  are about QUIC streams and datagrams. See D92.
+- 5d66096: `stream()`: an event declaring `yields` instead of `returns` answers with a sequence. The
+  client gets an async iterable with a `collect()`, the server writes an async generator.
+  Leaving the loop with `break` resets the QUIC stream, which fires the handler's `ctx.signal`
+  and runs its `finally`, so cancellation costs no extra API.
+
+  Adds one frame type, `CALL_CREDIT`. A streaming responder may run at most 32 frames ahead of
+  what the consumer has taken, because the transport's own flow control turned out to apply
+  none: measured on the reference binding, a producer ran 136,523 frames and roughly 53 MB
+  ahead of a consumer that had taken 40. A streaming initiator therefore keeps its send side
+  open rather than half-closing after the request.
+
+  `call()` is unchanged and a 0.1.0 caller still works against a 0.2.0 responder. See ADR 0012
+  and D93.
+
+### Patch Changes
+
+- 19133e7: A disposed session now releases everything it owns: both lane queues, the per-peer duplicate
+  suppression and sequence state, and the responses still in flight. It also stops accepting
+  emits rather than queueing them into a queue that will never drain, which the hub could
+  trigger by broadcasting to a room containing a peer that had just died. See D96.
+- da8a894: Documentation correction: `emit` hover is 107 characters with the two-line contract pattern
+  and 353 without it, for the README's contract. The previously published numbers, 126 and 303,
+  were wrong and nothing measured them. `scripts/check-hover.ts` now drives `tsc --lsp --stdio`
+  and measures the real hover string on every CI run. See D94.
+- df8d351: A streaming responder parked waiting for credit is now released when its session ends.
+  Previously it waited for ever, holding one of the session's 256 stream slots and whatever its
+  handler had open, because `dispose()` cleared handlers without aborting the responses in
+  flight. Nothing in the credit scheme can tell a slow consumer from a departed one, so session
+  liveness has to. See D95.
+
 ## 0.1.0
 
 ### Minor Changes
