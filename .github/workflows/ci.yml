@@ -64,6 +64,11 @@ jobs:
         run: bun run scripts/check-boundaries.ts
       - name: normative statements
         run: bun run scripts/check-norms.ts
+      # Drives `tsc --lsp --stdio`. The compiler API does not exist until TS 7.1, but the
+      # language server does, and hover is the only place the two-line contract pattern's
+      # value can be observed at all.
+      - name: hover width
+        run: bun run scripts/check-hover.ts
       - name: gate inputs are not empty
         run: bun run scripts/check-gate-inputs.ts
 

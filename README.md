@@ -92,7 +92,8 @@ export interface AppMap extends MapOf<typeof contract> {}
 ```
 
 Write both lines. The second is what keeps every hover readable - with it, hovering `emit`
-shows 126 characters; without it, 303, including your validator's internals.
+shows 107 characters; without it, 353, including your validator's internals. Measured
+against this contract by `npm run check:hover`, because the number depends on the contract.
 
 ```ts
 // server

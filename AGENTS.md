@@ -48,8 +48,9 @@ export const contract = defineContract({
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-**Write the second line.** It is not optional style. `Client<AppMap>` hovers at 126
-characters; `Client<MapOf<typeof contract>>` hovers at 303 with the validator's internal
+**Write the second line.** It is not optional style. For the contract above,
+`Client<AppMap>` hovers `emit` at 107 characters and `Client<MapOf<typeof contract>>` at 353,
+with the validator's internal
 types in it, because TypeScript preserves interface names and expands alias
 instantiations. Every example everywhere uses this form.
 

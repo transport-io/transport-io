@@ -15,6 +15,7 @@
     "build": "tsc --build",
     "check:boundaries": "bun run scripts/check-boundaries.ts",
     "check:gate-inputs": "bun run scripts/check-gate-inputs.ts",
+    "check:hover": "bun run scripts/check-hover.ts",
     "check:install": "bun run scripts/check-install-line.ts",
     "check:node": "./scripts/check-node.sh",
     "check:norms": "bun run scripts/check-norms.ts",

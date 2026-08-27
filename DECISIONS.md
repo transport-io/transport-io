@@ -937,16 +937,20 @@ export interface AppMap extends MapOf<typeof contract> {}
 ```
 
 The second line is what makes hover readable, and it is **opt-in by nature**, so it must be
-canonical by convention. Measured: with the interface, `emit` hover is 126 characters and
-mentions no schema library. Without it - inline `MapOf<...>` or a library-supplied
-`ClientOf<>` alias - it is 303 characters with the validator's internal types in it.
+canonical by convention. Measured against the README contract: with the interface, `emit`
+hover is 107 characters and mentions no schema library. Without it - inline `MapOf<...>` or a
+library-supplied `ClientOf<>` alias - it is 353 characters with the validator's internal
+types in it, and that is after TypeScript's own elision. The numbers in this paragraph were
+originally 126 and 303 and were wrong; see D94.
 TypeScript preserves interface names but expands alias instantiations, so no library-side
 trick removes the need for the line.
 
 The interface form therefore appears in the README quickstart, in **every** API.md example,
 in `examples/chat`, and in `AGENTS.md` when it lands. The inline form appears nowhere. One
 sentence in API.md explains why the line exists, because an unexplained magic line is its
-own developer-experience problem. The 126-character form is pinned in the type-level test.
+own developer-experience problem. The width is enforced by `scripts/check-hover.ts`, which
+drives `tsc --lsp --stdio` and measures the hover string an editor would render. This
+sentence previously claimed the type-level test pinned it. It did not. See D94.
 
 ### D58. Never reproduce an external interface from memory
 Depend on the published source, or read it. Never retype an external type declaration,
@@ -2182,3 +2186,35 @@ the session dies.
 **Reconsider when:** a transport with honest flow control becomes the default. The window
 stays regardless - a responder is entitled to stop at zero and cannot know which transport it
 is talking to - but its size becomes a tuning question rather than the only defence.
+
+### D94. A decision claimed a test pinned something the test did not assert
+D57 established the two-line contract pattern and recorded the evidence: `emit` hover is 126
+characters with the interface, 303 without. It ended with "the 126-character form is pinned
+in the type-level test."
+
+It was not. `types.test-d.ts` uses the pattern, and asserts nothing about hover at all. The
+number came from a person looking at an editor once, and from there into `README.md`,
+`API.md`, `AGENTS.md` and `CLAUDE.md`, four documents quoting a measurement nothing checked.
+
+This is D69's defect in a decision rather than in a document, and it is worse in one respect:
+D69's four promises were at least discoverable by looking for the code. A decision that says
+a test exists is trusted precisely because this project's rule is that claims carry tests.
+
+**`scripts/check-hover.ts` now measures it.** TypeScript 7.0 has no compiler API until 7.1,
+but `tsc --lsp --stdio` speaks LSP and `textDocument/hover` returns the string an editor
+renders. The gate drives the language server, measures both forms, and fails on an absolute
+ceiling and on the ratio between them. Verified in both directions: a lowered ceiling fails
+it, and making both forms inline fails it.
+
+**The re-measurement found the numbers wrong.** For the README's contract they are **107**
+and **353**, not 126 and 303, and the 353 is after TypeScript's own elision hides part of the
+validator's internals. All four documents are corrected.
+
+The more useful half of the finding is why an exact number was never reproducible: **hover
+width is a property of the contract, not of the library.** A different contract gives
+different numbers, and 126 was quoted for years with no way for a reader to reproduce it. The
+gate pins a specific probe contract and says so, and the documents now name the contract the
+numbers belong to.
+
+**Reconsider when:** TypeScript 7.1 lands the compiler API, which would make this a few lines
+instead of an LSP client. The gate should shrink then, not disappear.
