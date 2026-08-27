@@ -2313,3 +2313,33 @@ is the absence of an enumeration. Anything a session starts owning goes in that 
 
 **Reconsider when:** a session acquires something new. The test is the checklist, and it
 fails until the new thing is in it.
+
+### D97. The constants gate was an allowlist, so it could not report what it did not know
+`16 frames high-water` sat in PROTOCOL.md §9 for the life of the project. It matched no
+constant in `protocol.ts`, appeared in a normative table a second implementer would build
+against, and survived a gate whose entire purpose is comparing documented constants to real
+ones.
+
+The gate asked one question: for each constant I know about, is it documented correctly? It
+never asked the reverse: for each number in the document, is it real? Its coverage was
+therefore the set someone had remembered to add a regex for, and a number nobody had thought
+about was invisible by construction. That is D87's green-on-empty in a new place - not a
+check that examines nothing, but one whose scope is defined by what it already knows.
+
+The sweep now runs document-first: every number carrying a unit in a PROTOCOL.md table must
+be claimed by an expectation pinned to a named constant, and every expectation must match
+exactly one row. Both directions matter. Without the first, a new normative number appears
+unchecked; without the second, renaming a row makes the check quietly stop checking.
+
+**Membership was not enough, and the first draft proved it on the spot.** Checking that each
+number exists *somewhere* in `protocol.ts` passed `16 frames` immediately, because 16 is
+`STREAM_CREDIT_REFILL` and the row is about something else. A gate that accepts the right
+number for the wrong reason is worth very little. Identity is the check.
+
+What it still cannot do is verify a number that is correct for its own row but wrong as
+design. Nothing textual can. The stronger version would put implementation identifiers into
+a document written to be implemented from scratch in another language, which is the wrong
+trade.
+
+**Reconsider when:** a normative constant appears somewhere other than a table, which is the
+one shape this sweep is blind to by design.
