@@ -263,4 +263,10 @@ bindings, and the Redis adapter.
 
 ## Licence
 
-MIT
+MIT, for the source code.
+
+The name and the marks in [`assets/brand`](assets/brand) are **not** covered by it.
+Copyright and trademark are separate, and MIT speaks only to the first, so the carve out is
+stated explicitly in [`assets/brand/LICENSE`](assets/brand/LICENSE) rather than left to be
+argued about. Short version: use the marks to refer to this project, do not use them as the
+mark of your own. Forking is welcome, under your own name.

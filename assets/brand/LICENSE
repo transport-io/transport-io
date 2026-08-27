@@ -1,0 +1,44 @@
+transport-io brand assets
+
+Copyright (c) 2026 #V0ID <hey@v0id.me>
+
+These files are NOT covered by the MIT licence that covers the source code. The
+name "transport-io" and the marks in this directory are excluded from that grant.
+
+Copyright and trademark are separate things, and MIT speaks only to the first. It
+grants rights to copy and modify a work. It does not grant permission to use a
+project's name and mark to identify something else. This file removes that
+ambiguity rather than leaving it to be argued about.
+
+YOU MAY, without asking:
+
+  Use the marks to refer to this project. Articles, talks, slides, comparison
+  tables, "built with transport-io" badges, a dependency list, a conference
+  sticker about the project.
+
+  Reproduce them unaltered, at any size, in either the ink or bone colourway.
+
+  Link to them.
+
+YOU MAY NOT:
+
+  Use them as the mark of your own project, product, or company, including a
+  fork.
+
+  Modify them: no recolouring, rotating, skewing, outlining, adding effects,
+  reseating the wedge, or combining them with other marks.
+
+  Use them in a way that implies this project endorses, sponsors, or is
+  affiliated with you when it does not.
+
+  Register them, or anything confusingly similar, as a trademark.
+
+A fork is welcome and the code licence permits it. Ship it under your own name
+and your own mark.
+
+The wordmark in the lockup is set in IBM Plex Mono, which is licensed under the
+SIL Open Font License by IBM and is not covered by this file or owned by this
+project.
+
+If you want to do something this file does not cover, ask. The answer is usually
+yes.
