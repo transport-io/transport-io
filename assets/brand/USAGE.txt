@@ -1,0 +1,40 @@
+transport-io — brand assets
+mark: M1, "bitten slab"
+
+FILES
+  transport-io-mark-ink.svg           mark in ink (#16130F) — light grounds
+  transport-io-mark-bone.svg          mark in bone (#E7E2D6) — dark grounds
+  transport-io-mark-currentcolor.svg  inherits fill from CSS colour
+  transport-io-lockup-ink.svg         horizontal lockup, light grounds
+  transport-io-lockup-bone.svg        horizontal lockup, dark grounds
+  png/                                square rasters, 16-1024 px, ink and bone
+
+RULES
+  The mark is monochrome. Ink on light grounds, bone on dark. The accent
+  (#C2551D) never appears inside the mark.
+  No outline, no stroke, no shadow, no rounding, no gradient.
+  Clear space: half the slab width on every side.
+  Minimum size: 16 px. Below that use the slab alone, without the wedge.
+  Do not recolour, rotate, skew, or reseat the wedge.
+
+LOCKUP TYPE
+  The lockup sets the wordmark as live text in IBM Plex Mono SemiBold. If it
+  will be used where that font is not installed, convert the text to outlines
+  in a vector editor first.
+
+PALETTE
+  ground  #E4E0D6    panel  #F3F1EA    ink  #16130F    accent  #C2551D
+  dark:   ground #141210   panel #1D1A16   ink #E7E2D6   accent #D9692C
+
+AVATARS (derived, not part of the original delivery)
+  avatar/org-avatar-ink-ground-512.png    bone mark on an ink tile
+  avatar/org-avatar-bone-ground-512.png   ink mark on a bone tile
+
+  The delivered PNGs have transparent backgrounds, so on GitHub the ink mark
+  disappears against a dark theme and the bone mark disappears against a light
+  one. An avatar needs its ground baked in, which is what these are. Generated
+  from the 512 px marks with the mark at 56% of the tile, which keeps more than
+  the half-slab clear space the rules require.
+
+  Prefer the ink ground. It is bold on a light page, and on a dark page the
+  tile edge recedes while the mark still reads.

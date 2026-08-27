@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 72" width="360" height="72" role="img" aria-label="transport-io">
+  <title>transport-io lockup, horizontal</title>
+  <g fill="#E7E2D6">
+    <g transform="translate(0,4) scale(1)">
+      <path d="M4 8 H42 V23 L27 32 L42 41 V56 H4 Z"></path>
+      <path d="M45 46 L62 40 L62 57 H45 Z"></path>
+    </g>
+    <text x="88" y="46" font-family="'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" font-size="34" font-weight="600" letter-spacing="-0.4">transport-io</text>
+  </g>
+</svg>
