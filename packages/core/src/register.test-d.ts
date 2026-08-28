@@ -14,7 +14,7 @@
 import { expectTypeOf } from 'expect-type'
 import type { Client } from './client.ts'
 import { defineContract, type MapOf, type Register, reliable, rpc } from './contract.ts'
-import type { createServer } from './server.ts'
+import type { RoomTarget, Server, ServerPeer } from './server.ts'
 
 const contract = defineContract({
   chat: reliable<{ body: string }>(),
@@ -31,10 +31,35 @@ declare module './contract.ts' {
 // --- no type argument anywhere ---
 
 declare const client: Client
-declare const server: ReturnType<typeof createServer>
+declare const server: Server
+declare const peer: ServerPeer
+declare const room: RoomTarget
 
 client.emit('chat', { body: 'hi' })
 void client.call('save', { text: 'x' })
+
+/**
+ * `Server`, `ServerPeer` and `RoomTarget` all default to the registered map.
+ *
+ * `ServerPeer` and `RoomTarget` defaulted to `AnyMap` when registration shipped, so a bare
+ * annotation on either accepted every event name and every payload - the registration
+ * appeared to work and silently bought nothing. The assertions below are the payload types,
+ * not the acceptance, because acceptance is what `AnyMap` also gives.
+ */
+server.handle('save', async (payload) => {
+  expectTypeOf(payload).toEqualTypeOf<{ text: string }>()
+  return { n: 1 }
+})
+peer.on('chat', (p) => {
+  expectTypeOf(p).toEqualTypeOf<{ body: string }>()
+})
+void room.emit('chat', { body: 'hi' })
+
+// @ts-expect-error 'nope' is not in the registered contract
+peer.on('nope', () => {})
+
+// @ts-expect-error the payload comes from the contract, not from `AnyMap`
+void room.emit('chat', { wrong: true })
 
 // The payload type comes from the registration, not from `AnyMap`.
 client.on('chat', (p) => {
@@ -68,7 +93,7 @@ explicit.emit('chat', { body: 'hi' })
 // @ts-expect-error 'ping' belongs to the other contract
 client.emit('ping', { seq: 1 })
 
-declare const explicitServer: ReturnType<typeof createServer<OtherMap>>
+declare const explicitServer: Server<OtherMap>
 expectTypeOf(explicitServer).not.toEqualTypeOf(server)
 
 // --- the augmentation point must remain an interface ---

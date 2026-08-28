@@ -118,7 +118,7 @@ describe('two clients in one room, a message on each lane', () => {
   test('except() excludes the sender from its own broadcast', async () => {
     const server = createServer<AppMap>({ contract })
     await server.listen()
-    const peers: ServerPeer[] = []
+    const peers: ServerPeer<AppMap>[] = []
     server.onSession((peer) => {
       peers.push(peer)
       peer.on('chat', (p) => void server.to('lobby').except(peer.id).emit('chat', p))

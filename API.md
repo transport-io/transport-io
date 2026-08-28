@@ -323,16 +323,19 @@ the authenticated path.
 ```ts
 import type { RoomTarget, ServerPeer } from 'transport-io'
 
-export async function moveRooms(peer: ServerPeer<AppMap>): Promise<readonly string[]> {
+export async function moveRooms(peer: ServerPeer): Promise<readonly string[]> {
   await peer.join('lobby')
   await peer.leave('lobby')
   return peer.rooms
 }
 
-export function narrow(target: RoomTarget<AppMap>, exclude: string): RoomTarget<AppMap> {
+export function narrow(target: RoomTarget, exclude: string): RoomTarget {
   return target.except(exclude)
 }
 ```
+
+`Server`, `ServerPeer` and `RoomTarget` default to the registered map, so an annotation
+needs no type argument either.
 
 `emit` on a room returns a promise because it crosses the adapter, but delivery to local
 members does not wait for it. Awaiting each peer inside a broadcast loop would let one slow

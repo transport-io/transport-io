@@ -15,7 +15,7 @@ import { CloseCode } from './protocol.ts'
 import { Session, type SessionStats } from './session.ts'
 import type { Connection } from './transport/types.ts'
 
-export interface ServerPeer<M extends AnyMap = AnyMap> {
+export interface ServerPeer<M extends AnyMap = Registered> {
   readonly id: PeerId
   readonly origin: number
   readonly rooms: readonly string[]
@@ -56,7 +56,7 @@ export interface ServerOptions {
   readonly validateInbound?: boolean
 }
 
-export interface RoomTarget<M extends AnyMap = AnyMap> {
+export interface RoomTarget<M extends AnyMap = Registered> {
   emit<K extends keyof M & string>(event: K, payload: M[K]['payload']): Promise<void>
   except(...peers: PeerId[]): RoomTarget<M>
 }
