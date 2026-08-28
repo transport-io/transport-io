@@ -287,7 +287,7 @@ import { createServer } from 'transport-io'
 
 type Conn = Awaited<ReturnType<ClientOptions['connect']>>
 
-export async function start(incoming: AsyncIterable<Conn>): Promise<void> {
+export async function start(incoming: { sessions(): AsyncIterable<Conn> }): Promise<void> {
   const server = createServer<AppMap>({ contract })
   await server.listen()
 
