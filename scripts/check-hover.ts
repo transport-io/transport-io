@@ -38,6 +38,7 @@ const contract = defineContract({
     payload: type$<{ text: string }>(),
     returns: type$<{ revision: number }>(),
   },
+  ask: { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
 })
 interface AppMap extends MapOf<typeof contract> {}
 
@@ -45,11 +46,24 @@ declare const withInterface: Client<AppMap>
 declare const inline: Client<MapOf<typeof contract>>
 withInterface.emit('chat', { from: 'a', body: 'b' })
 inline.emit('chat', { from: 'a', body: 'b' })
+void withInterface.call('save', { text: 'x' })
+void inline.call('save', { text: 'x' })
+void withInterface.stream('ask', { prompt: 'x' })
+void inline.stream('ask', { prompt: 'x' })
 `
 
-/** 0-based, and the two call lines are the last two. */
-const LINE_INTERFACE = PROBE.split('\n').findIndex((l) => l.startsWith('withInterface.emit'))
-const LINE_INLINE = PROBE.split('\n').findIndex((l) => l.startsWith('inline.emit'))
+/**
+ * Every method whose hover the two-line pattern is supposed to keep readable, not just the
+ * one somebody measured first. `emit` was the only one checked, while D57's claim is about
+ * the pattern rather than about `emit`, so a regression in `call` or `stream` was invisible
+ * (D98).
+ */
+const METHODS = ['emit', 'call', 'stream'] as const
+
+function lineOf(prefix: string, method: string): number {
+  const want = `${prefix}.${method}(`
+  return PROBE.split('\n').findIndex((l) => l.includes(want))
+}
 
 /**
  * Ceilings, not equalities. An exact pin would break on every TypeScript patch that changes
@@ -59,7 +73,21 @@ const LINE_INLINE = PROBE.split('\n').findIndex((l) => l.startsWith('inline.emit
  * substantially smaller than the inline one, because that is the entire argument for
  * writing the second line. An absolute ceiling alone would pass if both forms grew.
  */
-const MAX_INTERFACE_CHARS = 160
+/**
+ * Per method, because a single ceiling derived from `emit` is not a ceiling for anything
+ * else. `emit` takes an event and a payload; `call` adds an options bag and a return type,
+ * and is legitimately 60 characters wider. One shared number either fails on `call` or is
+ * so loose that `emit` could triple without anyone noticing - and the first version of this
+ * gate had exactly that number, set from the only method it measured.
+ *
+ * Each is the measured width plus about 10%, which absorbs a TypeScript printer whitespace
+ * change without absorbing a regression.
+ */
+const MAX_INTERFACE_CHARS: Readonly<Record<string, number>> = {
+  emit: 120,
+  call: 186,
+  stream: 173,
+}
 const MAX_RATIO = 0.75
 
 interface Lsp {
@@ -169,10 +197,10 @@ try {
   // pass if it is not distinguished from a real one, so it is treated as a failure below.
   await new Promise((r) => setTimeout(r, 3000))
 
-  const measure = async (line: number, label: string): Promise<number> => {
+  const measure = async (line: number, label: string, method: string): Promise<number> => {
     // On the method name, computed rather than guessed: a fixed column lands inside a
     // string literal on the shorter line and the server answers with nothing at all.
-    const character = (PROBE.split('\n')[line] ?? '').indexOf('.emit') + 2
+    const character = (PROBE.split('\n')[line] ?? '').indexOf(`.${method}`) + 2
     const hover = await Promise.race([
       lsp.request('textDocument/hover', {
         textDocument: { uri },
@@ -189,29 +217,39 @@ try {
     return sig.length
   }
 
-  console.log('hover width for `emit`, against the README contract\n')
-  const withInterface = await measure(LINE_INTERFACE, 'interface')
-  const inline = await measure(LINE_INLINE, 'inline')
+  console.log('hover width against the README contract\n')
+  for (const method of METHODS) {
+    const withInterface = await measure(
+      lineOf('withInterface', method),
+      `${method} interface`,
+      method,
+    )
+    const inline = await measure(lineOf('inline', method), `${method} inline`, method)
+    if (!Number.isFinite(withInterface) || !Number.isFinite(inline)) continue
 
-  if (Number.isFinite(withInterface) && Number.isFinite(inline)) {
-    console.log('')
-    if (withInterface > MAX_INTERFACE_CHARS) {
+    const ceiling = MAX_INTERFACE_CHARS[method] ?? 0
+    if (ceiling === 0) {
+      problems.push(`\`${method}\` has no ceiling; add one measured from a clean run.`)
+    } else if (withInterface > ceiling) {
       problems.push(
-        `the two-line form hovers at ${withInterface} characters, over the ${MAX_INTERFACE_CHARS} ceiling.\n` +
+        `\`${method}\` hovers at ${withInterface} characters with the two-line form, over the ` +
+          `${ceiling} ceiling.\n` +
           '    Something leaked a validator type into the public signature.',
       )
     }
     const ratio = withInterface / inline
     if (ratio > MAX_RATIO) {
       problems.push(
-        `the two-line form is ${(ratio * 100).toFixed(0)}% of the inline form, over the ${MAX_RATIO * 100}% ceiling.\n` +
+        `\`${method}\` is ${(ratio * 100).toFixed(0)}% of the inline form, over the ` +
+          `${MAX_RATIO * 100}% ceiling.\n` +
           '    D57 exists because that gap is large. If it closes, the advice stops being worth giving.',
       )
     }
     console.log(
-      `  interface / inline = ${(ratio * 100).toFixed(0)}%   ceiling ${MAX_RATIO * 100}%, ` +
-        `absolute ceiling ${MAX_INTERFACE_CHARS}`,
+      `  ${method.padEnd(7)} ${String(withInterface).padStart(4)} chars ` +
+        `(ceiling ${ceiling})   interface/inline = ${(ratio * 100).toFixed(0)}%`,
     )
+    console.log('')
   }
 } finally {
   lsp.stop()

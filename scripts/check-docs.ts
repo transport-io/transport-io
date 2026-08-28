@@ -110,7 +110,36 @@ let blockCount = 0
 let fileCount = 0
 // AGENTS.md was exempt from this gate entirely - four `ts` blocks that no tool had ever
 // compiled, in the document whose whole purpose is to be read and copied by a machine.
-for (const doc of ['API.md', 'README.md', 'AGENTS.md']) {
+/** Documents whose TypeScript blocks are compiled. */
+const COMPILED_DOCS = ['API.md', 'README.md', 'AGENTS.md'] as const
+
+/**
+ * Documents allowed to contain a ```ts block without it being compiled.
+ *
+ * `COMPILED_DOCS` is an allowlist and cannot report a document nobody added to it (D98), so
+ * the default is inverted below: every tracked markdown file with a TypeScript block must
+ * either be compiled or listed here with a reason.
+ */
+const UNCOMPILED_DOCS: Readonly<Record<string, string>> = {
+  'CLAUDE.md': 'instructions to an agent, quoting the pattern rather than demonstrating it',
+  'DECISIONS.md': 'a ledger, whose snippets are historical and may not compile today',
+  'ADR/0012-streaming-responses.md': 'a record, quoting the API as it was decided',
+  'site/src/content/docs/index.mdx': 'site prose; see the note below',
+  'site/src/content/docs/getting-started.md': 'site prose; see the note below',
+  'site/src/content/docs/guides/lanes.md': 'site prose; see the note below',
+  'site/src/content/docs/guides/rooms.md': 'site prose; see the note below',
+  'site/src/content/docs/guides/call-and-stream.md': 'site prose; see the note below',
+  'site/src/content/docs/guides/backpressure.md': 'site prose; see the note below',
+}
+
+/**
+ * The site's own snippets are NOT compiled, and that is a known gap rather than a decision
+ * anyone should be comfortable with. They are illustrative fragments referencing symbols
+ * declared elsewhere on the page, so compiling them needs the same `standalone` treatment
+ * the README's blocks got. Recorded here rather than left implicit: an exemption with a
+ * reason can be argued with, an unlisted document cannot.
+ */
+for (const doc of COMPILED_DOCS) {
   const blocks = extractBlocks(doc)
   if (blocks.length === 0) continue
 
@@ -188,6 +217,26 @@ if (ignoredBlocks > MAX_IGNORED_BLOCKS) {
     `${ignoredBlocks} documentation blocks are tagged \`ignore\`, above the ceiling of ` +
       `${MAX_IGNORED_BLOCKS}. Implement the surface or lower the ceiling - never raise it.`,
   )
+}
+
+// -------------------------------------------------- every document with a block is claimed
+{
+  const tracked = execFileSync('git', ['ls-files', '*.md', '*.mdx'], { encoding: 'utf8' })
+    .split('\n')
+    .filter((f) => f.length > 0 && !f.startsWith('site/dist'))
+  let claimed = 0
+  for (const file of tracked) {
+    const blocks = (readFileSync(file, 'utf8').match(/^```ts\b/gm) ?? []).length
+    if (blocks === 0) continue
+    claimed++
+    if ((COMPILED_DOCS as readonly string[]).includes(file)) continue
+    if (file in UNCOMPILED_DOCS) continue
+    fail(
+      `${file} has ${blocks} TypeScript block(s) that nothing compiles.\n` +
+        '         Add it to COMPILED_DOCS, or to UNCOMPILED_DOCS with a reason.',
+    )
+  }
+  console.log(`docs: ${claimed} document(s) with TypeScript blocks, every one accounted for`)
 }
 
 // ---------------------------------------------------------------- protocol constants

@@ -24,7 +24,21 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const DOCS = ['README.md', 'packages/core/README.md']
+/**
+ * Every tracked markdown file, discovered rather than listed.
+ *
+ * This used to name two documents. `AGENTS.md` carried a third install line that nothing
+ * ever executed, missed twice over: wrong file, and its fence had no language tag so even
+ * the pattern would not have matched. A gate scoped to the documents somebody remembered is
+ * blind to the one they forgot, which is the shape of every allowlist in this repository
+ * (D98).
+ */
+const DOCS: string[] = execFileSync('git', ['ls-files', '*.md'], { encoding: 'utf8' })
+  .split('\n')
+  .filter((f) => f.length > 0 && !f.startsWith('site/dist'))
+
+/** Fewer than this and the discovery broke rather than the documents losing their lines. */
+const MIN_INSTALL_LINES = 3
 const LIBRARY = 'transport-io'
 
 /** The package that must NOT end up installed: the private monorepo root. */
@@ -32,7 +46,8 @@ const ROOT_PACKAGE = JSON.parse(readFileSync('package.json', 'utf8')).name as st
 
 export function installCommands(markdown: string): string[] {
   const out: string[] = []
-  for (const m of markdown.matchAll(/^```bash\n([\s\S]*?)^```/gm)) {
+  // Any fence, tagged or not: the line this gate exists for lived in an untagged one.
+  for (const m of markdown.matchAll(/^```[a-z]*\n([\s\S]*?)^```/gm)) {
     for (const line of (m[1] ?? '').split('\n')) {
       const cmd = line.trim()
       if (!cmd.startsWith('npm install ')) continue
@@ -46,9 +61,29 @@ export function installCommands(markdown: string): string[] {
 }
 
 const problems: string[] = []
-const commands = DOCS.filter((d) => existsSync(d)).flatMap((d) =>
+const found = DOCS.filter((d) => existsSync(d)).flatMap((d) =>
   installCommands(readFileSync(d, 'utf8')).map((c) => ({ doc: d, cmd: c })),
 )
+
+/**
+ * One run per distinct command, not per occurrence. Four documents repeating the same line
+ * is four npm installs and one fact; the sources are reported together so a failure still
+ * names every document that would mislead a reader.
+ */
+const commands = [...new Map(found.map((f) => [f.cmd, f])).values()].map((f) => ({
+  cmd: f.cmd,
+  doc: found
+    .filter((o) => o.cmd === f.cmd)
+    .map((o) => o.doc)
+    .join(', '),
+}))
+
+if (found.length > 0 && found.length < MIN_INSTALL_LINES) {
+  problems.push(
+    `only ${found.length} install line(s) found across ${DOCS.length} document(s), ` +
+      `expected at least ${MIN_INSTALL_LINES}. The discovery broke, or a document lost its line.`,
+  )
+}
 
 if (commands.length === 0) {
   /**

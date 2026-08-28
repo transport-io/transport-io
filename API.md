@@ -33,9 +33,10 @@ export interface AppMap extends MapOf<typeof contract> {}
 
 **Write both lines.** The second is what keeps every hover readable.
 With it, hovering `emit` shows 107 characters. Without it - passing the contract inline -
-it shows 353, and that is with TypeScript's own elision hiding part of the validator's
-internals. Both numbers are for the contract above and are re-measured on every run by
-`npm run check:hover`; a different contract gives different numbers. TypeScript preserves interface
+it shows 377, and that is with TypeScript's own elision hiding part of the validator's
+internals. `call` is 169 against 439, and `stream` 157 against 427. Every figure is for the
+contract pinned in `scripts/check-hover.ts` and is re-measured on each run; a different
+contract gives different numbers. TypeScript preserves interface
 names in hover but expands type-alias instantiations, so no library-side trick removes the
 need for the line.
 

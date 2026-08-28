@@ -154,7 +154,7 @@ export const contract = defineContract({ /* ... */ })
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-The second line is what keeps hover readable - 107 characters instead of 353, with no
+The second line is what keeps hover readable - 107 characters instead of 377, with no
 validator internals. It is opt-in by nature, so it is canonical by convention: it appears
 in the README, in every API.md example, in `examples/chat`, and in `AGENTS.md`. The inline
 form appears nowhere.

@@ -5,6 +5,7 @@
  * package name when the wrapper is next door - passed `biome ci` cleanly.
  */
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { findBoundaryViolations, isNodeOnly, scan } from './check-boundaries.ts'
 
 describe('a module Bun may load must not reach the transport', () => {
@@ -53,5 +54,15 @@ describe('a module Bun may load must not reach the transport', () => {
 
   test('the repository as it stands has no violation', () => {
     expect(scan()).toEqual([])
+  })
+
+  test('and the detector still fires against a real module, not only against fixtures', () => {
+    // A clean scan over the real tree proves nothing unless the finder would still catch a
+    // violation in a file of that shape. Take the largest non-Node module there is and give
+    // it the import the rule exists to forbid.
+    const path = 'packages/core/src/session.ts'
+    const real = readFileSync(path, 'utf8')
+    const broken = `import { connectHttp3 } from './transport/fails.node.ts'\n${real}`
+    expect(findBoundaryViolations(path, broken).length).toBeGreaterThan(0)
   })
 })

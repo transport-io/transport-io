@@ -20,6 +20,8 @@
     "check:install": "bun run scripts/check-install-line.ts",
     "check:node": "./scripts/check-node.sh",
     "check:norms": "bun run scripts/check-norms.ts",
+    "check:required": "bun run scripts/required-checks.ts",
+    "check:site-links": "bun run scripts/check-site-links.ts",
     "check:ts-floor": "./scripts/check-ts-floor.sh",
     "check:workflows": "bun run scripts/check-workflows.ts",
     "commitlint": "commitlint",

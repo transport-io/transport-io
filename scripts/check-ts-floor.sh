@@ -68,6 +68,9 @@ sed -e 's/"esnext"/"node16"/' -e 's/"bundler"/"node16"/' tsconfig.json > tsconfi
 cat > ok.ts <<'TS'
 import { Client, createServer, defineContract, type MapOf, type$, VERSION } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
+// Type-only: the node transport's declarations were never loaded at the floor version
+// because the probe imported three of the four entry points.
+import type { Http3Listener } from 'transport-io/node-transport'
 import { HostileAdapter } from 'transport-io/testing'
 
 export const contract = defineContract({
@@ -79,6 +82,7 @@ export const contract = defineContract({
 export interface AppMap extends MapOf<typeof contract> {}
 
 export const version: string = VERSION
+export type Listener = Http3Listener
 
 export async function probe(url: string): Promise<number> {
   const server = createServer<AppMap>({ contract, adapter: new HostileAdapter('probe') })
@@ -116,6 +120,56 @@ for cfg in tsconfig.json tsconfig.node16.json; do
   "$TSC" -p "$cfg"
   echo "ts floor: the published surface compiles at $FLOOR under $(sed -n 's/.*"moduleResolution": "\([a-z0-9]*\)".*/\1/p' "$cfg") resolution"
 done
+
+# Every shipped declaration must be reachable from the public entry points, or it is not
+# being checked at the floor version at all.
+#
+# The probe used to be a hand-written sample of the API: five of forty-eight exports, chosen
+# by whoever wrote it. Measured, importing a single symbol pulls thirteen of twenty-four
+# declaration files into the program, so eleven were never type checked at 5.0 and a
+# declaration broken there would have shipped. Coverage is now driven by the tarball rather
+# than by the sample (D98).
+"$TSC" -p tsconfig.json --listFiles > listed.txt
+node -e '
+const { readFileSync, readdirSync, statSync } = require("node:fs")
+const { join } = require("node:path")
+const root = "node_modules/transport-io/dist"
+const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+  e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".d.ts") ? [join(d, e.name)] : [])
+const shipped = walk(root)
+const listed = readFileSync("listed.txt", "utf8")
+
+// Declarations that ship but no public entry point can reach. Each is dead weight in the
+// tarball rather than a hole in the probe, and each is listed so the distinction stays
+// visible: an unreachable file nobody named is a gap, an unreachable file with a reason is
+// a decision. Trimming them from the build is a separate change.
+const UNREACHABLE = {
+  "codec.d.ts": "internal encode/decode, not exported and not in the exports map",
+  "hub.d.ts": "internal room fan-out, reachable only through Server",
+  "origin.d.ts": "internal origin allocator, reachable only through Server",
+  "transport/moq.node.d.ts": "the alternative transport behind the ADR 0007 seam, unexported",
+  "transport/parity-suite.d.ts": "test infrastructure for transport implementers",
+}
+const missing = shipped
+  .filter((f) => !listed.includes(f))
+  .filter((f) => !(f.slice(root.length + 1) in UNREACHABLE))
+if (shipped.length < 10) {
+  console.error(`only ${shipped.length} declaration file(s) shipped; the walk found nothing`)
+  process.exit(1)
+}
+if (missing.length > 0) {
+  console.error(`\n${missing.length} shipped declaration(s) are never loaded at the floor version:`)
+  for (const m of missing) console.error(`    ${m.slice(root.length + 1)}`)
+  console.error("\n    Either the probe does not reach them, or nothing does and they are dead")
+  console.error("    weight in the tarball. Both are worth knowing; neither is checked today.")
+  process.exit(1)
+}
+const exempt = Object.keys(UNREACHABLE).length
+console.log(
+  `ts floor: ${shipped.length - exempt} of ${shipped.length} shipped declaration(s) checked, ` +
+    `${exempt} unreachable by design`,
+)
+'
 
 # Same settings, the wrong event name. Compiling this is the failure.
 if "$TSC" -p tsconfig.bad.json > /dev/null 2>&1; then

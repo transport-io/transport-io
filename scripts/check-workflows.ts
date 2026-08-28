@@ -99,7 +99,7 @@ function flag(out: Violation[], file: string, index: number, script: string): vo
  * green twice over while running no tests. A gate that cannot tell "clean" from "looked at
  * nothing" is not a gate.
  */
-const MIN_WORKFLOWS = 1
+const MIN_WORKFLOWS = 2
 
 export function scanWorkflowDir(dir = WORKFLOW_DIR): Violation[] {
   const files = readdirSync(dir).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))

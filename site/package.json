@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
     "build": "astro build",
+    "dev": "astro dev",
+    "prebuild": "cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg",
+    "predev": "cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg",
     "preview": "astro preview"
   },
   "dependencies": {

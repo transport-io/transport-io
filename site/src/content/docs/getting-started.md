@@ -42,8 +42,9 @@ export interface AppMap extends MapOf<typeof contract> {}
 ```
 
 **Write both lines.** The second is what keeps hover readable: with it, hovering `emit`
-shows 107 characters; without it, 353, including your validator's internal types. Those
-numbers are for this contract and are re-measured on every CI run.
+shows 107 characters; without it, 377, including your validator's internal types. Hover
+width is a property of the contract rather than of the library, so those figures belong to
+the contract pinned in the project's hover gate and are re-measured on every CI run.
 
 ## The server
 

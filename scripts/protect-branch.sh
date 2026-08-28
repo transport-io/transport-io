@@ -12,22 +12,17 @@ echo "applying branch protection to ${REPO}:main"
 
 # Every hook in lefthook.yml has a CI counterpart, and this is what makes those
 # counterparts actually gate the merge button rather than merely exist.
-gh api -X PUT "repos/${REPO}/branches/main/protection" \
-  --input - <<'JSON'
+#
+# The context list is DERIVED from the workflows, not typed here. It used to be eight
+# literal strings, which were correct when written and wrong the moment `site.yml` was
+# added: protection covered eight of ten jobs and nothing noticed. A list kept in step with
+# something else by hand is a list that stops being in step with it.
+CONTEXTS="$(bun run "$(dirname "$0")/required-checks.ts" --json)"
+echo "required checks: ${CONTEXTS}"
+
+gh api -X PUT "repos/${REPO}/branches/main/protection" --input - <<JSON
 {
-  "required_status_checks": {
-    "strict": true,
-    "contexts": [
-      "PR title (the squashed commit subject)",
-      "typecheck / lint / dead code / docs",
-      "unit tests (bun - never loads the transport)",
-      "integration tests (node - loads the transport)",
-      "pack validation",
-      "e2e (playwright, real chrome and real quic)",
-      "changeset present",
-      "source changed without documentation"
-    ]
-  },
+  "required_status_checks": { "strict": true, "contexts": ${CONTEXTS} },
   "enforce_admins": false,
   "required_pull_request_reviews": null,
   "restrictions": null,

@@ -24,9 +24,29 @@
  *
  *   bun run scripts/check-norms.ts
  */
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 
 const DOCS = ['PROTOCOL.md', 'API.md'] as const
+
+/**
+ * Documents allowed to contain the word MUST without being scanned for markers.
+ *
+ * `DOCS` above is an allowlist, and an allowlist cannot report the document nobody added to
+ * it: a normative statement written into a fourth file would carry no marker and nothing
+ * would notice (D98). So the default is inverted. Every tracked markdown file is checked
+ * for normative language, and anything outside `DOCS` must be listed here with a reason.
+ *
+ * These four are exempt because their MUSTs are quotation or ordinary prose, not
+ * requirements this library makes of a peer.
+ */
+const NON_NORMATIVE: Readonly<Record<string, string>> = {
+  'CONTRIBUTING.md': 'prose about how to contribute, not a requirement on an implementation',
+  'DECISIONS.md': 'a ledger, quoting requirements decided elsewhere',
+  'packages/core/CHANGELOG.md': 'generated release notes quoting the specification',
+  'scripts/README.md': 'prose about the tooling',
+  'site/src/content/docs/guides/backpressure.md': 'a guide restating the specification',
+}
 
 /**
  * Statements that are about the words themselves rather than about behaviour. Only the
@@ -182,6 +202,25 @@ function main(): void {
       `only ${markers.length} marker(s) parsed, expected at least ${MIN_MARKERS}. ` +
         'A marker-syntax change turns this whole gate into a no-op that exits 0.',
     )
+  }
+
+  /**
+   * The inversion: nothing outside `DOCS` may carry normative language unlisted. Without
+   * this, a MUST written into a new document is unchecked and unnoticed.
+   */
+  const tracked = execFileSync('git', ['ls-files', '*.md'], { encoding: 'utf8' })
+    .split('\n')
+    .filter((f) => f.length > 0 && !f.startsWith('site/dist'))
+  for (const file of tracked) {
+    if ((DOCS as readonly string[]).includes(file)) continue
+    if (file in NON_NORMATIVE) continue
+    const hits = (readFileSync(file, 'utf8').match(/\bMUST(?: NOT)?\b/g) ?? []).length
+    if (hits > 0) {
+      problems.push(
+        `${file} contains ${hits} normative statement(s) and is not scanned for markers.\n` +
+          '    Add it to DOCS so its promises name tests, or to NON_NORMATIVE with a reason.',
+      )
+    }
   }
 
   const unproven = markers.filter((m) => m.unproven)

@@ -22,6 +22,8 @@ jobs:
         with: { node-version: '24' }
       - run: npm ci
       - run: npm -w site run build
+      - name: internal links resolve under the base path
+        run: npm run check:site-links
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site/dist

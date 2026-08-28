@@ -4,6 +4,7 @@
  * workflow was fixed, which is the only evidence that any of this works.
  */
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { findWorkflowViolations, scanWorkflowDir } from './check-workflows.ts'
 
 const WITH_PERMISSIONS = 'permissions:\n  contents: read\n'
@@ -81,5 +82,24 @@ describe('the repository as it actually is', () => {
     // Before the fix this reported ci.yml:22 run-interpolation (the PR title) plus four
     // base_ref splices and a missing permissions block. It is the reason this file exists.
     expect(scanWorkflowDir()).toEqual([])
+  })
+
+  test('and the detector still fires against the real file, not only against fixtures', () => {
+    // The clean result above is worth nothing on its own. If the parser drifted away from
+    // the shape `ci.yml` actually has - a different indent, a `run:` written another way -
+    // it would find no run blocks, report no violations, and look exactly like this.
+    //
+    // So the real file gets the real defect injected. Fixtures prove the rules; this proves
+    // the rules still reach the corpus. Same lesson as the link rewriter that passed over
+    // two files with no links in them.
+    const ci = readFileSync('.github/workflows/ci.yml', 'utf8')
+    const broken = ci.replace(
+      /^( +)- run: /m,
+      '$1- run: echo "${{ github.event.pull_request.title }}" && ',
+    )
+    expect(broken).not.toBe(ci)
+    expect(findWorkflowViolations('ci.yml', broken).map((v) => v.rule)).toContain(
+      'run-interpolation',
+    )
   })
 })

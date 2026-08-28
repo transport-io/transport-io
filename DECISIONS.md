@@ -949,7 +949,7 @@ export interface AppMap extends MapOf<typeof contract> {}
 The second line is what makes hover readable, and it is **opt-in by nature**, so it must be
 canonical by convention. Measured against the README contract: with the interface, `emit`
 hover is 107 characters and mentions no schema library. Without it - inline `MapOf<...>` or a
-library-supplied `ClientOf<>` alias - it is 353 characters with the validator's internal
+library-supplied `ClientOf<>` alias - it is 377 characters with the validator's internal
 types in it, and that is after TypeScript's own elision. The numbers in this paragraph were
 originally 126 and 303 and were wrong; see D94.
 TypeScript preserves interface names but expands alias instantiations, so no library-side
@@ -2343,3 +2343,45 @@ trade.
 
 **Reconsider when:** a normative constant appears somewhere other than a table, which is the
 one shape this sweep is blind to by design.
+
+### D98. Seven gates were allowlists, and an allowlist cannot report what it omits
+D97 fixed one gate that only checked constants somebody had remembered to list. The obvious
+next question was whether any other gate had the same shape, and seven did: each iterated a
+known set asking "is each of these correct" rather than sweeping the subject asking "is
+anything unaccounted for". The difference is invisible while the list happens to be complete
+and total while it is not.
+
+Fixed by inverting the direction so the subject drives coverage:
+
+- **`protect-branch.sh`** carried eight context strings. Adding the `site` workflow made it
+  eight of ten and nothing noticed. Contexts are now derived from the workflow files by
+  `scripts/required-checks.ts`, which also excludes jobs that cannot report on a pull request
+  and prints why, because a job silently dropped from protection is the failure this exists
+  to prevent.
+- **`commitlint.config.ts`** listed scopes while `CLAUDE.md` claimed they were "validated
+  against the workspace package list". They were not, and the gap surfaced the first time a
+  workspace was added. Derived from `workspaces` now, plus four meta scopes that are
+  genuinely not packages.
+- **`check-install-line.ts`** scanned two documents. `AGENTS.md` carried a third install line,
+  missed twice over: wrong file, and an untagged fence the pattern would not have matched
+  either. It now discovers every tracked markdown file and dedupes by command.
+- **`check-norms.ts`** and **`check-docs.ts`** each scanned a fixed list of documents. Both
+  now assert the inverse as well: any tracked document containing normative language, or a
+  TypeScript block, must be either in scope or exempt with a stated reason.
+- **`check-ts-floor.sh`** exercised five of forty-eight exports. Measured, importing one
+  symbol pulls thirteen of twenty-four declaration files into the program, so eleven were
+  never checked at the floor version. Coverage is now driven by the tarball: every shipped
+  declaration must be reachable from a public entry point or listed as unreachable. That
+  immediately found the probe missing an entire entry point, and five declarations that ship
+  while no consumer can import them.
+- **`check-hover.ts`** measured `emit` while D57's claim is about the pattern. It measures
+  `emit`, `call` and `stream` now, with a ceiling each, because one ceiling derived from
+  `emit` is either wrong for `call` or so loose that `emit` could triple unnoticed.
+
+**Clean, and worth copying:** `check-boundaries` walks the tree, `check-workflows` scans the
+directory, `run-node-tests.sh` globs and counts, `docs-freshness` reads the diff. All ask
+what is there.
+
+**Reconsider when:** a new gate is written. The question to ask of it is not "does it check
+the right things" but "what would it fail to notice", and if the answer is "anything nobody
+added to a list", it is this defect again.

@@ -4,12 +4,15 @@ description: Real-time apps over WebTransport. One connection, independent strea
 template: splash
 hero:
   tagline: One connection. Independent streams and unreliable datagrams. Choose reliability per message.
+  # Base-prefixed by hand: hero actions are frontmatter, so the remark plugin that
+  # prefixes markdown links never sees them. `scripts/check-site-links.ts` is what keeps
+  # these honest, and it caught exactly this.
   actions:
     - text: Getting started
-      link: /getting-started/
+      link: /transport-io/getting-started/
       icon: right-arrow
     - text: Read the limitations first
-      link: /limitations/
+      link: /transport-io/limitations/
       variant: minimal
 ---
 

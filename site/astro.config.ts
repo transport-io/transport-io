@@ -1,8 +1,17 @@
 import starlight from '@astrojs/starlight'
 import { defineConfig } from 'astro/config'
+import { remarkBaseLinks } from './src/remark/base-links.ts'
+
+/** Served under the repository name, because this is a project page. */
+const BASE = '/transport-io'
 
 export default defineConfig({
-  site: 'https://transport-io.js.org',
+  // The default GitHub Pages URL for a project page, which is where this deploys. There is
+  // no custom domain and no CNAME: a project page is served under a path, so `base` has to
+  // match the repository name or every root-absolute link 404s.
+  site: 'https://transport-io.github.io',
+  base: BASE,
+  markdown: { remarkPlugins: [[remarkBaseLinks, { base: BASE }]] },
   integrations: [
     starlight({
       title: 'transport-io',

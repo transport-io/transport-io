@@ -93,8 +93,10 @@ export interface AppMap extends MapOf<typeof contract> {}
 ```
 
 Write both lines. The second is what keeps every hover readable - with it, hovering `emit`
-shows 107 characters; without it, 353, including your validator's internals. Measured
-against this contract by `npm run check:hover`, because the number depends on the contract.
+shows 107 characters; without it, 377, including your validator's internals. `call` is 169
+against 439 and `stream` 157 against 427. Hover width is a property of the contract, not of
+this library, so those figures are for the contract pinned in `scripts/check-hover.ts` and
+are re-measured on every CI run.
 
 ```ts
 // server
