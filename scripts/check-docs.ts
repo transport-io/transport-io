@@ -169,14 +169,20 @@ for (const doc of COMPILED_DOCS) {
    */
   const prefix: string[] = []
   for (const b of blocks) {
-    prefix.push(`// ${doc}:${b.line}\n${b.body}`)
-    const scope = b.standalone ? [`// ${doc}:${b.line}\n${b.body}`] : prefix
+    const own = `// ${doc}:${b.line}\n${b.body}`
+    // A standalone block is not part of the page's running program, so it neither reads from
+    // the prefix nor joins it. Accumulating it anyway made a page that shows one construct
+    // two ways - a contract with types beside the same contract with a schema - fail as a
+    // duplicate declaration in every block after it.
+    if (!b.standalone) prefix.push(own)
+    const scope = b.standalone ? [own] : prefix
     const seen = new Map<string, Set<string>>()
     const source = scope
       .join('\n')
       .split('\n')
       .map((line) => {
-        const m = /^(\s*import\s+\{)([^}]*)(\}\s+from\s+['"])([^'"]+)(['"].*)$/.exec(line)
+        const m =
+          /^(\s*import\s+(?:type\s+)?\{)([^}]*)(\}\s+from\s+['"])([^'"]+)(['"].*)$/.exec(line)
         if (m === null) return line
         const [, head, names, mid, module_, tail] = m
         const already = seen.get(module_ as string) ?? new Set<string>()
