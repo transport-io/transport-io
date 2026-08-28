@@ -138,7 +138,13 @@ first stable release.
 
 The first release was `0.1.0`. (`0.0.1` is on the registry to claim the name, from the same
 tree, and is not a release.) Under `0.x` a **minor** bump is allowed to contain breaking
-changes - pin an exact version, or accept that `^0.4.0` can move under you.
+changes.
+
+A caret range does not expose you to that, which is the opposite of what this page used to
+say: npm reads `^0.4.0` as `>=0.4.0 <0.5.0`, so it admits patches and stops at the next
+minor. What exposes you is a fresh install, because `npm install transport-io` takes whatever
+minor is current on the day it runs. Pin the minor, which a caret already does, and read the
+changelog before you move it.
 
 `0.2.0` is the demonstration: it renamed both lane values and changed the handshake, so a
 `0.1.0` peer and a `0.2.0` peer refuse each other. That is what a minor bump is permitted to
