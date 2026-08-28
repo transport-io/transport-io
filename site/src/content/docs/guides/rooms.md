@@ -9,6 +9,7 @@ persisted.
 ```ts
 import {
   type Client,
+  type ClientState,
   defineContract,
   type MapOf,
   reliable,
@@ -93,11 +94,24 @@ not execute before the connection dropped. The client cannot know either.
 The hook you need:
 
 ```ts
-client.subscribe(() => {
+let previous: ClientState['status'] = client.getSnapshot().status
+
+const stopWatching = client.subscribe(() => {
   const { status } = client.getSnapshot()
-  if (status === 'connected') void resubscribe()
+  // The edge into `connected`, not the level. `subscribe` fires on every state change, and
+  // several of those happen while the status is already `connected`, so comparing against
+  // the previous status is what makes this run once per session.
+  if (status === 'connected' && previous !== 'connected') void resubscribe()
+  previous = status
 })
 ```
+
+`subscribe` returns its own unsubscribe, and dropping it leaks the listener for the lifetime
+of the client. Call `stopWatching()` when the component or process that installed it goes
+away.
+
+[Reconnecting](/guides/reconnect/) has the whole recipe: authorising the rejoin, catching up
+on what was missed, and the guard that stops two catch-ups overlapping.
 
 ## Scaling past one process
 
