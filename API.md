@@ -5,10 +5,6 @@ The TypeScript surface as it exists today. Every signature below is the real dec
 **Every snippet in this document is extracted and typechecked against the built package in
 CI.** When the API changes, the docs stop compiling and the build breaks.
 
-> **Not built yet.** `stream()` is specified in `PROTOCOL.md` and is not implemented.
-> Everything else below runs: contracts, both lanes, rooms, `call()`, and the client and
-> server surfaces. Nothing below is aspirational.
-
 ---
 
 ## 1. `defineContract`
