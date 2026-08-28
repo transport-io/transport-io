@@ -5,8 +5,8 @@
   "scripts": {
     "build": "astro build",
     "dev": "astro dev",
-    "prebuild": "cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg",
-    "predev": "cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg",
+    "prebuild": "mkdir -p public && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg",
+    "predev": "mkdir -p public && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg",
     "preview": "astro preview"
   },
   "dependencies": {
