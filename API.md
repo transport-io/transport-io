@@ -188,9 +188,8 @@ export interface GenMap extends Ms<typeof gen> {}
 export async function serveTokens(): Promise<void> {
   const server = css<GenMap>({ contract: gen })
   await server.listen()
-  server.handle('ask', async function* ({ prompt }, ctx) {
+  server.handle('ask', async function* ({ prompt }) {
     for (const token of prompt.split(' ')) {
-      ctx.signal.throwIfAborted()
       yield token
     }
   })

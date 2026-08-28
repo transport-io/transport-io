@@ -51,9 +51,8 @@ import { createServer } from 'transport-io'
 declare const server: ReturnType<typeof createServer<AppMap>>
 declare function model(text: string): AsyncIterable<string>
 
-server.handle('ask', async function* ({ prompt }, ctx) {
+server.handle('ask', async function* ({ prompt }) {
   for await (const token of model(prompt)) {
-    ctx.signal.throwIfAborted()
     yield token
   }
 })

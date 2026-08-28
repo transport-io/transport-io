@@ -961,6 +961,11 @@ export class Session {
     const it = produced[Symbol.asyncIterator]()
     try {
       for (;;) {
+        // Before the pull, not after. Asking a generator for a value that will be
+        // discarded costs whatever the handler does to produce it, and a handler should
+        // not need `ctx.signal.throwIfAborted()` in its loop to avoid that. It remains the
+        // escape hatch for long work *between* yields, where nothing else can interrupt.
+        if (controller.signal.aborted) break
         const next = await it.next()
         if (next.done === true) break
         if (controller.signal.aborted) break

@@ -466,3 +466,46 @@ describe('a producer with no credit', () => {
     expect(cleanedUp).toBe(true)
   })
 })
+
+describe('a handler needs no signal check of its own', () => {
+  test('a loop with no throwIfAborted still stops, and its finally runs', async () => {
+    const server = createServer<AppMap>({ contract })
+    await server.listen()
+    const [serverSide, clientSide] = loopbackPair()
+    const client = new Client<AppMap>({ contract, connect: async () => clientSide })
+
+    let cleanedUp = false
+    let pulls = 0
+    // No `ctx.signal.throwIfAborted()` anywhere. The responder drives this generator, so
+    // it checks the signal before asking for the next value; the handler does not have to
+    // repeat that check in every loop it writes. `throwIfAborted()` remains the escape
+    // hatch for a handler doing long work *between* yields, where nothing else can
+    // interrupt it.
+    server.handle('ask', async function* () {
+      try {
+        for (;;) {
+          pulls++
+          yield 'token'
+        }
+      } finally {
+        cleanedUp = true
+      }
+    })
+    await Promise.all([server.accept(serverSide), client.connect()])
+
+    const seen: string[] = []
+    for await (const t of client.stream('ask', { prompt: 'x' })) {
+      seen.push(t)
+      if (seen.length === 3) break
+    }
+
+    await until(() => cleanedUp)
+    expect(cleanedUp).toBe(true)
+    expect(seen).toHaveLength(3)
+
+    // And it stopped: no further pulls once the consumer had gone.
+    const settled = pulls
+    await new Promise((r) => setTimeout(r, 80))
+    expect(pulls).toBe(settled)
+  })
+})

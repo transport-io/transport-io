@@ -238,9 +238,8 @@ export interface AskMap extends MapOf<typeof c> {}
 export async function serveAsk(): Promise<void> {
   const server = createServer<AskMap>({ contract: c })
   await server.listen()
-  server.handle('ask', async function* ({ prompt }, ctx) {
+  server.handle('ask', async function* ({ prompt }) {
     for (const word of prompt.split(' ')) {
-      ctx.signal.throwIfAborted()
       yield word
     }
   })

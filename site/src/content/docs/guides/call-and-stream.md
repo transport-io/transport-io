@@ -18,6 +18,7 @@ export interface AppMap extends MapOf<typeof contract> {}
 declare const client: Client<AppMap>
 declare const server: ReturnType<typeof createServer<AppMap>>
 declare function model(text: string): AsyncIterable<string>
+declare function enrich(chunk: string): Promise<string>
 // Shadows the DOM's `prompt()`, which is what a reader's own variable does too.
 declare const prompt: string
 declare const userStopped: boolean
@@ -59,9 +60,8 @@ for await (const token of client.stream('ask', { prompt })) {
 ```
 
 ```ts
-server.handle('ask', async function* ({ prompt }, ctx) {
+server.handle('ask', async function* ({ prompt }) {
   for await (const token of model(prompt)) {
-    ctx.signal.throwIfAborted()
     yield token
   }
 })
@@ -71,6 +71,21 @@ Leaving the loop cancels the stream. `break` calls the iterator's `return()`, wh
 the QUIC stream. The responder sees STOP_SENDING. Its `ctx.signal` fires and any `finally`
 in the generator runs. Passing an `AbortSignal` to `stream()` has the same effect from
 outside the loop, which is what a React effect cleanup would use.
+
+The handler above never checks `ctx.signal`. It does not need to: the responder checks
+before asking the generator for another value, so a cancelled stream stops without the
+handler repeating that check in every loop. Use `ctx.signal.throwIfAborted()` when a handler
+does long work *between* yields, where nothing else can interrupt it:
+
+```ts
+server.handle('ask', async function* ({ prompt }, ctx) {
+  for await (const chunk of model(prompt)) {
+    const expensive = await enrich(chunk) // seconds, perhaps
+    ctx.signal.throwIfAborted()
+    yield expensive
+  }
+})
+```
 
 `collect()` returns the whole sequence as an array:
 
