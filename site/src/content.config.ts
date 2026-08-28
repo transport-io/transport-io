@@ -41,7 +41,7 @@ export const collections = {
         {
           file: 'KNOWN-ISSUES.md',
           id: 'limitations',
-          description: 'What this library refuses to do, and the one measured defect.',
+          description: 'What this library refuses to do, and what has been measured.',
           order: 3,
         },
       ]),

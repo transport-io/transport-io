@@ -37,8 +37,9 @@ const DOCS = ['PROTOCOL.md', 'API.md'] as const
  * would notice (D98). So the default is inverted. Every tracked markdown file is checked
  * for normative language, and anything outside `DOCS` must be listed here with a reason.
  *
- * These four are exempt because their MUSTs are quotation or ordinary prose, not
- * requirements this library makes of a peer.
+ * These are exempt because their MUSTs are quotation or ordinary prose, not requirements
+ * this library makes of a peer. Deliberately not counted here: the count moved and the
+ * sentence did not.
  */
 const NON_NORMATIVE: Readonly<Record<string, string>> = {
   'CONTRIBUTING.md': 'prose about how to contribute, not a requirement on an implementation',
