@@ -231,7 +231,17 @@ if (ignoredBlocks > MAX_IGNORED_BLOCKS) {
 
 // -------------------------------------------------- every document with a block is claimed
 {
-  const tracked = execFileSync('git', ['ls-files', '*.md', '*.mdx'], { encoding: 'utf8' })
+  // `--cached --others --exclude-standard` rather than a bare `ls-files`: a bare one reads
+  // the index, so a file that exists on disk but has never been `git add`ed is invisible to
+  // the gate. That is how a new guide with four compile errors passed - it was untracked, so
+  // nothing enumerated it. `--others` adds working-tree files, `--exclude-standard` keeps
+  // gitignored build output out. `existsSync` below covers the opposite case: an index entry
+  // whose file is gone, which is what `changeset version` leaves behind.
+  const tracked = execFileSync(
+    'git',
+    ['ls-files', '--cached', '--others', '--exclude-standard', '*.md', '*.mdx'],
+    { encoding: 'utf8' },
+  )
     .split('\n')
     // `existsSync` because `git ls-files` reads the index: a file deleted but not yet
     // committed is still listed, and `changeset version` deletes changesets on its way to
