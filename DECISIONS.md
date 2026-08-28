@@ -2467,3 +2467,42 @@ confusing error.
 
 **Reconsider when:** TypeScript preserves alias names in hover output, which would make both
 forms equivalent.
+
+### D101. A verification command that cannot report failure is the soak again
+`export interface Register {}` was rewritten to `export type Register = {}` by `lint:fix`,
+which silently broke module augmentation: a type alias cannot be augmented, so every
+application's registration would have failed with "Duplicate identifier". It was pushed,
+because the command that was supposed to catch it was
+
+```
+npx tsc -p tsconfig.register.json --noEmit 2>&1 | head -3 && echo "  program clean"
+```
+
+`head` exits 0 whatever `tsc` printed, so the confirmation always fired, directly beneath the
+errors it was meant to be reading. Same shape as D85, where a soak printed `SOAK PASSED` over
+`samples: 0`, and D87, where an aggregate over an empty collection satisfied every bound. The
+constant is a step that reports success independently of what it examined.
+
+**The repository's own scripts were checked and are clean.** `run-node-tests.sh` and
+`check-node.test.sh` both set `-uo pipefail`, and the one place a pipe wraps the command under
+test captures `PIPESTATUS[0]` explicitly. No npm script contains a pipe. The workflows pipe
+only inside conditions, where a failure is the condition failing. So this was not a repository
+defect; it was an ad-hoc command shape used while working, which is worth writing down
+precisely because nothing gates it.
+
+The rule: **never end a verification with a pipe into a pager or filter.** Check the exit code
+directly, or use the filter only after the status has been captured.
+
+**Two related sweeps, both clean.**
+
+`interface AppMap extends MapOf<typeof contract> {}` is the single most load-bearing
+declaration form in this project, and D57 measures what happens if it becomes a type alias:
+hover goes from 107 characters to 377. Biome does not rewrite a non-empty `extends` interface,
+verified against the real configuration. The pattern is safe from the fixer.
+
+Every `biome-ignore` in the repository names a live rule. This is gated rather than reviewed:
+biome reports `suppressions/unused` for a suppression that matches no diagnostic, and lint
+fails on it. Verified by pointing one at the wrong rule and watching lint go red.
+
+**Reconsider when:** a formatter or fixer gains the ability to rewrite `interface X extends Y
+{}`, which would silently undo D57.
