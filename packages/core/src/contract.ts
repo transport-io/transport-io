@@ -93,7 +93,10 @@ export type AnyMap = Readonly<Record<string, EventShape>>
  * TypeScript expands those while preserving interface names: hover on `emit` goes from 107
  * characters to 377, with the validator's internals back in it. See D100.
  */
-export type Register = {}
+// Must stay an `interface`: only interfaces can be augmented by `declare module`. A type
+// alias here compiles and then fails every registration with "Duplicate identifier".
+// biome-ignore lint/suspicious/noEmptyInterface: an empty interface is the augmentation point
+export interface Register {}
 
 /**
  * The sentinel for an unregistered application. Its only key is the instruction, so the

@@ -13,7 +13,7 @@
  */
 import { expectTypeOf } from 'expect-type'
 import type { Client } from './client.ts'
-import { defineContract, type MapOf, reliable, rpc } from './contract.ts'
+import { defineContract, type MapOf, type Register, reliable, rpc } from './contract.ts'
 import type { createServer } from './server.ts'
 
 const contract = defineContract({
@@ -70,3 +70,12 @@ client.emit('ping', { seq: 1 })
 
 declare const explicitServer: ReturnType<typeof createServer<OtherMap>>
 expectTypeOf(explicitServer).not.toEqualTypeOf(server)
+
+// --- the augmentation point must remain an interface ---
+//
+// `lint:fix` once rewrote `export interface Register {}` to `export type Register = {}`,
+// which compiles cleanly in the library and then fails every application's registration
+// with "Duplicate identifier 'Register'". A type alias cannot be augmented. This assertion
+// exists so the rewrite cannot happen silently again: it only holds if the declaration
+// merged, and merging only works for an interface.
+expectTypeOf<Register['map']>().toEqualTypeOf<AppMap>()

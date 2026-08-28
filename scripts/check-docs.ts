@@ -234,6 +234,9 @@ if (ignoredBlocks > MAX_IGNORED_BLOCKS) {
     claimed++
     if ((COMPILED_DOCS as readonly string[]).includes(file)) continue
     if (file in UNCOMPILED_DOCS) continue
+    // Changesets are release notes. `changeset version` folds them into
+    // `packages/core/CHANGELOG.md`, which is a record and exempt for the same reason.
+    if (file.startsWith('.changeset/')) continue
     fail(
       `${file} has ${blocks} TypeScript block(s) that nothing compiles.\n` +
         '         Add it to COMPILED_DOCS, or to UNCOMPILED_DOCS with a reason.',
