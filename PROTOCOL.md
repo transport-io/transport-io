@@ -377,7 +377,7 @@ ever once its window is spent.
 ### 6.3 `CALL_RESPONSE`
 
 Written by the responder on the call stream, then stream close. Payload is the encoded
-response payload. Event ID is `0x0000`.
+response payload. Event ID is `0x00000000`.
 
 For an event declaring `returns`, a responder MUST write **exactly one** `CALL_RESPONSE`, or
 one `CALL_ERROR`, and never zero of both. A receiver MUST nonetheless accept a sequence of
@@ -395,7 +395,7 @@ again.
 
 ### 6.4 `CALL_ERROR`
 
-Written by the responder, then stream close. Terminal. Event ID is `0x0000`.
+Written by the responder, then stream close. Terminal. Event ID is `0x00000000`.
 
 For a `returns` event it replaces the `CALL_RESPONSE`. For a `yields` event it MAY follow
 <!-- norm: stream-error-after-elements -> packages/core/src/stream.test.ts -->
@@ -417,7 +417,7 @@ Payload is a JSON object:
 ### 6.6 `CALL_CREDIT`
 
 Written by the **initiator** of a streaming call, on the call stream, at any point after the
-`CALL_REQUEST`. Event ID is `0x0000`. Payload is a JSON object:
+`CALL_REQUEST`. Event ID is `0x00000000`. Payload is a JSON object:
 
 ```json
 { "credit": 16 }
@@ -762,7 +762,7 @@ exceed **1024 bytes**, per the HTTP/3 WebTransport draft.
 |---|---|---|
 | `0` | `WT_NO_ERROR` | Normal close. |
 | `1000` | `WT_PROTOCOL_VERSION_MISMATCH` | Peers disagree on `v`. Upgrade one side. |
-| `1001` | `WT_CONTRACT_MISMATCH` | Fingerprints differ. Redeploy both sides together. |
+| `1001` | `WT_CONTRACT_MISMATCH` | An event the peers share is declared differently. Reconcile that event. |
 | `1002` | `WT_HANDSHAKE_TIMEOUT` | No handshake within 5000 ms. |
 | `1003` | `WT_PEER_TOO_SLOW` | Emit queue exceeded 256 frames. Consume faster. |
 | `1004` | `WT_PROTOCOL_ERROR` | Unrecoverable framing violation. |
