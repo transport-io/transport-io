@@ -1,5 +1,69 @@
 # transport-io
 
+## 0.4.0
+
+### Minor Changes
+
+- f42c7a6: Contract helpers: `reliable`, `unreliable`, `rpc` and `streaming`. Each takes a type argument
+  or a Standard Schema, and `rpc` and `streaming` are reliable by construction, so an
+  unreliable event with a response is no longer expressible. The object literal keeps working
+  and mixes with them; `id` is reached by spreading.
+
+  `defineContract` now rejects an event whose payload infers `unknown`, with an error naming
+  the event. `reliable()` with no type argument and no schema used to compile and accept
+  anything thereafter. Write `reliable<any>()` where a payload is deliberately untyped.
+- 4d34a5c: `stream()` gains `take(n)`, `forEach(fn)`, `toArray()` and `cancel()`, and `collect()` is
+  renamed to `toArray()`.
+
+  `take` closes the stream at its limit, the same as `break`. `forEach` awaits its callback
+  before pulling the next element, so a slow consumer slows the producer. `cancel()` stops from
+  outside the loop, where `break` cannot reach, and the consumer sees `WT_ABORTED`.
+
+  The names follow the TC39 async iterator helpers proposal, the behaviour is sequential, and
+  it will stay that way: the proposal is being revised to let helpers run several pulls at
+  once, which would defeat the credit window. `map` and `filter` are not shipped, and `cancel`
+  is not in the proposal. See D99.
+- 5586bac: `listen()` takes an optional connection source and owns the accept loop:
+
+  ```ts
+  const listener = await listenHttp3({ port: 8080, host: '127.0.0.1', cert, privKey, path: '/' })
+  await server.listen(listener)
+  ```
+
+  That loop was previously written by every application, identically, and every copy swallowed
+  the rejection. A failed accept is now counted in `server.acceptErrors` and reported to
+  `onAcceptError` if one is given. One refused handshake does not stop the loop.
+
+  `listen()` with no argument still prepares the server and leaves `accept()` to you, which is
+  what you want when a connection has to be inspected before it is accepted.
+- d49c6e0: Register the contract once and drop the type argument from every construction site:
+
+  ```ts
+  declare module 'transport-io' {
+    interface Register {
+      map: AppMap
+    }
+  }
+
+  const client = new Client({ contract })
+  const server = createServer({ contract })
+  ```
+
+  `Register` holds the map rather than the contract. Registering the contract would resolve the
+  map through a conditional type, which TypeScript expands in hover output: 377 characters
+  against 107 for the interface. The two-line contract pattern stays.
+
+  The explicit type argument still works and wins over the registration, which is what two
+  contracts in one process need. Forgetting to register fails at the first `emit` with an error
+  naming the fix. See D100.
+
+### Patch Changes
+
+- 8a65b10: A streaming handler no longer needs `ctx.signal.throwIfAborted()` in its loop. The responder
+  checks the signal before asking the generator for another value, so a cancelled stream stops
+  without the handler repeating that check. `throwIfAborted()` remains the escape hatch for a
+  handler doing long work between yields, where nothing else can interrupt it.
+
 ## 0.3.0
 
 ### Minor Changes

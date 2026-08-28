@@ -6,7 +6,16 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**/*.ts", "**/*.json", "!dist", "!node_modules", "!site/.astro", "!site/dist"]
+    "includes": [
+      "**/*.ts",
+      "**/*.json",
+      "!dist",
+      "!node_modules",
+      "!site/.astro",
+      "!site/dist",
+      "!.docs-check",
+      "!.hover-check"
+    ]
   },
   "formatter": {
     "enabled": true,

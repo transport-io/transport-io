@@ -10,3 +10,5 @@ playwright-report/
 site/.astro/
 site/dist/
 site/public/favicon.svg
+.docs-check/
+.hover-check/

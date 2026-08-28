@@ -210,7 +210,10 @@ function main(): void {
    */
   const tracked = execFileSync('git', ['ls-files', '*.md'], { encoding: 'utf8' })
     .split('\n')
-    .filter((f) => f.length > 0 && !f.startsWith('site/dist'))
+    // `existsSync` because `git ls-files` reads the index: a file deleted but not yet
+    // committed is still listed, and `changeset version` deletes changesets on its way to
+    // a release. A gate that crashes on that blocks the release it is meant to guard.
+    .filter((f) => f.length > 0 && !f.startsWith('site/dist') && existsSync(f))
   for (const file of tracked) {
     if ((DOCS as readonly string[]).includes(file)) continue
     if (file in NON_NORMATIVE) continue

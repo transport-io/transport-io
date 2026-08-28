@@ -226,7 +226,10 @@ if (ignoredBlocks > MAX_IGNORED_BLOCKS) {
 {
   const tracked = execFileSync('git', ['ls-files', '*.md', '*.mdx'], { encoding: 'utf8' })
     .split('\n')
-    .filter((f) => f.length > 0 && !f.startsWith('site/dist'))
+    // `existsSync` because `git ls-files` reads the index: a file deleted but not yet
+    // committed is still listed, and `changeset version` deletes changesets on its way to
+    // a release. A gate that crashes on that blocks the release it is meant to guard.
+    .filter((f) => f.length > 0 && !f.startsWith('site/dist') && existsSync(f))
   let claimed = 0
   for (const file of tracked) {
     const blocks = (readFileSync(file, 'utf8').match(/^```ts\b/gm) ?? []).length
