@@ -12,3 +12,6 @@ site/dist/
 site/public/favicon.svg
 .docs-check/
 .hover-check/
+
+# Release tarballs from `npm pack`, produced locally and published by hand.
+*.tgz
