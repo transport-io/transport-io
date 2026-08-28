@@ -2385,3 +2385,85 @@ what is there.
 **Reconsider when:** a new gate is written. The question to ask of it is not "does it check
 the right things" but "what would it fail to notice", and if the answer is "anything nobody
 added to a list", it is this defect again.
+
+### D99. The iterator helpers are ours, sequentially, and the proposal's concurrency is refused
+`stream()` gains `take`, `forEach`, `toArray` and `cancel`. The names and signatures follow
+the TC39 async iterator helpers proposal, and `collect()` is renamed to `toArray()` to match.
+That resemblance is where the alignment stops, and this entry exists so nobody reads more
+into it.
+
+The proposal was read rather than recalled. From its README:
+
+> **This proposal is in the process of being revised.** The core set of helpers and their
+> high-level API is unlikely to change, but the underlying specification mechanism will
+> likely be radically revised.
+
+The revision is about **concurrency**. `map`, `filter`, `take`, `drop` and `flatMap` are being
+redesigned so several `next()` calls can be in flight at once, and the README says the exact
+details "are not yet decided".
+
+**We implement these sequentially and will not adopt the concurrent semantics if they land.**
+A helper that pulls ahead of its consumer defeats the credit window: the window bounds the
+producer at 32 frames beyond what the consumer has *taken*, and a concurrent `take` or `map`
+takes eagerly. The bound would still hold numerically while measuring something the
+application no longer controls.
+
+So the plan is not "delete ours when the native version arrives". Swapping to a concurrent
+implementation would be a behaviour change wearing the clothes of a cleanup, and it will look
+like an obvious tidy-up to somebody in six months. It is not.
+
+`forEach` is unaffected by the revision - it consumes rather than producing an iterator - and
+it awaits its callback before pulling the next element, which is what makes it safe here and
+what `onstream(cb)` could never have offered.
+
+`cancel()` is not in the proposal at all. It is ours, for stopping from outside the loop,
+where `break` cannot reach.
+
+`map` and `filter` are deliberately not shipped. On a token stream the work belongs in the
+loop body, they are the two most exposed to the concurrency revision, and each is another
+chain link that has to propagate cancellation back to the source.
+
+**Reconsider when:** the proposal reaches Stage 3 with settled semantics. Even then, adoption
+is a decision about backpressure rather than about standards compliance.
+
+### D100. `Register` holds the map, not the contract
+Module augmentation removes the type parameter from `new Client({ contract })`. The obvious
+shape is to register the contract itself, which is what TanStack Router and Hono appear to do
+and what this change was originally specified as. Measured, it is wrong.
+
+Registering the contract means resolving the map through a conditional type:
+
+```ts
+type Registered = Register extends { contract: infer C } ? MapOf<C> : never
+```
+
+That is an alias instantiation, and TypeScript expands alias instantiations while preserving
+interface names. Printed:
+
+```
+Client<MapOf<{ readonly chat: { readonly lane: "reliable"; readonly payload:
+StandardSchemaV1<unknown, { from: string; body: string; }>; }; readonly save: { ... } }>>
+```
+
+Registering the map instead:
+
+```
+Client<AppMap>
+```
+
+This is D57 arriving from a new direction, and the failure mode is the one D57 exists to
+prevent: hover regresses to the width of the inline form, 377 characters against 107, with
+the validator's internals back in it.
+
+So `Register` holds `map: AppMap`, the two-line contract pattern stays, and what the change
+removes is the type argument at every construction site rather than the interface line. That
+is the smaller win, and it is the one available.
+
+The unregistered case resolves to a sentinel whose only key is the instruction, so the first
+`emit` fails with `Argument of type '"chat"' is not assignable to parameter of type '"no
+contract registered: declare module ..."'`. The sentinel must be a **type alias**: an
+interface has no implicit index signature and fails the `AnyMap` constraint with a second,
+confusing error.
+
+**Reconsider when:** TypeScript preserves alias names in hover output, which would make both
+forms equivalent.
