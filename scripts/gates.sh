@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 
 FAST=(lint typecheck test:unit docs:check check:norms check:boundaries check:workflows
       deadcode check:gate-inputs)
-FULL=(test:node check:hover verify:pack check:install)
+FULL=(test:node check:hover verify:pack check:install check:tags)
 
 GATES=("${FAST[@]}")
 if [ "${1:-}" = "--full" ]; then GATES+=("${FULL[@]}"); fi

@@ -41,7 +41,8 @@
     "test:node": "./scripts/run-node-tests.sh",
     "test:unit": "bun test --path-ignore-patterns=\"**/*.node.test.ts\" --path-ignore-patterns=\"e2e/**\"",
     "typecheck": "tsc --build && tsc -p tsconfig.test.json && tsc -p tsconfig.register.json",
-    "verify:pack": "bun run scripts/check-gate-inputs.ts && npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core && ./scripts/check-ts-floor.sh"
+    "verify:pack": "bun run scripts/check-gate-inputs.ts && npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core && ./scripts/check-ts-floor.sh",
+    "check:tags": "bun run scripts/check-tags.ts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

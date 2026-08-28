@@ -61,10 +61,24 @@ npx changeset                # describe the change
 npx changeset version        # consumes them: bumps the version and writes the changelog
 npm run preflight            # gate inputs, install lines, attw, publint, the TS floor
 npm -w packages/core publish # deliberate, from your machine
+git tag -s v<version> -m '…' # AFTER the publish succeeds, never before
+git push origin v<version>
 ```
 
 `VERSION` in `packages/core/src/index.ts` must match the manifest after a version bump. A
 unit test enforces it.
+
+**Tag on publish, never before.** A tag is how everyone else finds a release: it is what a
+changelog links to, what a bisect starts from, what a person types into a compare view. A tag
+with nothing behind it on the registry advertises a release that does not exist, and `v0.2.1`
+and `v0.4.1` are both that - tagged, then superseded before anyone published them.
+
+Tagging first is what produced them. It opens a window where the tag and the registry
+disagree legitimately, and any check that tolerates that window is exactly the check that
+misses this: both were the newest tag once. Tagging after the publish removes the window, so
+`check:tags` can reconcile the two with no exception for work in progress. It runs in
+`npm run gates -- --full`, and it fails in both directions: a tag with no published version,
+and a published version with no tag.
 
 Both READMEs say `npm install transport-io`. `check-install-line.ts` runs that command on
 every preflight and checks what lands.
