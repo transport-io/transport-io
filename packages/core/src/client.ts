@@ -138,7 +138,7 @@ export class Client<M extends AnyMap = Registered> {
   /**
    * Available only on events declaring `yields`. Iterate it, or `.toArray()` the whole
    * sequence. Leaving the loop with `break` resets the QUIC stream, and that reset is what
-   * fires the responder's `ctx.signal`. There is no separate cancel call.
+   * fires the responder's `ctx.signal`. `cancel()` does the same from outside the loop.
    */
   stream<K extends StreamableOf<M> & string>(
     event: K,
