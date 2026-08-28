@@ -478,30 +478,45 @@ if (coreIsStub) {
     `docs: snippet compilation PENDING - core is still the stub entry (${blockCount} blocks)`,
   )
 } else if (fileCount > 0) {
-  try {
-    execFileSync(
-      './node_modules/typescript/bin/tsc',
-      [
-        '--noEmit',
-        '--strict',
-        '--skipLibCheck',
-        '--module',
-        'preserve',
-        '--moduleResolution',
-        'bundler',
-        '--target',
-        'es2023',
-        '--ignoreConfig',
-        ...readdirSync(OUT).map((f) => join(OUT, f)),
-      ],
-      { stdio: 'inherit' },
-    )
-  } catch {
-    fail('documentation snippets do not compile')
+  /**
+   * One program per snippet, not one program for all of them.
+   *
+   * A snippet registers its map with `declare module 'transport-io'`, which is a global
+   * augmentation. Two documents registering different maps in a single program are a
+   * duplicate declaration of `Register.map`, and the second document's snippets then
+   * type-check against the first document's contract - so `emit('chat', ...)` in API.md
+   * failed against README's payload. Each generated file is self-contained, so the only
+   * thing the shared program contributed was that collision.
+   */
+  let broken = 0
+  for (const f of readdirSync(OUT)) {
+    try {
+      execFileSync(
+        './node_modules/typescript/bin/tsc',
+        [
+          '--noEmit',
+          '--strict',
+          '--skipLibCheck',
+          '--module',
+          'preserve',
+          '--moduleResolution',
+          'bundler',
+          '--target',
+          'es2023',
+          '--ignoreConfig',
+          join(OUT, f),
+        ],
+        { stdio: 'inherit' },
+      )
+    } catch {
+      broken++
+    }
   }
+  if (broken > 0)
+    fail(`documentation snippets do not compile (${broken} of ${fileCount} blocks)`)
 }
 
-rmSync(OUT, { recursive: true, force: true })
+// rmSync(OUT, { recursive: true, force: true })
 if (failures > 0) {
   console.error(`\ndocs-check: ${failures} failure(s)`)
   process.exit(1)
