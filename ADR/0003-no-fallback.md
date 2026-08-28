@@ -14,7 +14,7 @@ A WebSocket fallback for browsers or networks where QUIC is unavailable.
 A WebSocket is reliable and ordered. Running the unreliable lane over one would silently
 convert every `lane: 'unreliable'` event into a reliable, ordered one. The contract would
 still say the message may be dropped; the transport would guarantee it never is. The
-application would be built on a guarantee that is a lie, and the lie would be invisible
+application would be built on a guarantee that does not hold, and the mismatch would be invisible
 precisely where it matters - under the network conditions that triggered the fallback.
 
 Degrading availability is honest. Degrading a guarantee is not.
@@ -26,7 +26,7 @@ reference implementation catches a failed QUIC connection and switches to WebTra
 over HTTP/2, and it exposes an `Http2Server` and a `reliability: 'both'` mode. At least one
 browser advertises its own HTTP/2 fallback "with the same API".
 
-So this decision is not merely "do not build a fallback". It is "actively disable the one
+So the decision is not only "do not build a fallback". It is "actively disable the one
 we depend on":
 
 - Construct only `Http3Server`. Never `Http2Server`, never `reliability: 'both'`.
@@ -43,9 +43,9 @@ is therefore defence in depth: set `requireUnreliable` where supported, and asse
 
 One major browser cannot talk to a server built on this stack at all, because the
 underlying QUIC library does not implement the session-level flow-control settings that
-browser requires. It is unsupported in v1 and the README says so. This is worse than a
-missing feature: feature detection reports success and the session establishes before
-failing, so the handshake deadline in ADR 0009 exists to turn that silence into a named
+browser requires. It is unsupported in v1 and the README says so. The failure is not a
+clean one: feature detection reports success and the session establishes before failing, so
+the handshake deadline in ADR 0009 exists to turn that silence into a named
 error.
 
 ## Revisit when

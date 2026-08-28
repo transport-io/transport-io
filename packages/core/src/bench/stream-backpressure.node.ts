@@ -1,11 +1,12 @@
 /**
  * How far ahead of a slow consumer can a streaming handler get?
  *
- * The design claim for `stream()` is that flow control falls out of the language: the
- * generator does not resume until the write is accepted, so nothing accumulates in a queue
- * we would have to bound. D77's rule is that a bound is only a bound if something stays in
- * the bounded thing, and the only way to know whether `writer.ready` holds anything back on
- * the quiche binding is to run it.
+ * `stream()` was originally designed on the assumption that flow control fell out of the
+ * language: the generator does not resume until the write is accepted, so nothing would
+ * accumulate. This bench disproved that. `writer.ready` resolves unconditionally on the
+ * quiche binding, and the credit window in §6.6 exists because of what this measured.
+ *
+ * It is kept so the claim can be rechecked against another transport or another release.
  *
  * So this measures `produced - consumed` at its peak, against a consumer that sleeps. Both
  * peers are in this process, so both counters are exact.

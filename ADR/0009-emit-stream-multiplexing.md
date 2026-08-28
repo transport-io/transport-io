@@ -37,7 +37,7 @@ would cost one message; on the shared lane it destroys **all** stream-lane traff
 session, because there is no second stream and no way to reopen this one.
 
 The specification therefore escalates: any protocol error on the emit stream closes the
-session rather than resetting the stream. That is the correct fix, but it should be read as
+session rather than resetting the stream. That is the correct fix, and it should be read as
 what it is - a second consequence of the same trade, surfacing on its own after the
 decision was made. Head-of-line blocking was the cost we accepted knowingly. This one we
 did not see, and it is the more serious of the two: a single malformed frame now ends the
@@ -78,5 +78,5 @@ and then no application bytes ever flow. The deadline turns that silent hang int
 ## Revisit when
 
 p99 emit delivery latency to a peer in a quiet room exceeds 100 ms while a room that peer
-also belongs to sustains more than 200 emits per second. That is the point at which
-`emit-per-room` stops being reserved and starts being implemented.
+also belongs to sustains more than 200 emits per second. At that point `emit-per-room` gets
+implemented rather than staying reserved.

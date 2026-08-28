@@ -49,5 +49,5 @@ latency above 50 ms at 500 concurrent sessions with no network cause. Both are m
 harness, so this trigger fires from evidence already being collected rather than from an
 impression that "churn feels expensive".
 
-The known risk is upstream memory growth under high stream turnover, which is why that soak
-is a Stage 1 graduation criterion rather than a nice-to-have.
+The known risk is upstream memory growth under high stream turnover. That soak is a Stage 1
+graduation criterion.

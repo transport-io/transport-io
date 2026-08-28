@@ -98,11 +98,11 @@ open, is decided by the event's contract entry and not by the call site:
 | `yields` | one `CALL_REQUEST`, no FIN, then `CALL_CREDIT` frames | zero or more `CALL_RESPONSE`, optionally one `CALL_ERROR`, then close |
 
 Both peers know which shape applies before any response frame arrives, because the event
-table is exchanged at handshake (§4.3). **This is why the choice cannot be per call site.**
-A responder that yields nothing closes the stream with zero `CALL_RESPONSE` frames, which is
-byte for byte what a broken `returns` responder produces. Identical bytes, two meanings: a
-protocol error in one shape and a clean empty sequence in the other. Only the contract
-separates them.
+table is exchanged at handshake (§4.3). The shape cannot be chosen per call site. A
+responder that yields nothing closes the stream with zero `CALL_RESPONSE` frames, and those
+are the same bytes a broken `returns` responder produces. In the `returns` shape that is a
+protocol error; in the `yields` shape it is a complete empty sequence. The contract is what
+distinguishes them.
 
 Receivers MUST accept a `CALL_RESPONSE` sequence of any length regardless of shape, so that
 <!-- norm: receiver-accepts-multi-frame-response -> packages/core/src/reserved-and-limits.test.ts -->
@@ -532,11 +532,11 @@ The normative requirements are:
 3. **Reuse, via quarantine.** An origin MUST NOT be reissued while any peer that observed
    it may still hold sequence state for it. It MAY be reissued once that is impossible.
 
-   Never reusing would make the counter a clock rather than a capacity limit: 2²² values
-   at 100 sessions per second exhausts in 11.7 hours and at 500 per second in 2.3 hours,
-   so a busy host would stop accepting sessions and need a restart. That is a scheduled
-   outage disguised as a safety property, and it arrives in production because it is a
-   function of uptime multiplied by load rather than of anything testable.
+   Never reusing would turn the counter into a clock rather than a capacity limit. 2²²
+   values at 100 sessions per second exhausts in 11.7 hours, and at 500 per second in 2.3
+   hours, after which a busy host stops accepting sessions until it is restarted. The
+   failure depends on uptime multiplied by load, so it appears in production rather than in
+   testing.
 
    Reuse is safe because both windows that could confuse a reused origin are bounded by
    values this protocol sets:
@@ -612,7 +612,7 @@ Were Origin a 32-bit hash, distinct peers would collide with probability approxi
 `n² / 2³³` - about one in eight thousand at 1,000 concurrent peers, and about 1% at 10,000.
 A collision degrades rather than corrupts: two peers share a last-write-wins slot for one
 event, so one of them loses updates it should have kept. The unreliable lane already permits
-loss, which is why this is an acceptable trade against four more header bytes on the lane
+loss, so the trade is acceptable against four more header bytes on the lane
 whose whole purpose is being small.
 
 This field is also what `ADR 0005`'s self-publish dedupe needs: a node receiving its own
@@ -620,11 +620,13 @@ broadcast back identifies it by origin. Wrap is detected
 by treating the comparison as circular over the 32-bit space, with a difference greater
 than `0x7FFFFFFF` read as wrap rather than regression.
 
-This is in the protocol rather than left to applications because every realistic datagram
-payload - a cursor position, a presence beat, an object transform - is last-write-wins, and
-requiring each application to rebuild it is exactly the too-raw-primitive mistake this
-library exists to avoid. An application that genuinely wants unfiltered delivery disables
-the check per event; the field remains on the wire either way.
+This is in the protocol rather than left to applications. Most datagram payloads are
+last-write-wins: a cursor position, a presence beat, an object transform. Requiring every
+application to rebuild the check would leave the primitive too raw to use.
+
+Duplicate suppression is unconditional. There is no per-event opt-out, and an implementation
+that wants to deliver duplicates would have to skip the check entirely. The sequence field
+is on the wire either way.
 
 ### 7.4 Size ceiling
 
@@ -701,9 +703,9 @@ Normative for a conforming sender, because these choices are observable to the p
 | Emit, per peer | 256 frames | Close the session with `WT_PEER_TOO_SLOW`. |
 | Call stream | 32 frames of credit (§6.6) | Producer waits for credit. Never discard. |
 
-The emit lane never discards. A lane that advertises reliable, ordered delivery and then
-drops silently is a lie about the application's data; a peer 256 frames behind has already
-failed, and disconnecting it is the honest outcome.
+The emit lane never discards. It advertises reliable, ordered delivery, so dropping a frame
+would misreport what happened to the application's data. A peer 256 frames behind is
+disconnected instead.
 
 Call streams neither queue unboundedly nor discard. A streaming responder holds at most the
 credit its consumer has granted (§6.6) and waits at zero; a single-response call writes one
@@ -720,7 +722,7 @@ this, and a conforming sender MUST NOT substitute the transport's flow control f
 **Stale datagrams are a separate concern from overflow.** A queued datagram older than its
 time-to-live is discarded **at dequeue**, default 150 ms. Overflow handles a burst; TTL
 handles a stall. Without TTL, a peer that stalls for two seconds and resumes receives a
-backlog of stale positions and renders history, which is worse than receiving nothing.
+backlog of stale positions and renders history rather than the current state.
 
 The two causes MUST be counted separately, as `overflowDropped` and `staleDropped`, so an
 <!-- norm: drop-causes-counted-separately -> packages/core/src/datagram-lane.test.ts -->
@@ -738,8 +740,8 @@ One byte. Sent as the QUIC application error code on `RESET_STREAM` or `STOP_SEN
 left to explain on.** Everything a responder can say about a *call* - the handler threw,
 the event is not in the contract, the payload failed validation, the handshake had not
 completed - is sent as a `CALL_ERROR` frame (§6.4) carrying both a code and a message, on
-the stream the call already owns. That is strictly more than a reset can express, which is
-why only three reset codes exist.
+the stream the call already owns. That carries more detail than a reset code can, so only
+three reset codes exist.
 
 | code | name | meaning and remedy |
 |---|---|---|

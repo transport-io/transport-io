@@ -72,8 +72,8 @@ A generator yielding as fast as it could, against a consumer sleeping 20 ms per 
 Doubling what the consumer took doubled how far the producer got ahead, at every element
 size. There is no plateau because `WritableStreamDefaultWriter.ready` resolves
 unconditionally on the quiche binding: awaiting it applies no backpressure and the frames
-accumulate in the transport. That is not a slow consumer being handled, it is an unbounded
-buffer with a nicer API on top, and it would have shipped as "the language holds the bound".
+accumulate in the transport. Nothing is handling the slow consumer; the frames are simply
+buffered without a limit.
 
 D77's rule is that a bound is only a bound if something stays in the bounded thing. So the
 accounting is ours: `CALL_CREDIT` (PROTOCOL.md §6.6). A responder starts with **32** frames

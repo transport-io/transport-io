@@ -56,9 +56,9 @@ export interface SessionOptions {
   readonly now?: () => number
   readonly handshakeDeadlineMs?: number
   /**
-   * How a queued datagram flush is deferred. Defaults to a microtask, which is what makes
-   * the bounded ring and the TTL reachable at all: a synchronous drain on every push
-   * would mean a burst never queues and neither policy ever applies. Tests inject a
+   * How a queued datagram flush is deferred. Defaults to a microtask. A synchronous drain
+   * on every push would mean a burst never queues, so neither the bounded ring nor the TTL
+   * would ever apply. Tests inject a
    * manual scheduler to exercise both deterministically.
    */
   readonly scheduleFlush?: (flush: () => void) => void
@@ -403,7 +403,7 @@ export class Session {
       // library has - and it rejected with a raw DOMException carrying no code and no
       // remedy, which the error helper printed in API.md reports as 'unknown'.
       // Read through a call so narrowing from the pre-check above does not apply: the
-      // signal can abort at any point during the call, which is what it is for.
+      // signal can abort at any point during the call.
       const abortedNow = (): boolean => opts?.signal?.aborted ?? false
       throw isAbort(e) || abortedNow() ? abortToTransportError(e) : e
     } finally {
@@ -535,20 +535,18 @@ export class Session {
   }
 
   /**
-   * The only door out of a session, and every internal path now uses it.
+   * The only way out of a session. Every internal path routes through here.
    *
-   * Guarding this method alone was not enough: four call sites reached `#conn.close()`
-   * directly - the handshake deadline, the peer-too-slow bound, an emit write failure and a
-   * protocol error on the read loop - so the guard covered the one path that already had
-   * the fewest duplicates. A soak still produced 619,422 `close sent twice` complaints from
-   * quiche after the first fix, which is what a partial guard looks like from the outside.
+   * Guarding this method alone was not enough. Four call sites reached `#conn.close()`
+   * directly: the handshake deadline, the peer-too-slow bound, an emit write failure and a
+   * protocol error on the read loop. A soak produced 619,422 `close sent twice` complaints
+   * from quiche after that first partial fix.
    */
   close(code: number, reason: string): void {
-    // Idempotent in both halves. `dispose()` already was; `conn.close()` was not, so a
-    // second close - a client disconnecting while the server is tearing the same session
-    // down, which is ordinary - reached the transport twice. quiche logs
-    // "WebTransportHttp3 close sent twice" and refuses it, which is a protocol-level
-    // complaint we were generating and then ignoring.
+    // Idempotent in both halves. `dispose()` already was, `conn.close()` was not. A second
+    // close happens routinely when a client disconnects while the server is tearing the
+    // same session down, and it reached the transport twice. quiche logs
+    // "WebTransportHttp3 close sent twice" and refuses it.
     if (this.#disposed) return
     this.dispose()
     this.#conn.close(code, reason)
@@ -652,13 +650,14 @@ export class Session {
   /**
    * An async generator is the implementation as well as the API, because `return()` is
    * what makes `break` mean "reset the stream". The consumer leaving the loop runs the
-   * `finally` below, which resets, which the responder sees as STOP_SENDING, which fires
-   * its `ctx.signal` and runs its own generator's `finally`. No cancellation message
-   * exists anywhere in the protocol and none is needed.
+   * `finally` below. That resets the stream. The responder sees STOP_SENDING, its
+   * `ctx.signal` fires, and its own generator's `finally` runs. The protocol carries no
+   * cancellation message.
    *
-   * Receive-side flow control is the absence of a read: `reader.read()` is only reached
-   * when the consumer asks for the next element, so an unconsumed stream stops reading,
-   * the receive window fills, and the producer's `writer.ready` stops resolving.
+   * The consumer holds the producer back by granting credit, not by declining to read.
+   * `reader.read()` is only reached when the consumer asks for the next element, and the
+   * credit sent from here (§6.6) is what lets the responder write another frame. Receive
+   * buffering alone would not bound anything on the reference binding.
    */
   #doStream(eventId: number, body: Uint8Array, signal?: AbortSignal): StreamResult<unknown> {
     const open = (): Promise<BidiStream> => this.#conn.openBidi()
@@ -724,8 +723,8 @@ export class Session {
             }
             if (f.type !== FrameType.CALL_RESPONSE) continue
             yield decodePayload(f.payload)
-            // Reached only when the consumer asks for the next element, which is what
-            // makes this an acknowledgement of consumption rather than of arrival.
+            // Reached only when the consumer asks for the next element, so this
+            // acknowledges consumption rather than arrival.
             taken++
             await payCredit()
           }
@@ -877,9 +876,9 @@ export class Session {
    * who wants fewer, larger frames batches inside their own generator and pays the 12-byte
    * frame overhead once per batch instead of once per element.
    *
-   * `writer.ready` before every write is where the bound lives. If it resolves
-   * unconditionally, nothing is held back and the bound is not real. The number is
-   * measured rather than asserted (D77).
+   * The bound is the credit window, not `writer.ready`. That writer resolves
+   * unconditionally on the reference binding, so awaiting it holds nothing back. It is
+   * still awaited, for a transport that honours it. See D93 for the measurement.
    */
   async #serveStream(
     handler: StreamHandler,

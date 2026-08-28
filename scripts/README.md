@@ -43,7 +43,7 @@ defect. Line-based, no YAML dependency.
 
 Publishing is a human running a command on their own machine. Nothing in
 `.github/workflows/` publishes: there is no publish job, no `NPM_TOKEN`, no
-`changesets/action`, no `registry-url`. That is deliberate.
+`changesets/action` and no `registry-url`. That is deliberate.
 
 | check | state |
 |---|---|
@@ -67,7 +67,7 @@ npm -w packages/core publish # deliberate, from your machine
 unit test enforces it.
 
 Both READMEs say `npm install transport-io`. `check-install-line.ts` runs that command on
-every preflight and checks what actually lands, so the line cannot drift out of date.
+every preflight and checks what lands.
 
 ## `check-ts-floor.sh` - the published types, at the version we claim
 

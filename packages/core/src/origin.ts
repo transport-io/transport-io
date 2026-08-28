@@ -27,7 +27,7 @@ export class OriginAllocator {
   /**
    * `counterSpace` exists so the exhaustion branch can be reached in a test. Exhausting the
    * real space means 4,194,304 allocations, which is why §7.3's "MUST refuse new sessions"
-   * went unproven - and an unreachable branch in an allocator is exactly the kind of code
+   * went unproven. An unreachable branch in an allocator is the kind of code
    * that is wrong the first time it runs. Production never passes it.
    */
   constructor(

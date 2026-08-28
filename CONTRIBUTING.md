@@ -64,10 +64,10 @@ not named that way may not import one, by package name or by relative path.
 
 ## Gates
 
-Every gate must be able to fail. That sounds obvious and it was not true here: several were
-found reporting success while examining nothing, because an aggregate over an empty
-collection is inside every bound. If you add a check that reduces a collection to a verdict,
-give it a minimum size and make it fail loudly when it finds nothing.
+Every gate must be able to fail. Several here were found reporting success while examining
+nothing, because an aggregate over an empty collection is inside every bound. If you add a
+check that reduces a collection to a verdict, give it a minimum size and make it fail when
+it finds nothing.
 
 Two gates are unusual and worth knowing about:
 
@@ -95,23 +95,21 @@ small commits and it only works if each one is green.
 
 ## Tests
 
-**Every fix lands with a test that fails without it.** A fix with no failing test is a
-claim.
+Every fix lands with a test that fails without it.
 
-Two rules learned the hard way, both of which cost real defects:
+Two rules, both of which cost real defects here:
 
 1. **A test that checks the initiator of a two sided interaction is not a test of the
    interaction.** Caller and responder, startup and shutdown, one process and two. Assert
    both sides or you have asserted neither.
-2. **A test name is a promise.** If the name says what the system guarantees, the body must
-   assert that guarantee and not something cheaper to reach nearby.
+2. **Assert what the test name says.** If the name states a guarantee, the body has to check
+   that guarantee rather than something cheaper to reach nearby.
 
 ## Documentation
 
-Documentation updates ship in the **same commit** as the change, never in a follow up. A
-follow up commit is a promise, and promises are how documentation goes stale. A pre commit
-hook refuses a source change with no documentation change; if none is genuinely needed,
-re run with `DOCS_ACK=1` to record that judgement.
+Documentation updates ship in the same commit as the change, not in a follow up. A pre
+commit hook refuses a source change with no documentation change. If none is needed, re run
+with `DOCS_ACK=1` to record that judgement.
 
 Every external constant in a document is computed or fetched in the same change that writes
 it, and the command that produced it goes next to it. A hash, a version, a size limit: if it

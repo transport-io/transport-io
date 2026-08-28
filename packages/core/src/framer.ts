@@ -5,7 +5,7 @@
  * reference transport, 51 writes arrived as 217 reads, and the large write fragmented
  * while the small ones happened to survive - which is the worst case, because naive
  * boundary-trusting code passes in development and fails under load. The length prefix
- * is the only thing that recovers frame boundaries, and nobody using this library should
+ * is the only thing that recovers frame boundaries. Users of this library should never
  * ever have to think about it.
  */
 import { TransportError } from './errors.ts'

@@ -46,8 +46,8 @@ The rules that fall out, which core obeys from day one:
 
 ## Consequence accepted
 
-Local peers observe a message slightly before remote peers, because local delivery does
-not wait for the bus. That is inherent to any fan-out and is documented rather than hidden.
+Local peers observe a message slightly before remote peers, because local delivery does not
+wait for the bus. Any fan-out has this property; it is documented here rather than hidden.
 
 ## Revisit when
 

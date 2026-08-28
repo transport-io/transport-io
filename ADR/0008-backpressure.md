@@ -29,7 +29,7 @@ stale frames are the ones worth losing. 64 frames is roughly one second of buffe
 Dropping is the lane's advertised contract, so it counts rather than throws.
 
 **Emit - never drop, disconnect instead.** A lane that advertises reliable ordered delivery
-and then silently drops is exactly the lie this project exists to avoid. A peer 256 frames
+and then silently drops misreports what happened to the data. A peer 256 frames
 behind has already failed; disconnecting is the honest outcome.
 
 **Call streams - no queue and no drop.**
@@ -41,7 +41,7 @@ queueing". That was measured in 2026-08 and is false. `ready` resolves unconditi
 the reference binding, so awaiting the writer applies nothing; a producer ran 136,523 frames
 and roughly 53 MB ahead of a consumer that had taken 40, growing linearly with the run. The
 paragraph is replaced rather than annotated because this is a document people read to learn
-how backpressure works here, and a live document that is wrong is worse than no document.*
+how backpressure works, and leaving a wrong explanation in place would mislead them.*
 
 There is no queue and nothing is discarded. A streaming responder spends **credit** granted
 by its consumer: 32 frames to start, refilled 16 at a time as elements are actually taken,
@@ -59,8 +59,8 @@ Overflow and staleness are different problems and conflating them was the near-m
 
 Drop-oldest handles a burst. It does nothing for a peer that stalls for two seconds and
 resumes: the ring never overflows, so 64 stale positions are dutifully delivered and the
-application renders history. That is worse than delivering nothing, because it is wrong
-rather than merely late.
+application renders history rather than the current state. The result is wrong, not merely
+late.
 
 TTL at dequeue fixes it. After a two-second stall, all but the newest few frames are past
 150 ms and are discarded on the way out. 150 ms is chosen because pointer lag is
