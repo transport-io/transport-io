@@ -32,20 +32,66 @@ One file, and it is the only place that says what is reliable.
 
 ```ts
 // contract.ts
-import { defineContract, type MapOf, type$ } from 'transport-io'
+import { defineContract, type MapOf, reliable, type$, unreliable } from 'transport-io'
 
 export const contract = defineContract({
-  chat:   { lane: 'reliable',   payload: type$<{ from: string; body: string }>() },
-  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
+  chat: reliable<{ from: string; body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>(),
+})
+
+export interface AppMap extends MapOf<typeof contract> {}
+
+declare module 'transport-io' {
+  interface Register {
+    map: AppMap
+  }
+}
+```
+
+The `declare module` block registers the map. It is what keeps the rest of this page free of
+type arguments: `createServer({ contract })` and `new Client({ … })` below are typed from it.
+
+Write both of the first two lines. The second keeps hover readable: with it, hovering `emit` shows 107
+characters, without it 377, including your validator's internal types. Hover width is a
+property of your contract rather than of the library, so those figures belong to the
+contract pinned in the project's hover gate and are re-measured on every CI run.
+
+### Types, or a schema
+
+`reliable<T>()` describes the payload with a type. Nothing validates it at runtime, and it
+costs nothing at runtime either. A peer that sends the wrong shape is caught by whatever the
+handler does with it, which may be nothing.
+
+Pass a Standard Schema instead, and inbound payloads are validated on arrival:
+
+```ts standalone
+// contract.ts, with runtime validation
+import { defineContract, type MapOf, reliable, unreliable } from 'transport-io'
+import { z } from 'zod'
+
+export const contract = defineContract({
+  chat: reliable(z.object({ from: z.string(), body: z.string().max(2000) })),
+  cursor: unreliable(z.object({ x: z.number(), y: z.number() })),
 })
 
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-**Write both lines.** The second is what keeps hover readable: with it, hovering `emit`
-shows 107 characters; without it, 377, including your validator's internal types. Hover
-width is a property of the contract rather than of the library, so those figures belong to
-the contract pinned in the project's hover gate and are re-measured on every CI run.
+The payload types are inferred either way, so the rest of your application is identical.
+
+| | `type$` / `reliable<T>()` | a schema |
+|---|---|---|
+| inbound validation | none | every message, on arrival |
+| runtime cost | zero | one check per message |
+| bad payload from a peer | reaches your handler | rejected with `WT_VALIDATION_FAILED` |
+| dependency | none | your validator |
+
+Use a schema wherever a peer you do not control can reach, which for a server is every
+client. Use types where both ends are yours and the traffic is high, such as cursor
+positions at pointer rate.
+
+Any [Standard Schema](https://standardschema.dev) validator works: zod, valibot, arktype.
+The library depends on none of them.
 
 ## The server
 
@@ -57,7 +103,7 @@ import { listenHttp3 } from 'transport-io/node-transport'
 declare const cert: string
 declare const privKey: string
 
-const server = createServer<AppMap>({ contract })
+const server = createServer({ contract })
 
 server.onSession((peer) => {
   void peer.join('lobby')
@@ -83,7 +129,7 @@ declare const certificateHash: Uint8Array
 declare function render(from: string, body: string): void
 declare function moveDot(x: number, y: number): void
 
-const client = new Client<AppMap>({
+const client = new Client({
   contract,
   connect: () => connectBrowser({ url: 'https://127.0.0.1:8080/', certificateHash }),
 })

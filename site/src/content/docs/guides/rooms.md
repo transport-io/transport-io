@@ -7,21 +7,32 @@ A room is a name. Peers join it and the server broadcasts to it. Nothing about a
 persisted.
 
 ```ts
-import { createServer, defineContract, type MapOf, TransportError, type$ } from 'transport-io'
+import {
+  type Client,
+  defineContract,
+  type MapOf,
+  reliable,
+  rpc,
+  type Server,
+  TransportError,
+  unreliable,
+} from 'transport-io'
 
 const contract = defineContract({
-  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
-  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
-  subscribe: {
-    lane: 'reliable',
-    payload: type$<{ room: string }>(),
-    returns: type$<{ joined: boolean }>(),
-  },
+  chat: reliable<{ body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>(),
+  subscribe: rpc<{ room: string }, { joined: boolean }>(),
 })
 interface AppMap extends MapOf<typeof contract> {}
 
-declare const server: ReturnType<typeof createServer<AppMap>>
-declare const client: import('transport-io').Client<AppMap>
+declare module 'transport-io' {
+  interface Register {
+    map: AppMap
+  }
+}
+
+declare const server: Server
+declare const client: Client
 declare function allowed(room: string): boolean
 declare function resubscribe(): Promise<void>
 

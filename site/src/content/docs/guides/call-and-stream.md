@@ -7,16 +7,22 @@ An event that declares `returns` is called and answers with one value. An event 
 declares `yields` is streamed and answers with a sequence. An event cannot declare both.
 
 ```ts
-import { Client, createServer, defineContract, type MapOf, type$ } from 'transport-io'
+import { type Client, defineContract, type MapOf, rpc, type Server, streaming } from 'transport-io'
 
 export const contract = defineContract({
-  save: { lane: 'reliable', payload: type$<{ text: string }>(), returns: type$<{ n: number }>() },
-  ask:  { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
+  save: rpc<{ text: string }, { n: number }>(),
+  ask: streaming<{ prompt: string }, string>(),
 })
 export interface AppMap extends MapOf<typeof contract> {}
 
-declare const client: Client<AppMap>
-declare const server: ReturnType<typeof createServer<AppMap>>
+declare module 'transport-io' {
+  interface Register {
+    map: AppMap
+  }
+}
+
+declare const client: Client
+declare const server: Server
 declare function model(text: string): AsyncIterable<string>
 declare function enrich(chunk: string): Promise<string>
 // Shadows the DOM's `prompt()`, which is what a reader's own variable does too.
