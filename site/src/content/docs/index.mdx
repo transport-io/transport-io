@@ -67,10 +67,11 @@ server.handle('ask', async function* ({ prompt }) {
 </CardGrid>
 
 Each `stream()` and each `call()` owns its own QUIC stream, so a stalled one does not block
-the others. The recording below runs two generations at once and stops one of them.
+the others.
 
 <div class="tio-demo-slot">
-  <p><strong>Recording goes here.</strong> There is no live demo on this page, and there will
+  <p><strong>Run it locally in one command:</strong> <code>npx transport-io dev --demo</code>,
+  then open the printed URL in two tabs. There is no live demo on this page, and there will
   not be a fake one: the server needs raw UDP ingress, which GitHub Pages does not have.</p>
 </div>
 
