@@ -10,7 +10,7 @@ usual one and finding that out by trial is a waste of your evening.
 | **Node 22.18 or newer** | 22.18 strips TypeScript types without a flag, which is how the server and the integration tests run `.ts` files directly. `./scripts/check-node.sh` refuses anything older and says so. |
 | **[Bun](https://bun.sh)** | Runs the unit tests, the documentation gates and the example build. `npm install` succeeds without it and then your first `git commit` fails, because the hooks shell out to it. |
 | **`openssl` on `PATH`** | Mints the short lived certificate the browser needs. WebTransport will not accept an arbitrary self signed certificate, so the example generates one pinned by hash. |
-| **macOS or Linux** | Windows is not supported for *development*: the hook commands invoke `./node_modules/.bin/` paths directly, which are `.cmd` shims on Windows, and the scripts assume a POSIX shell. Use WSL. Running the library on Windows is a separate question and is not blocked. |
+| **macOS or Linux** | Windows is not supported for *development*: the scripts are POSIX shell, `gates.sh` and `check-ts-floor.sh` among them. Use WSL. Running the library on Windows is a separate question and is not blocked. |
 
 The native QUIC transport is a **separate, deliberate install** and is only needed if you
 are working on the transport itself or running the end to end suite:
@@ -81,8 +81,10 @@ Two gates are unusual and worth knowing about:
 
 ## Commits
 
-Conventional Commits. The scope is required and validated against the workspace list:
-`core`, `ci`, `docs`, `deps`, `repo`.
+Conventional Commits. The scope is required and derived from the workspaces at commit time,
+plus four that describe a kind of change rather than a package: `chat`, `ci`, `core`, `deps`,
+`docs`, `repo`, `site`. Adding a workspace adds its scope with no second list to update,
+which is why `commitlint.config.ts` derives them rather than listing them.
 
 **Subject only, never a body.** commitlint enforces an empty body and an empty footer, and
 the merge settings discard the body anyway. Breaking changes use the `!` marker, because a

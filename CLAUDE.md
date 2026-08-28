@@ -100,7 +100,8 @@ Part 2.
   40, growing with the run. `stream()` carries its own credit window because of it.
 - **The reference transport leaks per bidirectional stream**, unbounded, upstream: 5.95 KB
   on the server half and 5.88 KB on the client half. Not ours - our own path over a
-  loopback costs 0.045 KB. The soak fails and Stage 1 is blocked. See D65.
+  loopback costs 0.045 KB. The soak fails on it, and that is what stands between this and a
+  1.0. See D65.
 - **`@moq/web-transport` is flat** on the identical probe: 0.01 KB per stream over 16,000,
   with a real plateau. The transport seam in ADR 0007 is the way out. See D66.
 
@@ -165,9 +166,10 @@ form appears nowhere.
 ## Platform support
 
 Development is supported on **macOS and Linux**. Windows is not, and this is a statement
-rather than an oversight: hook commands invoke `./node_modules/.bin/` paths directly, which
-are `.cmd` shims on Windows, and the scripts assume a POSIX shell. Windows contributors
-should use WSL. Note this is about *developing* the library - the transport itself publishes
+rather than an oversight: the scripts are POSIX shell, and `gates.sh`, `check-ts-floor.sh`
+and `run-node-tests.sh` are the load-bearing ones. Windows contributors should use WSL.
+(The `.bin` shim problem this used to cite is gone: `lefthook.yml` runs everything through
+`bun run <script>` precisely because lefthook does not put `node_modules/.bin` on PATH.) Note this is about *developing* the library - the transport itself publishes
 a `win32-x64` prebuild, so running it on Windows is a separate question that is not blocked.
 
 ## Hooks vs CI
