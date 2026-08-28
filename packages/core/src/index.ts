@@ -24,6 +24,7 @@ export {
   type Lane,
   type MapOf,
   type Schema,
+  type StreamableOf,
   type$,
 } from './contract.ts'
 export { maxDatagramPayload } from './datagram.ts'
@@ -49,7 +50,7 @@ export {
   type ServerOptions,
   type ServerPeer,
 } from './server.ts'
-export type { SessionStats } from './session.ts'
+export type { SessionStats, StreamResult } from './session.ts'
 
 /**
  * Hand-maintained and asserted against `package.json` by `index.test.ts`, because
@@ -59,4 +60,4 @@ export type { SessionStats } from './session.ts'
  * `changeset version` moves the manifest, so this moves in the same commit - which the test
  * enforces rather than trusting anyone to remember.
  */
-export const VERSION: string = '0.2.1'
+export const VERSION: string = '0.3.0'

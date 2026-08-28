@@ -138,7 +138,7 @@ first stable release.
 
 The first release was `0.1.0`. (`0.0.1` is on the registry to claim the name, from the same
 tree, and is not a release.) Under `0.x` a **minor** bump is allowed to contain breaking
-changes - pin an exact version, or accept that `^0.2.0` can move under you.
+changes - pin an exact version, or accept that `^0.3.0` can move under you.
 
 `0.2.0` is the demonstration: it renamed both lane values and changed the handshake, so a
 `0.1.0` peer and a `0.2.0` peer refuse each other. That is what a minor bump is permitted to

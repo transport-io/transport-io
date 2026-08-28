@@ -1,5 +1,17 @@
 # transport-io
 
+## 0.3.0
+
+### Minor Changes
+
+- Export `StreamResult` and `StreamableOf`. `stream()` returns the first and constrains on the
+  second, so without them a consumer could not name the return type of 0.2.0's headline
+  feature or write a function taking one. `CallableOf` was exported and its streaming twin was
+  not.
+
+  Found by deriving the TypeScript floor gate's probe from the shipped declarations instead of
+  hand-listing five exports out of forty-eight. See D98.
+
 ## 0.2.1
 
 ### Patch Changes
