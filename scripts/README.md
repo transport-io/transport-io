@@ -47,7 +47,7 @@ Publishing is a human running a command on their own machine. Nothing in
 
 | check | state |
 |---|---|
-| `transport-io` on npm | published, latest `0.4.0` |
+| `transport-io` on npm | published, latest `0.4.1` |
 | root `package.json` | `private: true` (never publishes) |
 | `examples/chat` | `private: true` |
 | `packages/core` | not private - the one package that publishes |
