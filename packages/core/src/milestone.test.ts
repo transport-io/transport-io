@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { Client } from './client.ts'
-import { defineContract, type$ } from './contract.ts'
+import { defineContract, type MapOf, type$ } from './contract.ts'
 import { createServer, type ServerPeer } from './server.ts'
 import { loopbackPair } from './transport/loopback.ts'
 
@@ -8,22 +8,23 @@ const contract = defineContract({
   chat: { lane: 'reliable', payload: type$<{ room: string; body: string }>() },
   cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
 })
+interface AppMap extends MapOf<typeof contract> {}
 
 const settle = async (): Promise<void> => {
   for (let i = 0; i < 12; i++) await new Promise((r) => setTimeout(r, 1))
 }
 
 interface Wired {
-  readonly client: Client
-  readonly peer: ServerPeer
+  readonly client: Client<AppMap>
+  readonly peer: ServerPeer<AppMap>
 }
 
 async function connectOne(
-  server: ReturnType<typeof createServer>,
+  server: ReturnType<typeof createServer<AppMap>>,
   origin: number,
 ): Promise<Wired> {
   const [serverSide, clientSide] = loopbackPair()
-  const client = new Client({ contract, connect: async () => clientSide, origin })
+  const client = new Client<AppMap>({ contract, connect: async () => clientSide, origin })
   // accept() and connect() must run concurrently: each awaits the other's handshake.
   const [peer] = await Promise.all([server.accept(serverSide), client.connect()])
   return { client, peer }
@@ -31,7 +32,7 @@ async function connectOne(
 
 describe('two clients in one room, a message on each lane', () => {
   test('the milestone', async () => {
-    const server = createServer({ contract })
+    const server = createServer<AppMap>({ contract })
     await server.listen()
 
     // The server relays whatever a peer sends to everyone in the room.
@@ -85,7 +86,7 @@ describe('two clients in one room, a message on each lane', () => {
   })
 
   test('leaving a room stops delivery and updates the snapshot', async () => {
-    const server = createServer({ contract })
+    const server = createServer<AppMap>({ contract })
     await server.listen()
     server.onSession((peer) => {
       peer.on('chat', (p) => void server.to('lobby').emit('chat', p))
@@ -115,7 +116,7 @@ describe('two clients in one room, a message on each lane', () => {
   })
 
   test('except() excludes the sender from its own broadcast', async () => {
-    const server = createServer({ contract })
+    const server = createServer<AppMap>({ contract })
     await server.listen()
     const peers: ServerPeer[] = []
     server.onSession((peer) => {
@@ -141,7 +142,7 @@ describe('two clients in one room, a message on each lane', () => {
   })
 
   test('a broadcast to a room with no members is silent, not an error', async () => {
-    const server = createServer({ contract })
+    const server = createServer<AppMap>({ contract })
     await server.listen()
     await expect(
       server.to('empty').emit('chat', { room: 'empty', body: 'x' }),

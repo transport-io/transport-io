@@ -6,6 +6,7 @@ import {
   type CallableOf,
   type Contract,
   type EventTable,
+  type Registered,
   type StreamableOf,
 } from './contract.ts'
 import { Hub } from './hub.ts'
@@ -47,7 +48,7 @@ export interface RoomTarget<M extends AnyMap = AnyMap> {
   except(...peers: PeerId[]): RoomTarget<M>
 }
 
-export class Server<M extends AnyMap = AnyMap> {
+export class Server<M extends AnyMap = Registered> {
   readonly #opts: ServerOptions
   readonly #nodeId: string
   readonly #origins: OriginAllocator
@@ -184,6 +185,6 @@ export class Server<M extends AnyMap = AnyMap> {
   }
 }
 
-export function createServer<M extends AnyMap = AnyMap>(opts: ServerOptions): Server<M> {
+export function createServer<M extends AnyMap = Registered>(opts: ServerOptions): Server<M> {
   return new Server<M>(opts)
 }

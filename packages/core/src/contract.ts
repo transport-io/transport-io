@@ -77,6 +77,46 @@ export interface EventShape {
 }
 export type AnyMap = Readonly<Record<string, EventShape>>
 
+/**
+ * Augmented by the application to register its contract once:
+ *
+ * ```ts
+ * declare module 'transport-io' {
+ *   interface Register {
+ *     map: AppMap
+ *   }
+ * }
+ * ```
+ *
+ * It holds the **map**, not the contract, and that is measured rather than stylistic.
+ * Resolving the map through a conditional over the contract is an alias instantiation, and
+ * TypeScript expands those while preserving interface names: hover on `emit` goes from 107
+ * characters to 377, with the validator's internals back in it. See D100.
+ */
+export type Register = {}
+
+/**
+ * The sentinel for an unregistered application. Its only key is the instruction, so the
+ * first `emit` fails with `Argument of type '"chat"' is not assignable to parameter of type
+ * '"no contract registered: ..."'`.
+ *
+ * It must be a **type alias, not an interface**. Interfaces get no implicit index signature,
+ * so an interface here fails the `AnyMap` constraint and produces a second, confusing error
+ * next to the useful one. The next person to touch this will try the interface.
+ */
+type NoContractRegistered = {
+  readonly 'no contract registered: declare module "transport-io" { interface Register { map: AppMap } }': {
+    readonly payload: never
+    readonly returns: never
+    readonly yields: never
+  }
+}
+
+/** The registered map, or the sentinel that explains how to register one. */
+export type Registered = Register extends { map: infer M extends AnyMap }
+  ? M
+  : NoContractRegistered
+
 /** Events declaring `returns`, and therefore callable. */
 export type CallableOf<M extends AnyMap> = {
   [K in keyof M]: [M[K]['returns']] extends [never] ? never : K

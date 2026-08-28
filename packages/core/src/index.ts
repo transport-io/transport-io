@@ -23,6 +23,8 @@ export {
   type Infer,
   type Lane,
   type MapOf,
+  type Register,
+  type Registered,
   reliable,
   rpc,
   type Schema,

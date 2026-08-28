@@ -8,5 +8,10 @@
     "types": ["bun"],
     "declarationMap": false
   },
-  "include": ["packages/*/src/**/*.test.ts", "packages/*/src/**/*.test-d.ts", "scripts/**/*.ts"]
+  "include": [
+    "packages/*/src/**/*.test.ts",
+    "packages/*/src/**/*.test-d.ts",
+    "scripts/**/*.ts"
+  ],
+  "exclude": ["packages/core/src/register.test-d.ts"]
 }

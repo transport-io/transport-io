@@ -10,6 +10,7 @@ import {
   buildEventTable,
   type CallableOf,
   type Contract,
+  type Registered,
   type StreamableOf,
 } from './contract.ts'
 import { TransportError } from './errors.ts'
@@ -46,7 +47,7 @@ export interface ClientOptions<C extends Contract = Contract> {
   readonly now?: () => number
 }
 
-export class Client<M extends AnyMap = AnyMap> {
+export class Client<M extends AnyMap = Registered> {
   readonly #opts: ClientOptions
   readonly #listeners = new Set<() => void>()
   readonly #handlers = new Map<string, Set<(payload: unknown) => void>>()

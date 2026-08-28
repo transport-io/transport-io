@@ -1,0 +1,20 @@
+{
+  // Module augmentation is global to a compilation. `register.test-d.ts` declares a
+  // `Register` interface for its own contract, and inside one program that registration
+  // reaches every other test file, retyping clients that meant to use a different
+  // contract. That is not a flaw in the feature, it is what augmentation does, and it is
+  // why an application has one contract.
+  //
+  // So the registration test gets its own program. Running it separately is also the only
+  // honest way to test the unregistered case, which cannot coexist with a registration.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "isolatedDeclarations": false,
+    "declaration": false,
+    "composite": false,
+    "types": ["bun"],
+    "declarationMap": false
+  },
+  "include": ["packages/core/src/register.test-d.ts"]
+}
