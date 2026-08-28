@@ -2506,3 +2506,68 @@ fails on it. Verified by pointing one at the wrong rule and watching lint go red
 
 **Reconsider when:** a formatter or fixer gains the ability to rewrite `interface X extends Y
 {}`, which would silently undo D57.
+
+---
+
+### D102. The ergonomic forms are how the library is shown, and the object form is documented once
+
+Everything the 0.4.0 ergonomics work added was, until this pass, the *second* way each thing
+was written. The documents still opened with the object literal, an explicit `<AppMap>` at
+every construction site, a hand-written accept loop and `ctx.signal.throwIfAborted()` in a
+generator that does not need it. A reader copies what is in front of them, so the older form
+was still the real interface.
+
+So every example in `README.md`, `API.md`, `AGENTS.md`, the site, and `examples/chat` now uses
+`reliable` / `unreliable` / `rpc` / `streaming`, registers the map, and lets `listen(listener)`
+own the accept loop. The object form is documented exactly once, in API.md §1.3, as the form
+for a contract assembled programmatically, which is the one case a helper call cannot express.
+
+`throwIfAborted()` survives in one place, in the streaming guide, next to the case that earns
+it: long work *between* yields, where nothing else can interrupt.
+
+**Reconsider when:** a helper cannot express something the object form can, other than
+programmatic assembly. `id` was that case and it is covered by spreading:
+`{ ...reliable<T>(), id }`.
+
+### D103. A schema is a first-class choice, not a footnote
+
+`type$` was in every example and validation was a subsection titled "bring-your-own", which
+reads as the unusual option. It is the opposite: a server whose clients it does not control
+should validate.
+
+Both are now shown side by side wherever a contract is introduced, with the cost stated rather
+than implied: a type argument is types-only and free at runtime, a schema validates every
+inbound payload on arrival at one check per message. The recommendation is explicit - a schema
+where an untrusted peer can reach, a type argument where both ends are yours and the traffic
+is high.
+
+This changes no code. `payload` accepted both before.
+
+### D104. Each documentation snippet compiles as its own program
+
+The docs gate compiled every generated snippet file in one `tsc` invocation. That was invisible
+until snippets began registering a map, because `declare module 'transport-io'` is a global
+augmentation: two documents registering different maps collided, and API.md's snippets then
+type-checked against README's contract. The failure was in the gate, not the documents.
+
+Each snippet is self-contained already, so the shared program contributed nothing except the
+collision. One program per snippet costs 50 ms each and 2.5 s for the set, because TypeScript 7
+is the native compiler.
+
+Two blind spots were fixed in the same pass. A `standalone` block was compiled in isolation and
+then *still* accumulated into the prefix for later blocks, so a page showing one construct two
+ways failed as a duplicate declaration. And the import-deduplication regex never matched
+`import type { … }`, so a type-only re-import was a duplicate identifier.
+
+**Reconsider when:** the snippet count grows enough that per-file compilation is slow. The fix
+then is to group by document, which is correct as long as no document registers twice.
+
+### D105. `ServerPeer` and `RoomTarget` default to the registered map
+
+`Client` and `Server` defaulted to `Registered` when registration shipped. `ServerPeer` and
+`RoomTarget` defaulted to `AnyMap`, so a bare `ServerPeer` annotation accepted every event name
+and every payload: registration appeared to work and bought nothing.
+
+The type test that should have caught it asserted only that two server types differ, which is
+true whatever the payload types are. It now asserts the payload types themselves, because
+acceptance is exactly what `AnyMap` also gives.
