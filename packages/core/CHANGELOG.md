@@ -1,5 +1,26 @@
 # transport-io
 
+## 0.5.0
+
+### Minor Changes
+
+- 35ac1a3: `CallContext` gains `peer`, so a responder knows which peer called it. A call can now join its
+  own caller to a room or check that caller's permissions, which was impossible: the context was
+  `{ signal }` and a responder is registered on the server rather than on a peer, so every
+  authenticated request had to be hand-rolled as a pair of events. `CallContext` is now generic
+  over the map, defaulting to the registered one.
+- da7e2a9: `npx transport-io dev`: one command for the first thirty minutes. It mints the pinned
+  certificate, computes its hash, serves it at `/.well-known/transport-io-dev`, serves the built
+  package as ESM, and hands the certificate to your server process by environment. `--demo`
+  serves a two-tab chat page out of the package and writes no files.
+  
+  Two functions connect to it: `listenDev()` from `transport-io/node-transport`, and
+  `connectDev()` from the new `transport-io/dev-transport`. `connectDev` refuses any page origin
+  or WebTransport URL that is not loopback, so it cannot reach production by accident.
+  
+  The CLI adds no runtime dependencies: it uses only Node built-ins, and an import-boundary rule
+  enforces that. It does not bundle browser code.
+
 ## 0.4.1
 
 ### Patch Changes
