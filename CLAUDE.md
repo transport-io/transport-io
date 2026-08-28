@@ -1,5 +1,8 @@
-STAGE 0: UNPUBLISHED. Break anything. No backward compatibility.
-No deprecation shims. Protocol is v0 and unstable.
+STAGE: 0.x PUBLISHED. Break freely in a minor version.
+No deprecation shims, no compatibility branches, no migration
+guides. A breaking change needs a changeset and a CHANGELOG
+entry, nothing more. Semver applies at 1.0, which is a
+decision I make explicitly and have not made.
 
 # transport-io
 
@@ -8,7 +11,7 @@ transport with multiple streams and datagrams, without Socket.IO's mistakes.
 
 **Read this file at the start of every session.** If you are about to write a deprecation
 path, a compatibility shim, a migration guide, or a version check against an older release
-of this library, stop and check the stage above. There is no older release.
+of this library, stop and check the stage above.
 
 ## Thesis
 
