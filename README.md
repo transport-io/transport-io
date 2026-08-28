@@ -237,7 +237,7 @@ bytes, adds latency, reorders, duplicates and fails on command.
 
 ## Not in this version
 
-Namespaces (a room-name prefix covers it), presence and peer counts, middleware chains
+Namespaces (a room-name prefix covers it), presence, middleware chains
 (auth is one hook), binary payloads (JSON only, with a codec seam reserved), server-initiated
 streaming (a response shape only), framework bindings, and the Redis adapter.
 

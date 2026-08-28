@@ -399,6 +399,11 @@ export function narrow(target: RoomTarget, exclude: string): RoomTarget {
 `Server`, `ServerPeer` and `RoomTarget` default to the registered map, so an annotation
 needs no type argument either.
 
+`server.memberCount(room)` returns how many local peers are in a room, counted on this
+node rather than across the adapter. It is a number for a health endpoint or a log line, not
+a presence feature: it cannot see peers connected to another node, and it says nothing about
+who they are.
+
 `emit` on a room returns a promise because it crosses the adapter, but delivery to local
 members does not wait for it. Awaiting each peer inside a broadcast loop would let one slow
 client stall the whole room, which is the failure this design exists to prevent.
