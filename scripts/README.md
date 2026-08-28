@@ -17,7 +17,7 @@ gh api repos/transport-io/transport-io/branches/main/protection \
   --jq '.required_status_checks.contexts'   # what is actually applied
 ```
 
-It sets the eight required status checks, requires linear history, blocks force-pushes and
+It sets the required status checks, requires linear history, blocks force-pushes and
 deletions, and configures squash-merge-only with **`squash_merge_commit_message=BLANK`** -
 that last flag is the one people miss. GitHub otherwise puts the PR description into the
 commit body, which would break the subject-only rule (D29) on the only commit that survives
@@ -27,8 +27,11 @@ Re-running is safe.
 
 ## `check-docs.ts` - the documentation gates
 
-Compiles every ` ```ts ` block in API.md, README.md and AGENTS.md, and compares every normative
-constant and error code in PROTOCOL.md against `packages/core/src/protocol.ts`. Blocks
+Compiles every ` ```ts ` block in the documents listed in `COMPILED_DOCS` - both READMEs,
+API.md, AGENTS.md and every site page - and compares every normative constant and error code
+in PROTOCOL.md against `packages/core/src/protocol.ts`. The list is not an allowlist: a
+tracked markdown file with a ` ```ts ` block that nobody added is a failure, not a silent
+skip. Blocks
 tagged ` ```ts ignore ` are counted against a ceiling that may only go down.
 
 ## `check-workflows.ts` - no outsider-controlled text reaches a shell
@@ -93,8 +96,8 @@ still rejected, so the gate fails if the checking stops happening.
 The isolation is the whole design. This check has been wrong twice: once with
 `--skipLibCheck`, which skips the file named on the command line and so could never fail,
 and once without it but running in the repository root, where it type checked the entire dev
-tree's ambient declarations under a five-year-old compiler and turned main red for three
-commits. See D91.
+tree's ambient declarations under TypeScript 5.0.4, the consumer floor, and turned main red
+for three commits. See D91.
 
 ## `check-gate-inputs.ts` - the gates we do not own must have something to look at
 
