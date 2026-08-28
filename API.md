@@ -21,15 +21,28 @@ QUIC stream. `unreliable` means it may be dropped, duplicated or reordered; it i
 a QUIC datagram. The name says what your data gets, not how it travels.
 
 ```ts
-import { defineContract, type MapOf, type$ } from 'transport-io'
+import { defineContract, type MapOf, reliable, rpc, streaming, unreliable } from 'transport-io'
 
 export const contract = defineContract({
-  chat: { lane: 'reliable', payload: type$<{ room: string; body: string }>() },
-  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
+  chat: reliable<{ room: string; body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>(),
+  save: rpc<{ text: string }, { revision: number }>(),
+  ask: streaming<{ prompt: string }, string>(),
 })
 
 export interface AppMap extends MapOf<typeof contract> {}
+
+declare module 'transport-io' {
+  interface Register {
+    map: AppMap
+  }
+}
 ```
+
+`reliable` and `unreliable` take the payload. `rpc` and `streaming` take the payload and
+what comes back: `save` answers with one value, `ask` with a sequence. The `declare module` block registers the map, so no `Client` or
+`createServer` in the application carries a type argument; every example on this page relies
+on it.
 
 **Write both lines.** The second is what keeps every hover readable.
 With it, hovering `emit` shows 107 characters. Without it - passing the contract inline -
@@ -44,12 +57,38 @@ need for the line.
 <!-- norm: lane-lives-in-the-contract -> packages/core/src/lane-integrity.test.ts -->
 message type, so client and server cannot disagree about it.
 
-### 1.1 Validation is bring-your-own
+### 1.1 A type, or a schema
 
-`payload` accepts anything implementing the Standard Schema interface - zod, valibot and
-arktype all do - so core has no runtime dependency on a validator and your validator's
-types never appear in ours. `type$<T>()` is the types-only escape hatch used above: it
-infers without validating and costs nothing at runtime.
+Every helper takes either a type argument or a schema, and both give the same payload types
+to the rest of the application. What differs is what happens at runtime.
+
+A type argument, as in the contract above, is types-only: nothing checks it and it costs
+nothing at runtime. A peer that sends the wrong shape reaches your handler.
+
+A schema validates every inbound payload on arrival, at one check per message. `payload`
+accepts anything implementing the Standard Schema interface - zod, valibot and arktype all
+do - so core has no runtime dependency on a validator and your validator's types never
+appear in ours:
+
+```ts standalone
+import { defineContract, type MapOf, reliable, rpc } from 'transport-io'
+import { z } from 'zod'
+
+export const validated = defineContract({
+  chat: reliable(z.object({ room: z.string(), body: z.string().max(2000) })),
+  save: rpc(z.object({ text: z.string() }), z.object({ revision: z.number() })),
+})
+
+export interface ValidatedMap extends MapOf<typeof validated> {}
+```
+
+A payload the schema rejects never reaches a handler; the sender's call fails with
+`WT_VALIDATION_FAILED` and an emit is dropped. Use a schema wherever a peer you do not
+control can reach, which for a server is every client. Use a type argument where both ends
+are yours and the traffic is high.
+
+`type$<T>()` is the same types-only schema the helpers build for you, exported for the
+object form below.
 
 Inbound payloads are validated; outbound are not. The process that produced a payload does
 not need to check its own work, and validating twice doubles the cost on the hot path.
@@ -63,9 +102,32 @@ Two names whose hashes collide are a build-time error naming both events; set an
 
 ```ts
 export const withOverride = defineContract({
-  chat: { lane: 'reliable', payload: type$<{ body: string }>(), id: 0x31e06f7d },
+  chat: { ...reliable<{ body: string }>(), id: 0x31e06f7d },
 })
 ```
+
+### 1.3 The object form
+
+A helper returns a plain object, and `defineContract` accepts one written out. This is the
+form to use when a contract is assembled programmatically, where a helper call cannot be
+written literally:
+
+```ts standalone
+import { defineContract, type MapOf, type$ } from 'transport-io'
+
+export const explicit = defineContract({
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
+  save: { lane: 'reliable', payload: type$<{ text: string }>(), returns: type$<number>() },
+  ask: { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
+})
+
+export interface ExplicitMap extends MapOf<typeof explicit> {}
+```
+
+`rpc` and `streaming` are both `lane: 'reliable'`: a call and a stream are carried on their
+own QUIC stream, so there is no unreliable variant of either. The rest of this page uses the
+helpers.
 
 ---
 
@@ -83,7 +145,7 @@ import { Client, type ClientOptions } from 'transport-io'
 // Supplied by the transport seam, so this module never imports a transport.
 declare const openConnection: ClientOptions['connect']
 
-export const client = new Client<AppMap>({ contract, connect: openConnection })
+export const client = new Client({ contract, connect: openConnection })
 
 export async function main(): Promise<void> {
   await client.connect()
@@ -118,16 +180,8 @@ the stream *is* the correlation: no identifiers, no pending map, and a stalled c
 nothing else.
 
 ```ts
-import { defineContract as dc, type MapOf as M, type$ as t$, Client as C } from 'transport-io'
-
-export const rpc = dc({
-  save: { lane: 'reliable', payload: t$<{ text: string }>(), returns: t$<{ revision: number }>() },
-})
-export interface RpcMap extends M<typeof rpc> {}
-declare const rpcClient: C<RpcMap>
-
 export async function saveIt(): Promise<number> {
-  const { revision } = await rpcClient.call('save', { text: 'hello' })
+  const { revision } = await client.call('save', { text: 'hello' })
   return revision
 }
 ```
@@ -139,7 +193,7 @@ pending-callback bookkeeping this design removes. For a slow but live responder:
 
 ```ts
 export async function saveWithDeadline(): Promise<number> {
-  const res = await rpcClient.call('save', { text: 'hi' }, { signal: AbortSignal.timeout(5_000) })
+  const res = await client.call('save', { text: 'hi' }, { signal: AbortSignal.timeout(5_000) })
   return res.revision
 }
 ```
@@ -157,17 +211,17 @@ use.
 ### 2.2 Responding
 
 ```ts
-import { createServer as cs } from 'transport-io'
+import { createServer } from 'transport-io'
 
 export async function serve(): Promise<void> {
-  const server = cs<RpcMap>({ contract: rpc })
+  const server = createServer({ contract })
+  server.handle('save', async ({ text }) => ({ revision: text.length }))
   await server.listen()
-  server.handle('save', async ({ text }, ctx) => {
-    ctx.signal.throwIfAborted()
-    return { revision: text.length }
-  })
 }
 ```
+
+`ctx.signal` fires when the caller aborts. A handler that returns promptly does not need to
+consult it; one that does long work should, so the work stops when nobody is waiting for it.
 
 A handler that throws produces a `CALL_ERROR` frame. Throw a `TransportError` to choose the
 code; anything else becomes `WT_HANDLER_ERROR`.
@@ -178,16 +232,9 @@ An event declaring `yields` instead of `returns` answers with a **sequence**. Th
 gets an async iterable, the server writes an async generator.
 
 ```ts
-import { defineContract as dcs, type MapOf as Ms, type$ as ts$, Client as Cs, createServer as css } from 'transport-io'
+import type { Server } from 'transport-io'
 
-export const gen = dcs({
-  ask: { lane: 'reliable', payload: ts$<{ prompt: string }>(), yields: ts$<string>() },
-})
-export interface GenMap extends Ms<typeof gen> {}
-
-export async function serveTokens(): Promise<void> {
-  const server = css<GenMap>({ contract: gen })
-  await server.listen()
+export async function serveTokens(server: Server): Promise<void> {
   server.handle('ask', async function* ({ prompt }) {
     for (const token of prompt.split(' ')) {
       yield token
@@ -195,7 +242,7 @@ export async function serveTokens(): Promise<void> {
   })
 }
 
-export async function render(client: Cs<GenMap>): Promise<string[]> {
+export async function render(): Promise<string[]> {
   const out: string[] = []
   for await (const token of client.stream('ask', { prompt: 'one two three' })) {
     out.push(token)
@@ -205,13 +252,17 @@ export async function render(client: Cs<GenMap>): Promise<string[]> {
 }
 ```
 
+The handler above never consults `ctx.signal`. It does not need to: the responder checks
+before asking the generator for another value, so a cancelled stream stops without every
+loop repeating that check.
+
 **`break` is the cancel.** Leaving the loop calls the iterator's `return()`, which resets the
 QUIC stream, which fires the handler's `ctx.signal` and runs any `finally` inside the
 generator. An `AbortSignal` option does the same from outside the loop, which is what a
 React effect cleanup would use:
 
 ```ts
-export async function withDeadline(client: Cs<GenMap>): Promise<number> {
+export async function withDeadline(): Promise<number> {
   let n = 0
   const s = client.stream('ask', { prompt: 'a b c' }, { signal: AbortSignal.timeout(5_000) })
   for await (const _ of s) n++
@@ -219,17 +270,35 @@ export async function withDeadline(client: Cs<GenMap>): Promise<number> {
 }
 ```
 
-**`collect()`** takes the whole sequence as one value, for callers who do not want a loop:
+Four helpers cover the cases where a loop reads worse than the thing it is doing.
+`toArray()` takes the whole sequence, `take(n)` stops after `n` elements and closes the
+stream exactly as `break` does, `forEach(fn)` awaits `fn` before pulling the next element so
+a slow callback slows the producer, and `cancel()` stops a stream from outside its loop:
 
 ```ts
-export async function whole(client: Cs<GenMap>): Promise<string[]> {
+export async function whole(): Promise<string[]> {
   return await client.stream('ask', { prompt: 'a b c' }).toArray()
+}
+
+export async function firstTwo(): Promise<string[]> {
+  return await client.stream('ask', { prompt: 'a b c' }).take(2).toArray()
+}
+
+export async function stoppable(stop: { onclick: () => void }): Promise<void> {
+  const gen = client.stream('ask', { prompt: 'a b c' })
+  stop.onclick = () => gen.cancel()
+  await gen.forEach(async (token) => void console.log(token))
 }
 ```
 
+They are named after the TC39 async iterator helpers and behave sequentially. That proposal
+is being revised to let `take` and others run several pulls at once, which would defeat the
+credit window, so this library will not follow it there. `cancel()` is not in the proposal.
+
 An error partway through is delivered after the elements that preceded it: the loop yields
-what arrived, then throws. `collect()` rejects and discards the partial, because a partial
-array returned as if it were the whole answer is worse than an error.
+what arrived, then throws. `toArray()` rejects and discards the partial, because a partial
+array returned as if it were the whole answer is worse than an error. A cancelled stream
+ends with `WT_ABORTED`, the same as an `AbortSignal`.
 
 **Backpressure is accounted for, not assumed.** The generator does not resume until its
 frame has been accepted, and the responder may be at most **32 frames** ahead of what the
@@ -282,13 +351,10 @@ most common way this shape is implemented incorrectly. There is an explicit test
 ## 3. Server
 
 ```ts
-import { createServer } from 'transport-io'
-
 type Conn = Awaited<ReturnType<ClientOptions['connect']>>
 
 export async function start(incoming: { sessions(): AsyncIterable<Conn> }): Promise<void> {
-  const server = createServer<AppMap>({ contract })
-  await server.listen()
+  const server = createServer({ contract })
 
   server.onSession((peer) => {
     void peer.join('lobby')
