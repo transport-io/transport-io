@@ -14,12 +14,12 @@ of its consumer, and an application can reach that limit. Reliability is declare
 contract, so "this message may be dropped" is visible in the type system.
 
 ```ts
-import { defineContract } from 'transport-io'
+import { defineContract, reliable, unreliable } from 'transport-io'
 import { z } from 'zod'
 
 export const teaser = defineContract({
-  chat: { lane: 'reliable', payload: z.object({ room: z.string(), body: z.string() }) },
-  cursor: { lane: 'unreliable', payload: z.object({ x: z.number(), y: z.number() }) },
+  chat: reliable(z.object({ room: z.string(), body: z.string() })),
+  cursor: unreliable(z.object({ x: z.number(), y: z.number() })),
 })
 ```
 
@@ -74,43 +74,89 @@ use WSL.
 
 ## Use
 
-```ts standalone
+```ts
 // contract.ts - the whole surface, in one file
-import { defineContract, type MapOf, type$ } from 'transport-io'
+import { defineContract, type MapOf, reliable, rpc, streaming, unreliable } from 'transport-io'
 
 export const contract = defineContract({
-  chat:   { lane: 'reliable',   payload: type$<{ from: string; body: string }>() },
-  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
-  save:   { lane: 'reliable',   payload: type$<{ text: string }>(),
-            returns: type$<{ revision: number }>() },
+  chat: reliable<{ from: string; body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>(),
+  save: rpc<{ text: string }, { revision: number }>(),
+  ask: streaming<{ prompt: string }, string>(),
 })
 
 export interface AppMap extends MapOf<typeof contract> {}
+
+declare module 'transport-io' {
+  interface Register {
+    map: AppMap
+  }
+}
 ```
 
-Write both lines. The second is what keeps every hover readable - with it, hovering `emit`
-shows 107 characters; without it, 377, including your validator's internals. `call` is 169
-against 439 and `stream` 157 against 427. Hover width is a property of the contract, not of
-this library, so those figures are for the contract pinned in `scripts/check-hover.ts` and
-are re-measured on every CI run.
+`reliable` and `unreliable` take the payload. `rpc` and `streaming` take the payload and
+what comes back.
+
+Write the `MapOf` line as well. It is what keeps every hover readable - with it, hovering
+`emit` shows 107 characters; without it, 377, including your validator's internals. `call`
+is 169 against 439 and `stream` 157 against 427. Hover width is a property of the contract,
+not of this library, so those figures are for the contract pinned in
+`scripts/check-hover.ts` and are re-measured on every CI run.
+
+The `declare module` block registers the map, which is what keeps type arguments out of the
+rest of the application: `new Client({ … })` and `createServer({ … })` below are typed from
+it. Pass an explicit argument only when one process speaks two contracts.
+
+### A type, or a schema
+
+A type argument describes the payload and costs nothing at runtime, because nothing checks
+it. A peer that sends the wrong shape reaches your handler. Pass a
+[Standard Schema](https://standardschema.dev) validator instead - zod, valibot, arktype -
+and every inbound payload is validated on arrival, at one check per message:
+
+```ts standalone
+import { defineContract, reliable, unreliable } from 'transport-io'
+import { z } from 'zod'
+
+export const validated = defineContract({
+  chat: reliable(z.object({ from: z.string(), body: z.string().max(2000) })),
+  cursor: unreliable(z.object({ x: z.number(), y: z.number() })),
+})
+```
+
+The payload types are inferred either way, so nothing downstream changes. Use a schema
+wherever a peer you do not control can reach, which for a server is every client. Use a type
+argument where both ends are yours and the traffic is high, such as cursor positions at
+pointer rate.
 
 ```ts
 // server
 import { createServer } from 'transport-io'
+import { listenHttp3 } from 'transport-io/node-transport'
 
-export async function serve(): Promise<void> {
-  const server = createServer<AppMap>({ contract })
-  await server.listen()
+export async function serve(cert: string, privKey: string): Promise<void> {
+  const server = createServer({ contract })
 
   server.handle('save', async ({ text }) => ({ revision: text.length }))
+
+  server.handle('ask', async function* ({ prompt }) {
+    for (const word of prompt.split(' ')) yield word
+  })
 
   server.onSession((peer) => {
     void peer.join('lobby')
     peer.on('chat', (msg) => void server.to('lobby').emit('chat', msg))
     peer.on('cursor', (pos) => void server.to('lobby').except(peer.id).emit('cursor', pos))
   })
+
+  const listener = await listenHttp3({ port: 4433, host: '127.0.0.1', cert, privKey, path: '/' })
+  await server.listen(listener)
 }
 ```
+
+`listen(listener)` owns the accept loop, and a handshake that fails is counted in
+`server.acceptErrors` rather than thrown away. Call `listen()` with no argument and drive
+`accept()` yourself only when a connection has to be inspected before it is accepted.
 
 ```ts
 // client
@@ -118,7 +164,7 @@ import { Client } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 
 export async function run(url: string): Promise<number> {
-  const client = new Client<AppMap>({ contract, connect: () => connectBrowser({ url }) })
+  const client = new Client({ contract, connect: () => connectBrowser({ url }) })
   await client.connect()
 
   client.emit('chat', { from: 'me', body: 'hello' }) // arrives
@@ -131,23 +177,10 @@ export async function run(url: string): Promise<number> {
 An event can answer with a **sequence** instead of a value. Declare `yields` instead of
 `returns`, write an async generator, consume an async iterable:
 
-```ts standalone
-import { Client, createServer, defineContract, type MapOf, type$ } from 'transport-io'
+```ts
+import type { Client } from 'transport-io'
 
-export const gen = defineContract({
-  ask: { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
-})
-export interface GenMap extends MapOf<typeof gen> {}
-
-export async function serve(model: (p: string) => AsyncIterable<string>): Promise<void> {
-  const server = createServer<GenMap>({ contract: gen })
-  await server.listen()
-  server.handle('ask', async function* ({ prompt }) {
-    for await (const token of model(prompt)) yield token
-  })
-}
-
-export async function render(client: Client<GenMap>, prompt: string): Promise<string[]> {
+export async function render(client: Client, prompt: string): Promise<string[]> {
   const out: string[] = []
   for await (const token of client.stream('ask', { prompt })) {
     out.push(token)
@@ -158,9 +191,23 @@ export async function render(client: Client<GenMap>, prompt: string): Promise<st
 ```
 
 `break` is the cancel: leaving the loop resets the QUIC stream, which fires the handler's
-`ctx.signal`. There is no cancel method because there is nothing for one to do. The
-generator does not resume until its frame is accepted, and the producer may be at most 32
-frames ahead of what the consumer has taken.
+`ctx.signal`. The generator does not resume until its frame is accepted, and the producer
+may be at most 32 frames ahead of what the consumer has taken.
+
+The loop above is `take(20).toArray()` written out. Four helpers exist for the cases where a
+loop reads worse than the thing it is doing, and `cancel()` stops a stream from outside its
+loop, which is what a stop button needs:
+
+```ts
+export async function withHelpers(client: Client, stop: { onclick: () => void }): Promise<void> {
+  const first20 = await client.stream('ask', { prompt: 'hello' }).take(20).toArray()
+  console.log(first20.length)
+
+  const generation = client.stream('ask', { prompt: 'hello' })
+  stop.onclick = () => generation.cancel()
+  await generation.forEach(async (token) => void console.log(token))
+}
+```
 
 A wrong event name or payload fails to compile. The error names the event instead of
 unrolling the contract type.
