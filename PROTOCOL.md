@@ -411,7 +411,7 @@ Payload is a JSON object:
 
 | field | type | meaning |
 |---|---|---|
-| `code` | string | A code from §10.1. Local codes (§10.3) are never transmitted. |
+| `code` | string | A `WT_`-prefixed error code. **§10 does not tabulate the set a `CALL_ERROR` may carry**, and the example above uses one that appears in none of its three tables: a responder forwards whatever code the handler threw. Treat unknown codes as opaque. |
 | `message` | string | Human-readable, stating what to do about it. |
 
 ### 6.6 `CALL_CREDIT`
