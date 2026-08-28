@@ -15,22 +15,9 @@ What the library does not decide is what re-joining should cost. That is your
 authorisation, your catch-up window and your idempotency. What follows is the recipe. Copy
 it.
 
-## Why this is events and not `call()`
-
-The obvious shape is an `rpc` that authorises and joins, and it does not work today. A call
-handler is registered on the server rather than on a peer, and the `ctx` it receives is
-`{ signal }` and nothing else: there is no `ctx.peer`.
-
-There is no way for a call handler to learn who called it, so it cannot join the caller to a
-room. Taking a peer id in the payload does not fix it, because the server cannot verify the
-client sent its own.
-
-Per-peer handlers do have the peer, and they are event handlers: `peer.on(...)` inside
-`onSession`. So the recipe below is a pair of events in each direction, which is
-request-and-response written out by hand. It works, and the shape is a known cost rather
-than a preference.
-
 ## The contract
+
+Two callable events. One authorises and joins, one catches up on what was missed.
 
 ```ts
 import {
@@ -39,7 +26,9 @@ import {
   defineContract,
   type MapOf,
   reliable,
+  rpc,
   type Server,
+  TransportError,
 } from 'transport-io'
 
 interface Message {
@@ -51,10 +40,8 @@ interface Message {
 
 export const contract = defineContract({
   message: reliable<Message>(),
-  resume: reliable<{ token: string; room: string }>(),
-  resumed: reliable<{ room: string; joined: boolean }>(),
-  catchUp: reliable<{ room: string; after: number }>(),
-  missed: reliable<{ room: string; messages: readonly Message[] }>(),
+  resume: rpc<{ token: string; room: string }, { joined: boolean }>(),
+  since: rpc<{ room: string; after: number }, { missed: readonly Message[] }>(),
 })
 
 export interface AppMap extends MapOf<typeof contract> {}
@@ -66,14 +53,14 @@ declare module 'transport-io' {
 }
 ```
 
-`resume` carries whatever your application uses to prove identity. `catchUp` carries a
-watermark, and `missed` returns what the client did not see while it was away.
+`resume` carries whatever your application uses to prove identity. `since` carries a
+watermark and returns what the client missed while it was away.
 
 ## The server half
 
-`peer.on` is where identity enters the system. The library has not identified anyone for
-you: `peer.id` is a value the server assigned itself, so `verify` below is the only check
-that means anything.
+`ctx.peer` is the caller. `peer.id` is a value this server assigned itself and identifies
+nobody, so `verify` below is the only check that means anything: authenticate the payload,
+then act on the peer.
 
 ```ts
 declare function verify(token: string): Promise<{ userId: string } | null>
@@ -81,35 +68,34 @@ declare function mayJoin(userId: string, room: string): Promise<boolean>
 declare function history(room: string, after: number): Promise<readonly Message[]>
 
 export function install(server: Server): void {
-  server.onSession((peer) => {
-    // `peer.on` takes a synchronous handler, so async work is started rather than awaited.
-    peer.on('resume', ({ token, room }) => {
-      void (async () => {
-        const who = await verify(token)
-        const ok = who !== null && (await mayJoin(who.userId, room))
-        if (ok) await peer.join(room)
-        peer.emit('resumed', { room, joined: ok })
-      })()
-    })
+  server.handle('resume', async ({ token, room }, ctx) => {
+    const who = await verify(token)
+    if (who === null) {
+      throw new TransportError('WT_HANDLER_ERROR', 'bad token', 'Sign in again.')
+    }
+    if (!(await mayJoin(who.userId, room))) return { joined: false }
 
-    peer.on('catchUp', ({ room, after }) => {
-      void (async () => {
-        // Membership is the authorisation. A peer that has not joined cannot read a room's
-        // history by asking for it, which is the failure this ordering exists to prevent.
-        if (!peer.rooms.includes(room)) return
-        peer.emit('missed', { room, messages: await history(room, after) })
-      })()
-    })
+    await ctx.peer.join(room)
+    return { joined: true }
+  })
+
+  server.handle('since', async ({ room, after }, ctx) => {
+    // Membership is the authorisation. A peer that has not joined cannot read the room's
+    // history by asking for it, which is the failure this ordering exists to prevent.
+    if (!ctx.peer.rooms.includes(room)) {
+      throw new TransportError('WT_HANDLER_ERROR', 'not in room', 'Call resume first.')
+    }
+    return { missed: await history(room, after) }
   })
 }
 ```
 
-The order matters: `catchUp` checks membership rather than the token, so a client that has
-not completed `resume` gets nothing. Reversing them lets an unauthorised peer read history.
+The order matters: `since` checks membership rather than the token, so `resume` has to come
+first. Reversing them lets an unauthorised peer read history.
 
 ## Idempotency is yours
 
-Both halves funnel into one function, so define it before the client. `missed` and the live
+Both halves funnel into one function, so define it before the client. `since` and the live
 stream overlap: a message can arrive both ways, and every message carries an `id` for
 exactly that reason.
 
@@ -134,28 +120,31 @@ millisecond. An id is cheaper than being careful.
 
 `subscribe` and `getSnapshot` are the two methods a React binding hands to
 `useSyncExternalStore`, and they are enough on their own. Watch for the transition into
-`connected` and start there.
+`connected` and do the work there.
 
 ```ts
 export function keepUp(client: Client, token: string, room: string): () => void {
   let previous: ClientState['status'] = client.getSnapshot().status
+  let inFlight: Promise<void> | null = null
+
+  const catchUp = async (): Promise<void> => {
+    const { joined } = await client.call('resume', { token, room })
+    if (!joined) return
+    const { missed } = await client.call('since', { room, after: watermark })
+    for (const m of missed) apply(m)
+  }
 
   const unsubscribe = client.subscribe(() => {
     const { status } = client.getSnapshot()
-    // The edge into `connected`, not the level: `subscribe` fires on every state change,
-    // and several of those happen while the status is already `connected`.
-    if (status === 'connected' && previous !== 'connected') {
-      client.emit('resume', { token, room })
-    }
+    const arrived = status === 'connected' && previous !== 'connected'
     previous = status
-  })
-
-  client.on('resumed', ({ room: r, joined }) => {
-    if (joined) client.emit('catchUp', { room: r, after: watermark })
-  })
-
-  client.on('missed', ({ messages }) => {
-    for (const m of messages) apply(m)
+    if (arrived && inFlight === null) {
+      inFlight = catchUp()
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight = null
+        })
+    }
   })
 
   client.on('message', (m) => apply(m))
@@ -164,22 +153,27 @@ export function keepUp(client: Client, token: string, room: string): () => void 
 }
 ```
 
-Two things in there are not obvious, and each one is a bug if you leave it out.
+Three things in there are not obvious, and each one is a bug if you leave it out.
 
-**The edge, not the level.** Comparing against the previous status makes this run once per
-session rather than once per notification.
+**The edge, not the level.** `subscribe` fires on every state change, and several of them
+happen while `status` is already `connected`. Comparing against the previous status makes
+this run once per session rather than once per notification.
+
+**The guard.** A connection that drops during catch-up fires `connected` again while the
+first catch-up is still awaiting. Without `inFlight`, the two interleave and the watermark
+moves backwards.
 
 **The watermark advances inside `apply`, from live messages as well as caught-up ones.**
-Between `resume` and `missed` arriving, live messages come in on the emit stream. Advancing
-in one place means the next catch-up asks for the right window rather than replaying what
-already arrived.
+Between `resume` returning and `since` returning, live messages arrive on the emit stream.
+Advancing in one place means the next catch-up asks for the right window rather than
+replaying what already arrived.
 
 ## What this does not do
 
 It does not survive a server restart, because `history` is your storage and the recipe says
-nothing about what that is. It does not handle a token that expires mid-session: `resumed`
-arrives with `joined: false` and the client is left connected but out of the room, which is
-the right shape, and what to do about it is a product decision.
+nothing about what that is. It does not handle a token that expires mid-session: `resume`
+returns `joined: false` and the client is left connected but out of the room, which is the
+right shape, and what to do about it is a product decision.
 
 It does not retry. `client.connect()` is idempotent and refcounted, so a retry loop around
 it is safe to write, and the library does not write one for you: how long to back off and

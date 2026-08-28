@@ -168,13 +168,15 @@ await server.listen(listener, { onAcceptError: (e) => console.error(e) })
 with no argument leaves `accept(conn)` to you, which is for the case where a connection must
 be inspected before it is accepted.
 
-A handler receives `ctx.signal`, which fires when the caller aborts. A handler that returns
-promptly can ignore it.
+A handler receives `ctx.signal`, which fires when the caller aborts; one that returns
+promptly can ignore it. It also receives `ctx.peer`, the `ServerPeer` that made the call,
+which is the only thing that says who is asking: `await ctx.peer.join(room)` inside a
+responder joins the caller. `peer.id` identifies nobody, so authenticate the payload first.
 
 **Rooms are server-authoritative.** A client cannot join by sending anything; only
 `peer.join()` does it, and the client learns membership from a notification. If you want
-client-initiated subscription, make it an ordinary event you handle on the server, where
-you can apply whatever authorization your application has. **This library authenticates
+client-initiated subscription, make it a `call` whose handler authorises the payload and
+then joins `ctx.peer`. **This library authenticates
 nothing** and gives a handler no peer identity beyond `peer.id`, which it assigned itself -
 so "handle it on the server" means your check runs there, not that anyone has been
 identified. See PROTOCOL.md §3.

@@ -219,6 +219,25 @@ export async function serve(): Promise<void> {
 `ctx.signal` fires when the caller aborts. A handler that returns promptly does not need to
 consult it; one that does long work should, so the work stops when nobody is waiting for it.
 
+`ctx.peer` is the `ServerPeer` that made the call. A responder is registered once and answers
+every peer, so this is the only thing that says who is asking, and it is what lets a call
+join its own caller to a room:
+
+```ts
+import type { Server } from 'transport-io'
+
+export function installSave(server: Server): void {
+  server.handle('save', async ({ text }, ctx) => {
+    // The caller is known here, so the responder can act on it.
+    await ctx.peer.join('editors')
+    return { revision: text.length }
+  })
+}
+```
+
+`peer.id` is a value the server assigned itself and identifies nobody. Authenticate the
+payload, then act on the peer.
+
 A handler that throws produces a `CALL_ERROR` frame. Throw a `TransportError` to choose the
 code; anything else becomes `WT_HANDLER_ERROR`.
 
@@ -379,8 +398,9 @@ when a connection has to be inspected before it is accepted.
 A client cannot join by sending anything; only `peer.join()` on the server has that effect.
 The client learns its membership from a notification, which is why `ClientState.rooms` is
 accurate without the client ever asking. An application wanting client-initiated
-subscription implements it as an ordinary event handled on the server, which is already on
-the authenticated path.
+subscription implements it as a `call` whose handler authorises the payload and then joins
+`ctx.peer`, which is the shape the [reconnect
+guide](https://transport-io.github.io/transport-io/guides/reconnect/) spells out.
 
 ```ts
 import type { RoomTarget, ServerPeer } from 'transport-io'

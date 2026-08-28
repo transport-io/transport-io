@@ -31,7 +31,7 @@ export interface SessionStats extends QueueStats {
 export type EventHandler = (payload: unknown, meta: { readonly from: number }) => void
 export type CallHandler = (
   payload: unknown,
-  ctx: { readonly signal: AbortSignal },
+  ctx: { readonly signal: AbortSignal; readonly peer: unknown },
 ) => Promise<unknown>
 
 /**
@@ -41,7 +41,7 @@ export type CallHandler = (
  */
 export type StreamHandler = (
   payload: unknown,
-  ctx: { readonly signal: AbortSignal },
+  ctx: { readonly signal: AbortSignal; readonly peer: unknown },
 ) => AsyncIterable<unknown>
 
 /**
@@ -202,6 +202,16 @@ export class Session {
   readonly #sequences = new Map<number, number>()
   readonly #controlHandlers = new Set<(type: number, body: unknown) => void>()
   readonly #callHandlers = new Map<string, CallHandler | StreamHandler>()
+  /**
+   * The `ServerPeer` this session belongs to, opaque here.
+   *
+   * A call handler is registered on the server and answers every peer, so without this it
+   * had no way to learn who called it: it could not join the caller to a room or check the
+   * caller's permissions, and an authenticated request had to be hand-rolled as a pair of
+   * events. `Session` is shared with the client, which registers no responders, so the type
+   * stays `unknown` here and `Server` supplies the only value that is ever read.
+   */
+  #peer: unknown
   /**
    * Every inbound call or stream currently being served. A streaming responder parked for
    * credit waits on a peer that may never return, and the credit scheme cannot distinguish
@@ -386,6 +396,11 @@ export class Session {
     return () => {
       this.#callHandlers.delete(event)
     }
+  }
+
+  /** Called by `Server.accept` once the peer facade exists. */
+  attachPeer(peer: unknown): void {
+    this.#peer = peer
   }
 
   /** Revoke a responder on this session. `Server.handle`'s disposer needs it. */
@@ -932,7 +947,10 @@ export class Session {
         return
       }
 
-      const result = await (handler as CallHandler)(value, { signal: controller.signal })
+      const result = await (handler as CallHandler)(value, {
+        signal: controller.signal,
+        peer: this.#peer,
+      })
       await writer.write(
         encodeFrame({
           type: FrameType.CALL_RESPONSE,
@@ -972,7 +990,7 @@ export class Session {
       streaming: boolean
     },
   ): Promise<void> {
-    const produced = handler(payload, { signal: controller.signal })
+    const produced = handler(payload, { signal: controller.signal, peer: this.#peer })
     if (
       produced === null ||
       typeof produced !== 'object' ||

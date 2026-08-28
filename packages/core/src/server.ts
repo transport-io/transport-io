@@ -30,9 +30,17 @@ export interface ServerPeer<M extends AnyMap = Registered> {
   close(code?: number, reason?: string): void
 }
 
-export interface CallContext {
+export interface CallContext<M extends AnyMap = Registered> {
   /** Fires when the initiator resets the stream. Immediate, and free on this transport. */
   readonly signal: AbortSignal
+  /**
+   * The peer that made this call.
+   *
+   * A responder is registered once and answers every peer, so this is the only thing that
+   * says who is asking. `peer.id` is a value this server assigned itself and identifies
+   * nobody: authenticate the payload, then use `peer.join` to act on the result.
+   */
+  readonly peer: ServerPeer<M>
 }
 
 /** Anything that yields connections: a transport listener, or a test double. */
@@ -134,7 +142,7 @@ export class Server<M extends AnyMap = Registered> {
   /** Register a responder for a callable event. */
   handle<K extends CallableOf<M> & string>(
     event: K,
-    handler: (payload: M[K]['payload'], ctx: CallContext) => Promise<M[K]['returns']>,
+    handler: (payload: M[K]['payload'], ctx: CallContext<M>) => Promise<M[K]['returns']>,
   ): () => void
   /**
    * Register a responder for a streaming event. The handler is an async generator: each
@@ -143,9 +151,9 @@ export class Server<M extends AnyMap = Registered> {
    */
   handle<K extends StreamableOf<M> & string>(
     event: K,
-    handler: (payload: M[K]['payload'], ctx: CallContext) => AsyncIterable<M[K]['yields']>,
+    handler: (payload: M[K]['payload'], ctx: CallContext<M>) => AsyncIterable<M[K]['yields']>,
   ): () => void
-  handle(event: string, handler: (payload: never, ctx: CallContext) => never): () => void {
+  handle(event: string, handler: (payload: never, ctx: CallContext<M>) => never): () => void {
     this.#callHandlers.set(event, handler as never)
     for (const { session } of this.#peers.values()) {
       session.handle(event, handler as never)
@@ -200,6 +208,8 @@ export class Server<M extends AnyMap = Registered> {
       close: (code = CloseCode.WT_NO_ERROR, reason = '') => session.close(code, reason),
     }
 
+    // Before any responder is registered, so no handler can ever observe an absent peer.
+    session.attachPeer(peer)
     for (const [event, handler] of this.#callHandlers) session.handle(event, handler as never)
     this.#peers.set(id, { peer, session })
     void conn.closed
