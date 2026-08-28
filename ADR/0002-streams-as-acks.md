@@ -31,8 +31,11 @@ reset rather than an application-level protocol.
 
 Making the response a frame sequence rather than a single length-prefixed frame cost nothing
 at the time and is what let `stream()` arrive in 0.2.0 without a protocol break. The bet paid
-out: no frame type changed, no version moved, and a 0.1.0 caller still works against a 0.2.0
-responder. See ADR 0012.
+out for the response shape: no response frame type changed, and `stream()` needed no break
+of its own. It did not buy cross-version interop, and this record originally claimed it did:
+the same 0.2.0 release renamed both lane values and changed the handshake, so a 0.1.0 peer
+and a 0.2.0 peer refuse each other (D92). The streaming bet and the lane rename were
+independent, and only the first one was free. See ADR 0012.
 
 ## Revisit when
 
@@ -45,9 +48,9 @@ present. The cost is in one implementation of one transport, which is what ADR 0
 exists to make replaceable. A stream per call stays.
 
 The original trigger, for the record: RSS growth above 4 MB/h by linear fit, or p99 call
-latency above 50 ms at 500 concurrent sessions with no network cause. Both are measured by the same
-harness, so this trigger fires from evidence already being collected rather than from an
-impression that "churn feels expensive".
+latency above 50 ms at 500 concurrent sessions with no network cause. Only the first half is
+measured today: the soak harness fits RSS growth and does not record call latency at all, so
+the p99 half of this trigger cannot fire until something measures it.
 
 The known risk is upstream memory growth under high stream turnover. That soak is a Stage 1
 graduation criterion.

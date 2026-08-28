@@ -24,8 +24,9 @@ direction, so a high-volume room delays a quiet room's messages to the same peer
 
 This is the problem this transport is marketed as solving, reintroduced on the lane most
 applications will use most. It is a real cost, not a technicality, and it is documented in
-three places - this record, the protocol specification, and the README - so that
-"independent streams" is never read as a promise about emits.
+three places - this record, the protocol specification, and `KNOWN-ISSUES.md` under "The
+emit lane blocks across rooms" - so that "independent streams" is never read as a promise
+about emits.
 
 The trade is still right: calls and datagrams remain fully isolated, and the alternative
 trades a bounded latency cost for an unbounded memory one.
