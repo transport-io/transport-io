@@ -13,9 +13,9 @@
  *      package is `transport-io-monorepo` and is private. What lands in `node_modules` is
  *      the monorepo, and `import … from 'transport-io'` fails.
  *
- * So it is executed rather than reasoned about. Every ```bash block in README.md and
- * packages/core/README.md whose first word is `npm install` is run in a temporary
- * directory, and the installed package must be the library.
+ * So it is executed rather than reasoned about. Every ```bash block in every tracked
+ * markdown file whose first word is `npm install` is run in a temporary directory, and the
+ * installed package must be the library.
  *
  *   bun run scripts/check-install-line.ts
  */
@@ -97,10 +97,11 @@ if (found.length > 0 && found.length < MIN_INSTALL_LINES) {
 
 if (commands.length === 0) {
   /**
-   * No install line is a legitimate state - the documents currently say clone and build,
-   * because the package is not published. But "nothing to check" must not be silently
-   * green, so the alternative instruction has to be there instead. Otherwise this gate
-   * passes hardest on a README that tells a reader nothing at all.
+   * No install line was a legitimate state before the package was published, when the
+   * documents said clone and build instead. It is not one now, and this branch survives
+   * only so that "nothing to check" can never be silently green: a document with neither
+   * an install line nor a clone-and-build instruction tells a reader nothing at all, and
+   * this gate would otherwise pass hardest on exactly that.
    */
   for (const doc of DOCS.filter((d) => existsSync(d))) {
     const text = readFileSync(doc, 'utf8')
@@ -112,7 +113,7 @@ if (commands.length === 0) {
     }
   }
   console.log(
-    `install: no \`npm install\` line yet; both READMEs give clone-and-build instead ` +
+    `install: no \`npm install\` line found; every document gives clone-and-build instead ` +
       `(${DOCS.length} checked)`,
   )
 } else {

@@ -1,10 +1,10 @@
 /**
  * Two documentation gates.
  *
- * 1. Every ```ts block in API.md / README.md is extracted and typechecked, so when the
- *    API changes the docs stop compiling and the build breaks. Blocks tagged
- *    ```ts ignore are skipped. This half activates by itself once packages/core
- *    exports a real surface.
+ * 1. Every ```ts block in the documents listed in `COMPILED_DOCS` is extracted and
+ *    typechecked, so when the API changes the docs stop compiling and the build breaks.
+ *    Blocks tagged ```ts ignore are skipped. The list is not an allowlist: every tracked
+ *    markdown file carrying a ```ts block must be compiled or exempted with a reason.
  * 2. Every normative constant and error code in PROTOCOL.md is parsed out and compared
  *    against protocol.ts, which is the single source. Adding an error code without
  *    documenting it fails here, and so does changing a default without updating a table.
@@ -82,8 +82,12 @@ function extractBlocks(file: string): Block[] {
 }
 
 /**
- * A block tagged `ignore` is a promise to come back. The count is printed on every run
- * and must only ever go down, so the exemption cannot quietly become permanent.
+ * A block tagged `ignore` is not compiled. The count is printed on every run and may only
+ * go down, so the exemption cannot quietly become permanent.
+ *
+ * It is not a promise to implement anything. The one exemption today is a React binding in
+ * API.md, and React is deliberately never a dependency of this repository, so that block
+ * will never compile here and is not waiting for anything.
  */
 const MAX_IGNORED_BLOCKS = 1
 
@@ -98,8 +102,8 @@ const MIN_CONSTANT_ROWS = 3
 
 /**
  * Numbers with units that must appear in a PROTOCOL.md table for the sweep below to be
- * looking at anything. Four is the count today; a parser that stopped matching would
- * otherwise report a clean sweep over nothing.
+ * looking at anything. A floor rather than the exact count, which moves as the tables do; a
+ * parser that stopped matching would otherwise report a clean sweep over nothing.
  */
 const MIN_TABLE_CONSTANTS = 4
 
@@ -214,7 +218,7 @@ for (const doc of COMPILED_DOCS) {
   blockCount += blocks.length
 }
 console.log(
-  `docs: ${blockCount} block(s) checked, ${ignoredBlocks} awaiting implementation (ceiling ${MAX_IGNORED_BLOCKS})`,
+  `docs: ${blockCount} block(s) checked, ${ignoredBlocks} exempt (ceiling ${MAX_IGNORED_BLOCKS})`,
 )
 if (blockCount < MIN_BLOCKS) {
   fail(
@@ -481,14 +485,7 @@ else {
 }
 
 // ---------------------------------------------------------------- compile the snippets
-const coreEntry = readFileSync('packages/core/src/index.ts', 'utf8')
-const coreIsStub = [...coreEntry.matchAll(/^export /gm)].length <= 1
-
-if (coreIsStub) {
-  console.log(
-    `docs: snippet compilation PENDING - core is still the stub entry (${blockCount} blocks)`,
-  )
-} else if (fileCount > 0) {
+if (fileCount > 0) {
   /**
    * One program per snippet, not one program for all of them.
    *
