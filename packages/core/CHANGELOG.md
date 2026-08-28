@@ -1,5 +1,13 @@
 # transport-io
 
+## 0.5.1
+
+### Patch Changes
+
+- The doc comment on `stream()` no longer claims there is no cancel call. `cancel()` has shipped
+  since 0.4.0, and the claim was in the published declarations, so anyone hovering `stream()` in
+  an editor was told a method that exists does not.
+
 ## 0.5.0
 
 ### Minor Changes
