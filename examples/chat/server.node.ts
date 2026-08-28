@@ -41,7 +41,6 @@ try {
 const names = new Map<string, string>()
 
 const server = createServer<ChatMap>({ contract })
-await server.listen()
 
 // Callable: the client asks for a name and gets an answer back on the same stream.
 server.handle('setName', async ({ name }) => {
@@ -86,13 +85,12 @@ const listener = await listenHttp3({
   path: '/',
 })
 console.log(`webtransport  https://127.0.0.1:${WT_PORT}/`)
-void (async () => {
-  for await (const conn of listener.sessions()) {
-    void server.accept(conn).catch((e: unknown) => {
-      console.error('session refused:', (e as Error).message)
-    })
-  }
-})()
+
+// `listen(listener)` owns the accept loop. Drive `accept()` yourself only when you need
+// something the loop does not do, such as inspecting a connection before accepting it.
+await server.listen(listener, {
+  onAcceptError: (e) => console.error('session refused:', (e as Error).message),
+})
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

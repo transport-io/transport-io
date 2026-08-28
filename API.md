@@ -301,12 +301,17 @@ export async function start(incoming: AsyncIterable<Conn>): Promise<void> {
     })
   })
 
-  for await (const conn of incoming) void server.accept(conn)
+  await server.listen(incoming)
 }
 ```
 
-`listen()` is async because event ids are a SHA-256 of the event name, and the table is
-built once at start rather than per message.
+`listen()` is async because event ids are a SHA-256 of the event name, and the table is built
+once at start rather than per message.
+
+Passing a connection source hands `listen()` the accept loop. A rejected accept is counted in
+`server.acceptErrors` and passed to `onAcceptError` if one is given; it does not stop the
+loop, and it does not vanish. Call `listen()` with no argument and drive `accept()` yourself
+when a connection has to be inspected before it is accepted.
 
 ### 3.1 Rooms are server-authoritative
 

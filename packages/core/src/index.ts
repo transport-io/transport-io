@@ -50,7 +50,9 @@ export {
   STREAM_FRAME_OVERHEAD_BYTES,
 } from './protocol.ts'
 export {
+  type ConnectionSource,
   createServer,
+  type ListenOptions,
   type RoomTarget,
   Server,
   type ServerOptions,

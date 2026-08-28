@@ -58,7 +58,6 @@ declare const cert: string
 declare const privKey: string
 
 const server = createServer<AppMap>({ contract })
-await server.listen()
 
 server.onSession((peer) => {
   void peer.join('lobby')
@@ -67,7 +66,7 @@ server.onSession((peer) => {
 })
 
 const listener = await listenHttp3({ port: 8080, host: '127.0.0.1', cert, privKey, path: '/' })
-for await (const conn of listener.sessions()) void server.accept(conn)
+await server.listen(listener)
 ```
 
 Rooms are server-authoritative. A client cannot join by sending a frame, so `peer.join` is

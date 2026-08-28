@@ -35,6 +35,19 @@ export interface CallContext {
   readonly signal: AbortSignal
 }
 
+/** Anything that yields connections: a transport listener, or a test double. */
+export interface ConnectionSource {
+  sessions(): AsyncIterable<Connection>
+}
+
+export interface ListenOptions {
+  /**
+   * Called for each accept that rejects. Without it the failure is still counted in
+   * `acceptErrors`, so it is never silent, only quiet.
+   */
+  readonly onAcceptError?: (error: unknown) => void
+}
+
 export interface ServerOptions {
   readonly contract: Contract
   readonly adapter?: Adapter
@@ -53,6 +66,8 @@ export class Server<M extends AnyMap = Registered> {
   readonly #nodeId: string
   readonly #origins: OriginAllocator
   readonly #peers = new Map<PeerId, { peer: ServerPeer<M>; session: Session }>()
+  #acceptErrors = 0
+  #accepting: Promise<void> | undefined
   readonly #onPeer: ((peer: ServerPeer<M>) => void)[] = []
   #table: EventTable | undefined
   #hub: Hub | undefined
@@ -68,13 +83,52 @@ export class Server<M extends AnyMap = Registered> {
   }
 
   /** Builds the event table once. Async because event ids are a SHA-256 of the name. */
-  async listen(): Promise<void> {
+  /**
+   * Prepare the server, and optionally take ownership of the accept loop.
+   *
+   * Without a source this is what it always was, and `accept()` is yours to drive. With
+   * one, `listen()` runs `for await (const conn of source.sessions()) accept(conn)` for
+   * you. That loop existed in ten places in this repository alone, identical every time
+   * and swallowing the rejection every time.
+   *
+   * A rejected accept is counted rather than discarded. A failed handshake must not take
+   * the server down, so it cannot throw; it must not be undiscoverable either, so it
+   * cannot vanish. `acceptErrors` is the count, and `onAcceptError` is for an application
+   * that wants to do something about it.
+   */
+  async listen(source?: ConnectionSource, opts?: ListenOptions): Promise<void> {
     this.#table = await buildEventTable(this.#opts.contract)
     this.#adapter = this.#opts.adapter ?? new MemoryAdapter(this.#nodeId)
     this.#hub = new Hub(this.#adapter, this.#table)
     // The server broadcasts on the unreliable lane too, so it needs its own origin.
     // Origin 0 is reserved, so it cannot simply be left unset.
     this.#serverOrigin = this.#origins.allocate(Date.now())
+
+    if (source === undefined) return
+    this.#accepting = (async () => {
+      for await (const conn of source.sessions()) {
+        // Per connection, so one refused handshake does not end the loop for everyone
+        // else. Awaiting here would serialise accepts behind the slowest handshake.
+        void this.accept(conn).catch((e: unknown) => {
+          this.#acceptErrors++
+          opts?.onAcceptError?.(e)
+        })
+      }
+    })()
+    // The loop ends when the source ends, which is a transport concern rather than an
+    // error. A source that throws surfaces through `acceptErrors` the same way.
+    this.#accepting.catch((e: unknown) => {
+      this.#acceptErrors++
+      opts?.onAcceptError?.(e)
+    })
+  }
+
+  /**
+   * Accepts that failed since `listen()`. Zero on a healthy server, and the only signal
+   * that connections are being refused when nobody installed `onAcceptError`.
+   */
+  get acceptErrors(): number {
+    return this.#acceptErrors
   }
 
   /** Register a responder for a callable event. */
