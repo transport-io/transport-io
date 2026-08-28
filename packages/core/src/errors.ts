@@ -18,6 +18,7 @@ export type TransportErrorCode =
   | 'WT_PEER_TOO_SLOW'
   | 'WT_TOO_MANY_STREAMS'
   | 'WT_RELIABILITY_REFUSED'
+  | 'WT_DEV_ONLY'
 
 export class TransportError extends Error {
   readonly code: TransportErrorCode

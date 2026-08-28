@@ -62,6 +62,41 @@ export function findBoundaryViolations(file: string, source: string): Violation[
   return out
 }
 
+/**
+ * The CLI must stay dependency-free.
+ *
+ * `npx transport-io dev` lives in this package rather than a separate one for exactly one
+ * reason: everything it needs is a Node built-in, so putting a `bin` here costs no runtime
+ * dependency. That reason evaporates the first time someone reaches for a package, and it
+ * would evaporate quietly, so it is a rule rather than a promise: under `src/cli/`, the only
+ * legal specifiers are `node:` built-ins and this library's own relative source.
+ */
+export function findCliViolations(file: string, source: string): Violation[] {
+  if (!/[\\/]src[\\/]cli[\\/]/.test(file)) return []
+  const out: Violation[] = []
+  // Template literals are blanked first, keeping newlines so line numbers survive. The demo
+  // page is a template literal full of real `import` statements meant for a browser, and the
+  // usage text quotes one; scanning those would report the documentation as a dependency.
+  const scrubbed = source.replace(/`(?:[^`\\]|\\[\s\S])*`/g, (m) => m.replace(/[^\n]/g, ' '))
+  for (const [i, line] of scrubbed.split('\n').entries()) {
+    // `from` is required, so `export const LIB_PREFIX = '/_transport-io/'` is not an import.
+    // The looser shape the boundary checker uses reads that as importing '/_transport-io/'.
+    const m =
+      /^\s*(?:import|export)\b[^'"]*\bfrom\s*['"]([^'"]+)['"]/.exec(line) ??
+      /^\s*import\s*['"]([^'"]+)['"]/.exec(line) ??
+      /^\s*(?:await\s+|void\s+|return\s+|const\s[^=]*=\s*)?import\s*\(\s*['"]([^'"]+)['"]/.exec(
+        line,
+      )
+    const specifier = m?.[1]
+    if (specifier === undefined) continue
+    // A type-only import is erased, so it cannot make the CLI depend on anything at runtime.
+    if (/^\s*import\s+type\b/.test(line) || /^\s*export\s+type\b/.test(line)) continue
+    if (specifier.startsWith('node:') || /^\.{1,2}\//.test(specifier)) continue
+    out.push({ file, line: i + 1, specifier })
+  }
+  return out
+}
+
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const p = join(dir, e.name)
@@ -100,7 +135,21 @@ export function scan(
   return files.flatMap((f) => findBoundaryViolations(f, readFileSync(f, 'utf8')))
 }
 
+export function scanCli(roots: readonly string[] = ['packages']): Violation[] {
+  return roots
+    .flatMap((r) => sourceFiles(r))
+    .flatMap((f) => findCliViolations(f, readFileSync(f, 'utf8')))
+}
+
 if (import.meta.main) {
+  const cliViolations = scanCli()
+  for (const v of cliViolations) {
+    console.error(
+      `${v.file}:${v.line}  imports '${v.specifier}'\n` +
+        '  The CLI takes no dependencies: it is in this package only because everything it ' +
+        "needs is a Node built-in.\n  Use a `node:` built-in or this library's own source.",
+    )
+  }
   const violations = scan()
   for (const v of violations) {
     console.error(
@@ -109,9 +158,12 @@ if (import.meta.main) {
         'segfaults on exit.\n  Rename it to *.node.ts, or move the import behind one. See D14.',
     )
   }
-  if (violations.length > 0) {
-    console.error(`\n${violations.length} import-boundary violation(s).`)
+  const total = violations.length + cliViolations.length
+  if (total > 0) {
+    console.error(`\n${total} import-boundary violation(s).`)
     process.exit(1)
   }
-  console.log('boundaries: no non-Node module reaches the transport')
+  console.log(
+    'boundaries: no non-Node module reaches the transport, and the CLI takes no dependencies',
+  )
 }

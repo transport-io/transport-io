@@ -72,6 +72,22 @@ install` succeeds without Bun and then the first `git commit` fails, because the
 out to it. Development is supported on macOS and Linux only - Windows contributors should
 use WSL.
 
+## See it work
+
+One command. No project, no certificate, no configuration:
+
+```bash
+npx transport-io dev --demo
+```
+
+Open the printed URL in two tabs and type. Chrome or Firefox; Safari cannot talk to a
+quiche-backed server.
+
+For your own project, `transport-io dev ./server.ts` mints the certificate, publishes its
+hash for the browser to pin, and hands the certificate to your server. It does not bundle
+your browser code: that needs a bundler, and this package takes no runtime dependencies for
+its CLI, so keep running your own and point `--static` at the output.
+
 ## Use
 
 ```ts

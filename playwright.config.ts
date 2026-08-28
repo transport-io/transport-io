@@ -13,6 +13,16 @@ import { defineConfig, devices } from '@playwright/test'
 /** Overridable, because 8080 is the most contended port on any developer's machine. */
 const E2E_PORT = process.env.E2E_PORT ?? '8080'
 const E2E_ORIGIN = `http://localhost:${E2E_PORT}`
+/**
+ * `transport-io dev --demo` runs alongside the example, on its own ports.
+ *
+ * The demo is the only thing that meets the acceptance test for `dev` - someone who has
+ * never used this library seeing two tabs talk after one command - so it is a second thing
+ * to maintain. This is what stops it rotting: if `dev --demo` breaks, this suite is red.
+ */
+const DEMO_PORT = process.env.E2E_DEMO_PORT ?? '3210'
+const DEMO_WT_PORT = process.env.E2E_DEMO_WT_PORT ?? '4510'
+export const DEMO_ORIGIN = `http://localhost:${DEMO_PORT}`
 
 export default defineConfig({
   testDir: './e2e',
@@ -26,17 +36,27 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    command: 'npm run e2e:server',
-    url: `${E2E_ORIGIN}/cert-hash`,
-    // Never reuse. With reuse on, any dev server already holding this port was accepted -
-    // Playwright's readiness probe passes on any status from 200 to 403 - and the suite
-    // then ran against an unrelated application, failing on selectors that never mention
-    // the port. Starting our own costs a few seconds and cannot be wrong about what it is
-    // testing. `E2E_PORT` moves the port if something else owns it.
-    reuseExistingServer: false,
-    timeout: 60_000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
+  webServer: [
+    {
+      command: `node packages/core/dist/cli/main.node.js dev --demo --port ${DEMO_PORT} --wt-port ${DEMO_WT_PORT}`,
+      url: `${DEMO_ORIGIN}/.well-known/transport-io-dev`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      command: 'npm run e2e:server',
+      url: `${E2E_ORIGIN}/cert-hash`,
+      // Never reuse. With reuse on, any dev server already holding this port was accepted -
+      // Playwright's readiness probe passes on any status from 200 to 403 - and the suite
+      // then ran against an unrelated application, failing on selectors that never mention
+      // the port. Starting our own costs a few seconds and cannot be wrong about what it is
+      // testing. `E2E_PORT` moves the port if something else owns it.
+      reuseExistingServer: false,
+      timeout: 60_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  ],
 })

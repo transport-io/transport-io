@@ -69,6 +69,7 @@ sed -e 's/"esnext"/"node16"/' -e 's/"bundler"/"node16"/' tsconfig.json > tsconfi
 cat > ok.ts <<'TS'
 import { Client, createServer, defineContract, type MapOf, type$, VERSION } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
+import { connectDev, DEV_ENDPOINT } from 'transport-io/dev-transport'
 // Type-only: the node transport's declarations were never loaded at the floor version
 // because the probe imported three of the four entry points.
 import type { Http3Listener } from 'transport-io/node-transport'
@@ -83,6 +84,8 @@ export const contract = defineContract({
 export interface AppMap extends MapOf<typeof contract> {}
 
 export const version: string = VERSION
+export const devEndpoint: string = DEV_ENDPOINT
+export const devConnect: typeof connectDev = connectDev
 export type Listener = Http3Listener
 
 export async function probe(url: string): Promise<number> {

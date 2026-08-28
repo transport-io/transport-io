@@ -102,6 +102,24 @@ types-only schema the helpers build, exported for the object form.
   removing events is rolling-deploy safe. Two names that collide are a build-time error
   naming both; set an explicit `id` on one rather than renaming.
 
+## Local development
+
+```bash
+npx transport-io dev --demo          # two tabs talking, no project needed
+npx transport-io dev ./server.ts     # your server, certificate handled
+```
+
+The command mints an ECDSA P-256 certificate valid 14 days, renews it silently when it is
+within a day of expiry, publishes its SHA-256 at `/.well-known/transport-io-dev`, and passes
+the certificate to the server process by environment. Two functions connect to it:
+`listenDev()` from `transport-io/node-transport` on the server, `connectDev()` from
+`transport-io/dev-transport` in the browser.
+
+`connectDev` throws `WT_DEV_ONLY` unless both the page origin and the WebTransport URL are
+loopback, so it cannot be enabled in production by accident.
+
+It does not bundle browser code. Run your own bundler and pass `--static <dir>`.
+
 ## Client
 
 ```ts

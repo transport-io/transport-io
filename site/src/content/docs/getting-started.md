@@ -26,6 +26,18 @@ image has, so use a `trixie` variant or Ubuntu 24.04.
 
 You need **Node 22 or newer** and **TypeScript 5.0 or newer**.
 
+## See it work first
+
+One command, no project, no certificate, no configuration:
+
+```bash
+npx transport-io dev --demo
+```
+
+Open the printed URL in two tabs and type. Messages cross on the reliable lane and the
+cursors follow on the unreliable one. Chrome or Firefox: Safari cannot talk to a
+quiche-backed server.
+
 ## The contract
 
 One file, and it is the only place that says what is reliable.
@@ -147,8 +159,55 @@ dot moves in the other, with some frames missing.
 
 ## The certificate
 
-WebTransport will not accept an arbitrary self-signed certificate. For local development,
-mint a short-lived one and pin it by hash:
+WebTransport will not accept an arbitrary self-signed certificate. It accepts one pinned by
+hash, and the hash has to reach the browser somehow. `transport-io dev` does all of it:
+
+```bash
+npx transport-io dev ./server.ts
+```
+
+It mints the certificate, computes the hash, serves it at a fixed endpoint, and passes the
+certificate to your server by environment. Two lines connect the two halves. On the server:
+
+```ts
+import type { Server } from 'transport-io'
+import { listenDev } from 'transport-io/node-transport'
+
+export async function serveInDev(server: Server): Promise<void> {
+  await server.listen(await listenDev())
+}
+```
+
+And in the browser, `connectDev` fetches the hash the command published:
+
+```ts
+import { connectDev } from 'transport-io/dev-transport'
+
+export function devClient(): Client {
+  return new Client({ contract, connect: () => connectDev() })
+}
+```
+
+`connectDev` refuses to run anywhere that is not loopback, both for the page origin and for
+the WebTransport URL it is given. That is a property of the function rather than a
+convention, so a bundle that reaches production cannot connect through it.
+
+### What `dev` does not do
+
+**It does not bundle your browser code.** Bundling needs a bundler, and this package has no
+runtime dependencies for its CLI, so it will not grow one. Keep running your own `vite dev`
+or `bun build --watch` and point the command at the output:
+
+```bash
+npx transport-io dev ./server.ts --static ./web/dist
+```
+
+So "one command" is exactly true for `--demo`, and true apart from your own bundler for a
+real project.
+
+### Doing it by hand
+
+For production, or to understand what the command is doing:
 
 ```bash
 openssl ecparam -name prime256v1 -genkey -noout -out key.pem
@@ -158,7 +217,7 @@ openssl req -new -x509 -key key.pem -out cert.pem -days 14 \
 
 ECDSA P-256 and a maximum of 14 days are constraints imposed by
 `serverCertificateHashes`. Pass the SHA-256 of the certificate's DER bytes to
-`connectBrowser`.
+`connectBrowser` as `certificateHash`.
 
 ## Where next
 

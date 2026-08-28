@@ -196,6 +196,27 @@ export async function listenHttp3(opts: Http3ServerOptions): Promise<Http3Listen
   }
 }
 
+/**
+ * The listener `transport-io dev` prepared for this process.
+ *
+ * The CLI mints the certificate and passes it by environment, so a project's server file is
+ * `await server.listen(await listenDev())` and never reads a certificate path, a port, or an
+ * environment variable itself.
+ */
+export async function listenDev(): Promise<Http3Listener> {
+  const cert = process.env.TRANSPORT_IO_DEV_CERT
+  const privKey = process.env.TRANSPORT_IO_DEV_KEY
+  const port = process.env.TRANSPORT_IO_DEV_WT_PORT
+  if (cert === undefined || privKey === undefined || port === undefined) {
+    throw new TransportError(
+      'WT_DEV_ONLY',
+      'listenDev() found no certificate in the environment',
+      'Start this process with `npx transport-io dev`, which mints the certificate and sets it. Use listenHttp3 with your own certificate otherwise.',
+    )
+  }
+  return await listenHttp3({ port: Number(port), host: '127.0.0.1', cert, privKey, path: '/' })
+}
+
 export interface Http3ClientOptions {
   readonly url: string
   readonly certificateHash: Uint8Array
