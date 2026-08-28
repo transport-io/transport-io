@@ -13,7 +13,7 @@ import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'
-import { type ChatMap, contract } from './contract.ts'
+import { contract } from './contract.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const certDir = join(here, '.cert')
@@ -40,7 +40,7 @@ try {
 
 const names = new Map<string, string>()
 
-const server = createServer<ChatMap>({ contract })
+const server = createServer({ contract })
 
 // Callable: the client asks for a name and gets an answer back on the same stream.
 server.handle('setName', async ({ name }) => {
@@ -51,9 +51,8 @@ server.handle('setName', async ({ name }) => {
 
 // Streaming: one word at a time, on the same kind of stream a call uses. `break` on the
 // client resets it, which fires `ctx.signal` here, which ends the loop below.
-server.handle('say', async function* ({ text }, ctx) {
+server.handle('say', async function* ({ text }) {
   for (const word of text.split(/\s+/).filter(Boolean)) {
-    ctx.signal.throwIfAborted()
     await new Promise((r) => setTimeout(r, 80))
     yield word
   }

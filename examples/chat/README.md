@@ -2,14 +2,18 @@
 
 Both lanes in one page, so you can watch the difference.
 
-- **chat** is `lane: 'reliable'` - reliable and ordered. Nothing sent here is ever lost.
-- **cursor** is `lane: 'unreliable'` - unreliable. Frames are dropped routinely, which is
-  fine: a cursor position is stale the moment the next one exists.
-- **setName** is a `call()` - request and response on their own bidirectional stream.
-- **say** is a `stream()` - type `/say some words` and the reply arrives one word at a time,
-  growing the line in place. One bidirectional stream, many response frames.
+- **chat** is `reliable()` - reliable and ordered. Nothing sent here is ever lost.
+- **cursor** is `unreliable()` - frames are dropped routinely, which is fine: a cursor
+  position is stale the moment the next one exists.
+- **setName** is `rpc()` - request and response on their own bidirectional stream, consumed
+  with `call()`.
+- **say** is `streaming()` - type `/say some words` and the reply arrives one word at a time,
+  growing the line in place. One bidirectional stream, many response frames, consumed with
+  `stream()`.
 
-The contract in [`contract.ts`](contract.ts) is the only place that says which is which.
+The contract in [`contract.ts`](contract.ts) is the only place that says which is which. It
+also registers the map, which is why neither `createServer({ contract })` in `server.node.ts`
+nor `new Client({ … })` in `web/main.ts` carries a type argument.
 
 ## Running it
 
