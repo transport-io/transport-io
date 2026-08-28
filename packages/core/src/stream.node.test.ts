@@ -203,3 +203,33 @@ test('credit bounds how far the producer runs ahead of a slow consumer', async (
   assert.ok(state.produced < 200, `produced ${state.produced} for 20 consumed`)
   client.disconnect()
 })
+
+test('cancel() stops a stream from outside the loop, over real QUIC', async () => {
+  reset()
+  const client = await connected()
+
+  const s = client.stream('ask', { prompt: 'forever' })
+  const seen: string[] = []
+
+  // The stop button: nothing is inside the loop to `break`, so cancellation has to come
+  // from the handle. On the loopback transport a pending read is not unblocked by
+  // cancelling the reader, so this behaviour is only meaningful over a real one.
+  const consuming = s.forEach((t) => {
+    seen.push(t)
+    state.consumed++
+  })
+  await new Promise((r) => setTimeout(r, 60))
+  s.cancel()
+
+  const err = await consuming.then(
+    () => null,
+    (e: unknown) => e,
+  )
+  assert.ok(err instanceof TransportError, 'cancelling aborts the consumer')
+  assert.equal((err as TransportError).code, 'WT_ABORTED')
+  assert.ok(seen.length > 0, 'elements arrived before the cancel')
+
+  await until(() => state.cleanedUp)
+  assert.equal(state.cleanedUp, true, "the handler's finally must run on cancel()")
+  client.disconnect()
+})

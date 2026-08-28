@@ -223,7 +223,7 @@ export async function withDeadline(client: Cs<GenMap>): Promise<number> {
 
 ```ts
 export async function whole(client: Cs<GenMap>): Promise<string[]> {
-  return await client.stream('ask', { prompt: 'a b c' }).collect()
+  return await client.stream('ask', { prompt: 'a b c' }).toArray()
 }
 ```
 

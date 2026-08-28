@@ -136,7 +136,7 @@ export class Client<M extends AnyMap = Registered> {
   }
 
   /**
-   * Available only on events declaring `yields`. Iterate it, or `.collect()` the whole
+   * Available only on events declaring `yields`. Iterate it, or `.toArray()` the whole
    * sequence. Leaving the loop with `break` resets the QUIC stream, and that reset is what
    * fires the responder's `ctx.signal`. There is no separate cancel call.
    */

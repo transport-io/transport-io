@@ -262,8 +262,11 @@ Rules:
 - Leaving the loop cancels. `break` resets the QUIC stream, fires the handler's `ctx.signal`
   and runs any `finally` in the generator. There is no `.cancel()` method. Passing
   `{ signal }` does the same from outside the loop.
-- `.collect()` returns the whole sequence as an array. It rejects on a mid-stream error and
-  discards the partial result.
+- Helpers: `.take(n)`, `.forEach(fn)`, `.toArray()`, `.cancel()`. `take` closes the stream at
+  its limit, `forEach` awaits the callback before pulling the next element, `toArray` rejects
+  on a mid-stream error and discards the partial, `cancel` stops from outside the loop and
+  makes the consumer see `WT_ABORTED`. Sequential by design; the TC39 proposal's concurrency
+  is deliberately not implemented (D99).
 - An error partway through delivers the elements that preceded it, then throws. Elements are
   never retracted.
 - A yielding handler may run at most **32 frames** ahead of what the consumer has taken. That

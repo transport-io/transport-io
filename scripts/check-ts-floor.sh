@@ -96,7 +96,7 @@ export async function probe(url: string): Promise<number> {
   client.emit('chat', { body: 'hello' })
   client.emit('cursor', { x: 1, y: 2 })
   const { n } = await client.call('save', { text: 'hi' })
-  const tokens = await client.stream('ask', { prompt: 'hi' }).collect()
+  const tokens = await client.stream('ask', { prompt: 'hi' }).toArray()
   for await (const token of client.stream('ask', { prompt: 'hi' })) void token.length
   return n + tokens.length
 }

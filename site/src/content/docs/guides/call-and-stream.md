@@ -22,7 +22,8 @@ declare function enrich(chunk: string): Promise<string>
 // Shadows the DOM's `prompt()`, which is what a reader's own variable does too.
 declare const prompt: string
 declare const userStopped: boolean
-declare function render(token: string): void
+declare function render(token: string): Promise<void>
+declare const stopButton: { onclick: () => void }
 ```
 
 `call('ask', …)` does not compile, and neither does `stream('save', …)`. At runtime both are
@@ -87,18 +88,43 @@ server.handle('ask', async function* ({ prompt }, ctx) {
 })
 ```
 
-`collect()` returns the whole sequence as an array:
+### Helpers
 
 ```ts
-const tokens = await client.stream('ask', { prompt }).collect()
+const tokens = await client.stream('ask', { prompt }).toArray()
+const first20 = await client.stream('ask', { prompt }).take(20).toArray()
+
+await client.stream('ask', { prompt }).forEach(async (token) => {
+  await render(token)
+})
 ```
+
+`toArray()` collects the whole sequence. `take(n)` stops after `n` elements and closes the
+stream, the same as `break`. `forEach(fn)` awaits `fn` before pulling the next element, so a
+slow callback slows the producer instead of queueing behind it.
+
+`cancel()` stops from outside the loop, which is what a stop button needs:
+
+```ts
+const generation = client.stream('ask', { prompt })
+stopButton.onclick = () => generation.cancel()
+await generation.forEach(render)
+```
+
+Cancelling aborts the stream, so the consumer sees `WT_ABORTED`, exactly as it would from an
+`AbortSignal`.
+
+These four are named after the TC39 async iterator helpers proposal and behave sequentially.
+That proposal is being revised to let `map`, `take` and others run several pulls at once,
+which would defeat the credit window, so this library will not follow it there. `cancel()` is
+not in the proposal at all.
 
 ## Errors partway through
 
 When a handler throws after yielding some elements, the consumer keeps those elements. The
 loop yields what arrived, then throws.
 
-`collect()` rejects and discards the partial result. Use the loop if you need what arrived
+`toArray()` rejects and discards the partial result. Use the loop if you need what arrived
 before the failure.
 
 ## Concurrency

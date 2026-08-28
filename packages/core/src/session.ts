@@ -44,9 +44,30 @@ export type StreamHandler = (
   ctx: { readonly signal: AbortSignal },
 ) => AsyncIterable<unknown>
 
-/** What `stream()` returns: iterate it, or take the whole sequence with `collect()`. */
+/**
+ * What `stream()` returns.
+ *
+ * Four helpers, named and shaped after the TC39 async iterator helpers proposal and
+ * implemented **sequentially**. That proposal is Stage 2 and "in the process of being
+ * revised"; the revision adds concurrency to `map`, `filter`, `take`, `drop` and `flatMap`
+ * so several `next()` calls can be in flight at once. A helper that pulls ahead of its
+ * consumer defeats the credit window, which bounds the producer against what the consumer
+ * has taken, so these will not adopt that behaviour if it lands. See D99.
+ *
+ * `cancel()` is not in the proposal. It is ours, for stopping from outside the loop.
+ */
 export interface StreamResult<T> extends AsyncIterable<T> {
-  collect(): Promise<T[]>
+  /** At most `limit` elements, then the source is closed as though the loop had broken. */
+  take(limit: number): StreamResult<T>
+  /** Calls `fn` for each element and awaits it before pulling the next. */
+  forEach(fn: (value: T) => void | Promise<void>): Promise<void>
+  /** The whole sequence as an array. Rejects on a mid-stream error, discarding the partial. */
+  toArray(): Promise<T[]>
+  /**
+   * Stop from outside the loop, where `break` cannot reach. Aborts the stream, so a
+   * consumer iterating it sees `WT_ABORTED`, exactly as it would from an `AbortSignal`.
+   */
+  cancel(): void
 }
 
 export interface SessionOptions {
@@ -112,6 +133,56 @@ function abortToTransportError(cause: unknown): TransportError {
     timedOut ? 'the call timed out before the responder answered' : 'the call was aborted',
     'The stream was reset, so the responder was told. Retry if the work is idempotent, or raise the deadline.',
   )
+}
+
+/**
+ * The four helpers, over a source generator.
+ *
+ * `take` closes the source when it reaches its limit, which is what makes it equivalent to
+ * `break`. `cancel` is threaded through every wrapper, so a chain still stops the real
+ * stream rather than only the outermost link.
+ */
+function streamResult<T>(source: AsyncGenerator<T>, stop: () => void): StreamResult<T> {
+  return {
+    [Symbol.asyncIterator]: () => source,
+
+    take(limit: number): StreamResult<T> {
+      async function* taken(): AsyncGenerator<T> {
+        if (limit <= 0) return
+        let n = 0
+        try {
+          for await (const v of source) {
+            yield v
+            if (++n >= limit) break
+          }
+        } finally {
+          // `for await` closes the source on `break`, but not when the consumer abandons
+          // this wrapper instead. Closing here covers both.
+          await source.return(undefined as never).catch(() => undefined)
+        }
+      }
+      return streamResult(taken(), stop)
+    },
+
+    async forEach(fn: (value: T) => void | Promise<void>): Promise<void> {
+      // Awaited, which is the whole reason a callback is acceptable here: the next element
+      // is not pulled until this one is handled, so backpressure still holds.
+      for await (const v of source) await fn(v)
+    },
+
+    async toArray(): Promise<T[]> {
+      const out: T[] = []
+      for await (const v of source) out.push(v)
+      return out
+    },
+
+    cancel(): void {
+      // Synchronous, and it does not await the generator. An async generator queues
+      // `return()` behind a pending `next()`, and that pending `next()` is the read this
+      // abort is unblocking, so awaiting it here deadlocks. Measured: it hung.
+      stop()
+    },
+  }
 }
 
 export class Session {
@@ -370,7 +441,7 @@ export class Session {
       throw new TransportError(
         'WT_PROTOCOL_ERROR',
         `'${event}' declares \`yields\`, so its response is a sequence`,
-        'Use stream(), or stream(...).collect() if you want the whole sequence as one value.',
+        'Use stream(), or stream(...).toArray() if you want the whole sequence as one value.',
       )
     }
     if (entry.lane === 'reliable' && entry.def.returns === undefined) {
@@ -660,6 +731,12 @@ export class Session {
    * buffering alone would not bound anything on the reference binding.
    */
   #doStream(eventId: number, body: Uint8Array, signal?: AbortSignal): StreamResult<unknown> {
+    /**
+     * What `cancel()` aborts. It is watched by the same listener as the caller's signal, so
+     * cancelling from outside the loop takes the path an `AbortSignal` already takes:
+     * reset the stream, which the responder sees as STOP_SENDING.
+     */
+    const cancelled = new AbortController()
     const open = (): Promise<BidiStream> => this.#conn.openBidi()
     const released = (): void => {
       this.#openCalls--
@@ -678,6 +755,7 @@ export class Session {
       }
       const onAbort = (): void => reset()
       signal?.addEventListener('abort', onAbort, { once: true })
+      cancelled.signal.addEventListener('abort', onAbort, { once: true })
 
       try {
         await writer.write(
@@ -730,14 +808,18 @@ export class Session {
           }
         }
         signal?.throwIfAborted()
+        cancelled.signal.throwIfAborted()
         ended = true
         await writer.close()
       } catch (e) {
         // Same conversion `call()` makes. Aborting is the most-documented failure this
         // library has and it must not arrive as a DOMException with no code and no remedy.
-        throw isAbort(e) || signal?.aborted === true ? abortToTransportError(e) : e
+        throw isAbort(e) || signal?.aborted === true || cancelled.signal.aborted
+          ? abortToTransportError(e)
+          : e
       } finally {
         signal?.removeEventListener('abort', onAbort)
+        cancelled.signal.removeEventListener('abort', onAbort)
         // Not ended means the consumer broke, threw, or was aborted. Either way the
         // responder is still producing and has to be told.
         if (!ended) reset()
@@ -745,15 +827,9 @@ export class Session {
       }
     }
 
-    const gen = run()
-    return {
-      [Symbol.asyncIterator]: () => gen,
-      async collect(): Promise<unknown[]> {
-        const out: unknown[] = []
-        for await (const v of gen) out.push(v)
-        return out
-      },
-    }
+    return streamResult(run(), () => {
+      cancelled.abort()
+    })
   }
 
   async #serveCall(stream: BidiStream, controller: AbortController): Promise<void> {

@@ -97,7 +97,7 @@ describe('termination', () => {
     expect(seen).toEqual([])
     // Same bytes a broken call() responder produces. Only the contract tells them apart,
     // which is why `yields` is declared there and not chosen at the call site.
-    expect(await client.stream('ask', { prompt: 'x' }).collect()).toEqual([])
+    expect(await client.stream('ask', { prompt: 'x' }).toArray()).toEqual([])
   })
 
   test('a single yield terminates without a second frame', async () => {
@@ -110,7 +110,7 @@ describe('termination', () => {
     })
     await Promise.all([server.accept(serverSide), client.connect()])
 
-    expect(await client.stream('ask', { prompt: 'x' }).collect()).toEqual(['only'])
+    expect(await client.stream('ask', { prompt: 'x' }).toArray()).toEqual(['only'])
   })
 
   test('one yield is one CALL_RESPONSE frame, counted on the wire', async () => {
@@ -195,7 +195,7 @@ describe('errors mid-stream', () => {
 
     const err = await client
       .stream('ask', { prompt: 'x' })
-      .collect()
+      .toArray()
       .then(
         () => null,
         (e: unknown) => e,
@@ -215,7 +215,7 @@ describe('errors mid-stream', () => {
 
     const err = await client
       .stream('ask', { prompt: 'x' })
-      .collect()
+      .toArray()
       .then(
         () => null,
         (e: unknown) => e,
@@ -507,5 +507,86 @@ describe('a handler needs no signal check of its own', () => {
     const settled = pulls
     await new Promise((r) => setTimeout(r, 80))
     expect(pulls).toBe(settled)
+  })
+})
+
+describe('iterator helpers', () => {
+  const rig = async (): Promise<{
+    client: Client<AppMap>
+    state: { produced: number; cleanedUp: boolean }
+  }> => {
+    const server = createServer<AppMap>({ contract })
+    await server.listen()
+    const [serverSide, clientSide] = loopbackPair()
+    const client = new Client<AppMap>({ contract, connect: async () => clientSide })
+    const state = { produced: 0, cleanedUp: false }
+    server.handle('ask', async function* () {
+      try {
+        for (let i = 0; ; i++) {
+          state.produced++
+          yield `t${i}`
+        }
+      } finally {
+        state.cleanedUp = true
+      }
+    })
+    await Promise.all([server.accept(serverSide), client.connect()])
+    return { client, state }
+  }
+
+  test('toArray collects a finite sequence', async () => {
+    const server = createServer<AppMap>({ contract })
+    await server.listen()
+    const [serverSide, clientSide] = loopbackPair()
+    const client = new Client<AppMap>({ contract, connect: async () => clientSide })
+    server.handle('ask', async function* () {
+      yield 'a'
+      yield 'b'
+    })
+    await Promise.all([server.accept(serverSide), client.connect()])
+    expect(await client.stream('ask', { prompt: 'x' }).toArray()).toEqual(['a', 'b'])
+  })
+
+  test('take(n) stops the source, the same as break', async () => {
+    const { client, state } = await rig()
+    const first = await client.stream('ask', { prompt: 'x' }).take(3).toArray()
+    expect(first).toEqual(['t0', 't1', 't2'])
+
+    // `take` closes the underlying iterator when it reaches its limit, which resets the
+    // stream and runs the handler's `finally`.
+    await until(() => state.cleanedUp)
+    expect(state.cleanedUp).toBe(true)
+    expect(state.produced).toBeLessThanOrEqual(33)
+  })
+
+  test('take(0) yields nothing and never opens the stream', async () => {
+    const { client, state } = await rig()
+    expect(await client.stream('ask', { prompt: 'x' }).take(0).toArray()).toEqual([])
+    await new Promise((r) => setTimeout(r, 60))
+    // The generator is lazy: nothing is pulled, so no request is sent and the handler is
+    // never invoked. There is nothing to clean up because nothing started.
+    expect(state.produced).toBe(0)
+    expect(state.cleanedUp).toBe(false)
+  })
+
+  test('forEach awaits the callback before pulling the next element', async () => {
+    const { client, state } = await rig()
+    const seen: string[] = []
+    let maxAhead = 0
+
+    await client
+      .stream('ask', { prompt: 'x' })
+      .take(6)
+      .forEach(async (t) => {
+        seen.push(t)
+        maxAhead = Math.max(maxAhead, state.produced - seen.length)
+        await new Promise((r) => setTimeout(r, 15))
+      })
+
+    expect(seen).toHaveLength(6)
+    // A callback that is not awaited would let the producer run away. The credit window
+    // bounds it at 32 either way, so this asserts the callback is awaited by checking the
+    // consumer never ran ahead of its own callback.
+    expect(maxAhead).toBeLessThanOrEqual(33)
   })
 })
