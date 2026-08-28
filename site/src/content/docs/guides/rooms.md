@@ -52,14 +52,15 @@ you want client-initiated subscription, implement it as a `call()` and check the
 before joining:
 
 ```ts
-server.onSession((peer) => {
-  server.handle('subscribe', async ({ room }) => {
-    if (!allowed(room)) {
-      throw new TransportError('WT_ROOM_NOT_JOINED', 'not yours', 'Ask an admin.')
-    }
-    await peer.join(room)
-    return { joined: true }
-  })
+// Registered once, at startup. `server.handle` is global, so registering it inside
+// `onSession` would re-register on every connection and capture whichever peer connected
+// last - a call from one peer would then join a different one. `ctx.peer` is the caller.
+server.handle('subscribe', async ({ room }, ctx) => {
+  if (!allowed(room)) {
+    throw new TransportError('WT_ROOM_NOT_JOINED', 'not yours', 'Ask an admin.')
+  }
+  await ctx.peer.join(room)
+  return { joined: true }
 })
 ```
 
