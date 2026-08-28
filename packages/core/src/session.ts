@@ -485,8 +485,10 @@ export class Session {
   /**
    * The streaming form of `call()`, on the same wire shape: one bidirectional stream, one
    * CALL_REQUEST, then a sequence of CALL_RESPONSE frames terminated by stream close.
-   * PROTOCOL.md §6.3 always required receivers to accept a sequence, so this adds no frame
-   * type and breaks no version 0 peer.
+   * PROTOCOL.md §6.3 always required receivers to accept a sequence, so the response
+   * direction adds no frame type and breaks no version 0 peer. The initiator's direction
+   * does add one: CALL_CREDIT (0x08) carries the window, and a peer that never sends it
+   * stalls after the first 32 frames.
    *
    * Every guard `call()` applies is applied here, synchronously, before any stream is
    * opened. A method returning an iterable cannot report a bad event name by rejecting a
@@ -1168,8 +1170,8 @@ export class Session {
    * every origin it has sent to. Both grow with the number of peers, so both are things a
    * disposed session has no business still holding.
    *
-   * Exposed for the disposal test. `Session` is internal - `index.ts` exports its stats
-   * type and nothing else - so this is not public surface.
+   * Exposed for the disposal test. `Session` is internal - `index.ts` exports `SessionStats`
+   * and `StreamResult` from this module, never the class - so this is not public surface.
    */
   get retainedPeerState(): number {
     return this.#gate.tracked + this.#sequences.size
