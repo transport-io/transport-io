@@ -33,29 +33,63 @@ Node ≥ 22. TypeScript ≥ 5.0 for consumers.
 `transport-io/node-transport` loads a native addon that segfaults Bun on exit. Only import
 it from a file named `*.node.ts`.
 
-## The contract - always two lines
+## The contract
 
 ```ts
-import { defineContract, type MapOf, type$ } from 'transport-io'
+import { defineContract, type MapOf, reliable, rpc, streaming, unreliable } from 'transport-io'
 
 export const contract = defineContract({
-  chat:   { lane: 'reliable',   payload: type$<{ from: string; body: string }>() },
-  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
-  save:   { lane: 'reliable',   payload: type$<{ text: string }>(),
-            returns: type$<{ revision: number }>() },
+  chat: reliable<{ from: string; body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>(),
+  save: rpc<{ text: string }, { revision: number }>(),
+  ask: streaming<{ prompt: string }, string>(),
 })
 
 export interface AppMap extends MapOf<typeof contract> {}
+
+declare module 'transport-io' {
+  interface Register {
+    map: AppMap
+  }
+}
 ```
 
-**Write the second line.** It is not optional style. For the contract above,
-`Client<AppMap>` hovers `emit` at 107 characters and `Client<MapOf<typeof contract>>` at 377,
-with the validator's internal
-types in it, because TypeScript preserves interface names and expands alias
-instantiations. Every example everywhere uses this form.
+Three parts, all three required.
 
-`payload` accepts any Standard Schema validator - zod, valibot, arktype - or `type$<T>()`
-for inference with no runtime validation. Inbound payloads are validated; outbound are not.
+**The helpers.** `reliable(payload?)` and `unreliable(payload?)` for events with no answer,
+`rpc(payload?, returns?)` for one value back, `streaming(payload?, yields?)` for a sequence.
+`rpc` and `streaming` are always `lane: 'reliable'`. The object form
+(`{ lane, payload, returns }`) still works and is documented in API.md §1.3; use it only for
+a contract assembled programmatically.
+
+**The `MapOf` line.** For the contract above, `Client<AppMap>` hovers `emit` at 107
+characters and `Client<MapOf<typeof contract>>` at 377, with the validator's internal types
+in it, because TypeScript preserves interface names and expands alias instantiations.
+
+**The registration.** It makes `AppMap` the default for `Client`, `Server`, `ServerPeer` and
+`RoomTarget`, so nothing in the application carries a type argument. Pass one explicitly only
+when a process speaks two contracts. Without a registration, every call site fails with
+`no contract registered`, naming this block.
+
+### A type, or a schema
+
+Every helper takes either. A type argument (`reliable<{ x: number }>()`) is types-only:
+nothing checks it, and it costs nothing at runtime. A Standard Schema validator - zod,
+valibot, arktype - validates every inbound payload on arrival, at one check per message, and
+a payload it rejects never reaches a handler:
+
+```ts standalone
+import { defineContract, reliable } from 'transport-io'
+import { z } from 'zod'
+
+export const validated = defineContract({
+  chat: reliable(z.object({ from: z.string(), body: z.string().max(2000) })),
+})
+```
+
+Use a schema where an untrusted peer can reach, a type argument where both ends are yours and
+the traffic is high. Inbound payloads are validated; outbound are not. `type$<T>()` is the
+types-only schema the helpers build, exported for the object form.
 
 ### Rules the contract enforces
 
@@ -74,7 +108,7 @@ for inference with no runtime validation. Inbound payloads are validated; outbou
 import { Client } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 
-const client = new Client<AppMap>({
+const client = new Client({
   contract,
   connect: () => connectBrowser({ url: 'https://example.com:4433/' }),
 })
@@ -111,13 +145,9 @@ client.disconnect()
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'   // in a *.node.ts file
 
-const server = createServer<AppMap>({ contract })
-await server.listen()
+const server = createServer({ contract })
 
-server.handle('save', async ({ text }, ctx) => {
-  ctx.signal.throwIfAborted()          // fires when the caller aborts
-  return { revision: text.length }
-})
+server.handle('save', async ({ text }) => ({ revision: text.length }))
 
 server.onSession((peer) => {
   void peer.join('lobby')
@@ -129,8 +159,17 @@ declare const cert: string    // PEM, from your own certificate source
 declare const privKey: string // PEM
 
 const listener = await listenHttp3({ port: 4433, cert, privKey })
-for await (const conn of listener.sessions()) void server.accept(conn)
+await server.listen(listener, { onAcceptError: (e) => console.error(e) })
 ```
+
+`listen(listener)` owns the accept loop: never write
+`for await (const conn of listener.sessions())` yourself. A failed handshake increments
+`server.acceptErrors` and reaches `onAcceptError`, and does not stop the loop. `listen()`
+with no argument leaves `accept(conn)` to you, which is for the case where a connection must
+be inspected before it is accepted.
+
+A handler receives `ctx.signal`, which fires when the caller aborts. A handler that returns
+promptly can ignore it.
 
 **Rooms are server-authoritative.** A client cannot join by sending anything; only
 `peer.join()` does it, and the client learns membership from a notification. If you want
@@ -227,17 +266,10 @@ live objects. No node may assume it knows a room's full membership.
 An event declaring `yields` instead of `returns` answers with a sequence. Server writes an
 async generator, client consumes an async iterable:
 
-```ts standalone
-import { Client, createServer, defineContract, type MapOf, type$ } from 'transport-io'
+```ts
+import type { Server } from 'transport-io'
 
-export const c = defineContract({
-  ask: { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
-})
-export interface AskMap extends MapOf<typeof c> {}
-
-export async function serveAsk(): Promise<void> {
-  const server = createServer<AskMap>({ contract: c })
-  await server.listen()
+export async function serveAsk(server: Server): Promise<void> {
   server.handle('ask', async function* ({ prompt }) {
     for (const word of prompt.split(' ')) {
       yield word
@@ -245,13 +277,17 @@ export async function serveAsk(): Promise<void> {
   })
 }
 
-export async function consume(client: Client<AskMap>): Promise<string[]> {
+export async function consume(client: Client): Promise<string[]> {
   const out: string[] = []
   for await (const token of client.stream('ask', { prompt: 'a b c' })) {
     out.push(token)
     if (out.length === 2) break
   }
   return out
+}
+
+export async function consumeWithHelpers(client: Client): Promise<string[]> {
+  return await client.stream('ask', { prompt: 'a b c' }).take(2).toArray()
 }
 ```
 
@@ -260,8 +296,11 @@ Rules:
 - `yields` and `returns` are mutually exclusive. `call()` on a `yields` event throws and
   names `stream()`. `stream()` on a `returns` event throws and names `call()`.
 - Leaving the loop cancels. `break` resets the QUIC stream, fires the handler's `ctx.signal`
-  and runs any `finally` in the generator. There is no `.cancel()` method. Passing
-  `{ signal }` does the same from outside the loop.
+  and runs any `finally` in the generator. Passing `{ signal }` or calling `.cancel()` does
+  the same from outside the loop.
+- A generator does not need `ctx.signal.throwIfAborted()` in its loop: the responder checks
+  before asking for the next value. Use it only for long work *between* yields, where nothing
+  else can interrupt.
 - Helpers: `.take(n)`, `.forEach(fn)`, `.toArray()`, `.cancel()`. `take` closes the stream at
   its limit, `forEach` awaits the callback before pulling the next element, `toArray` rejects
   on a mid-stream error and discards the partial, `cancel` stops from outside the loop and
