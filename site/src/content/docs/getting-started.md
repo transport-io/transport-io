@@ -51,7 +51,10 @@ the contract pinned in the project's hover gate and are re-measured on every CI 
 ```ts
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'
-import { contract, type AppMap } from './contract.ts'
+
+// From your own configuration: see "The certificate" below.
+declare const cert: string
+declare const privKey: string
 
 const server = createServer<AppMap>({ contract })
 await server.listen()
@@ -74,7 +77,11 @@ Rooms are server-authoritative. A client cannot join by sending a frame, which i
 ```ts
 import { Client } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
-import { contract, type AppMap } from './contract.ts'
+
+// The SHA-256 of your certificate's DER bytes, and your own render functions.
+declare const certificateHash: Uint8Array
+declare function render(from: string, body: string): void
+declare function moveDot(x: number, y: number): void
 
 const client = new Client<AppMap>({
   contract,

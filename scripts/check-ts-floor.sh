@@ -63,6 +63,7 @@ cat > tsconfig.json <<'JSON'
 }
 JSON
 sed 's/"ok.ts"/"bad.ts"/' tsconfig.json > tsconfig.bad.json
+sed 's/"ok.ts"/"surface.ts"/' tsconfig.json > tsconfig.surface.json
 sed -e 's/"esnext"/"node16"/' -e 's/"bundler"/"node16"/' tsconfig.json > tsconfig.node16.json
 
 cat > ok.ts <<'TS'
@@ -113,12 +114,17 @@ declare const client: Client<AppMap>
 client.emit('nope', { body: 'x' })
 TS
 
+# Every published export, referenced. Generated from the tarball's own declarations rather
+# than hand-listed: the probe above exercises the surface a user meets first, and this makes
+# sure nothing ships that cannot be named or used at the floor version.
+node "$ROOT/scripts/exported-surface.ts" "$DIR/node_modules/transport-io/dist/index.d.ts" > surface.ts
+
 TSC="$DIR/node_modules/typescript/bin/tsc"
 echo "ts floor: $("$TSC" --version), package $TARBALL"
 
-for cfg in tsconfig.json tsconfig.node16.json; do
+for cfg in tsconfig.json tsconfig.node16.json tsconfig.surface.json; do
   "$TSC" -p "$cfg"
-  echo "ts floor: the published surface compiles at $FLOOR under $(sed -n 's/.*"moduleResolution": "\([a-z0-9]*\)".*/\1/p' "$cfg") resolution"
+  echo "ts floor: ${cfg} compiles at $FLOOR under $(sed -n 's/.*"moduleResolution": "\([a-z0-9]*\)".*/\1/p' "$cfg") resolution"
 done
 
 # Every shipped declaration must be reachable from the public entry points, or it is not

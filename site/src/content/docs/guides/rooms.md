@@ -7,6 +7,24 @@ A room is a name. Peers join it, the server broadcasts to it, and nothing else a
 persistent.
 
 ```ts
+import { createServer, defineContract, type MapOf, TransportError, type$ } from 'transport-io'
+
+const contract = defineContract({
+  chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+  cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },
+  subscribe: {
+    lane: 'reliable',
+    payload: type$<{ room: string }>(),
+    returns: type$<{ joined: boolean }>(),
+  },
+})
+interface AppMap extends MapOf<typeof contract> {}
+
+declare const server: ReturnType<typeof createServer<AppMap>>
+declare const client: import('transport-io').Client<AppMap>
+declare function allowed(room: string): boolean
+declare function resubscribe(): Promise<void>
+
 server.onSession((peer) => {
   void peer.join('lobby')
   peer.on('chat', (msg) => void server.to('lobby').emit('chat', msg))
@@ -24,10 +42,14 @@ client-initiated subscription implements it as a `call()`, which is already the 
 you can check something before saying yes:
 
 ```ts
-server.handle('subscribe', async ({ room }, ctx) => {
-  if (!allowed(room)) throw new TransportError('WT_ROOM_NOT_JOINED', 'not yours', 'Ask an admin.')
-  await peer.join(room)
-  return { joined: true }
+server.onSession((peer) => {
+  server.handle('subscribe', async ({ room }) => {
+    if (!allowed(room)) {
+      throw new TransportError('WT_ROOM_NOT_JOINED', 'not yours', 'Ask an admin.')
+    }
+    await peer.join(room)
+    return { joined: true }
+  })
 })
 ```
 
@@ -38,6 +60,10 @@ request one.
 ## Broadcasting
 
 ```ts
+declare const msg: { body: string }
+declare const pos: { x: number; y: number }
+declare const peer: { id: string }
+
 server.to('lobby').emit('chat', msg)                    // everyone in the room
 server.to('lobby').except(peer.id).emit('cursor', pos)  // everyone but the sender
 ```

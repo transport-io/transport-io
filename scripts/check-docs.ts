@@ -111,7 +111,17 @@ let fileCount = 0
 // AGENTS.md was exempt from this gate entirely - four `ts` blocks that no tool had ever
 // compiled, in the document whose whole purpose is to be read and copied by a machine.
 /** Documents whose TypeScript blocks are compiled. */
-const COMPILED_DOCS = ['API.md', 'README.md', 'AGENTS.md'] as const
+const COMPILED_DOCS = [
+  'API.md',
+  'README.md',
+  'AGENTS.md',
+  'site/src/content/docs/index.mdx',
+  'site/src/content/docs/getting-started.md',
+  'site/src/content/docs/guides/lanes.md',
+  'site/src/content/docs/guides/rooms.md',
+  'site/src/content/docs/guides/call-and-stream.md',
+  'site/src/content/docs/guides/backpressure.md',
+] as const
 
 /**
  * Documents allowed to contain a ```ts block without it being compiled.
@@ -124,20 +134,13 @@ const UNCOMPILED_DOCS: Readonly<Record<string, string>> = {
   'CLAUDE.md': 'instructions to an agent, quoting the pattern rather than demonstrating it',
   'DECISIONS.md': 'a ledger, whose snippets are historical and may not compile today',
   'ADR/0012-streaming-responses.md': 'a record, quoting the API as it was decided',
-  'site/src/content/docs/index.mdx': 'site prose; see the note below',
-  'site/src/content/docs/getting-started.md': 'site prose; see the note below',
-  'site/src/content/docs/guides/lanes.md': 'site prose; see the note below',
-  'site/src/content/docs/guides/rooms.md': 'site prose; see the note below',
-  'site/src/content/docs/guides/call-and-stream.md': 'site prose; see the note below',
-  'site/src/content/docs/guides/backpressure.md': 'site prose; see the note below',
 }
 
 /**
- * The site's own snippets are NOT compiled, and that is a known gap rather than a decision
- * anyone should be comfortable with. They are illustrative fragments referencing symbols
- * declared elsewhere on the page, so compiling them needs the same `standalone` treatment
- * the README's blocks got. Recorded here rather than left implicit: an exemption with a
- * reason can be argued with, an unlisted document cannot.
+ * The site's snippets are compiled too, and they are the ones that matter most: the site is
+ * where a reader copies from now, and sixteen samples on it had never been near a compiler.
+ * They were exempted with a reason when the inversion landed, which was honest and still
+ * wrong - an exemption is a debt, not a decision.
  */
 for (const doc of COMPILED_DOCS) {
   const blocks = extractBlocks(doc)

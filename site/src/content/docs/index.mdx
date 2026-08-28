@@ -27,6 +27,18 @@ nothing for one to do.
 <CardGrid>
 <Card title="Client">
 ```ts
+import { Client, defineContract, type MapOf, type$ } from 'transport-io'
+
+const contract = defineContract({
+  ask: { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
+})
+interface AppMap extends MapOf<typeof contract> {}
+
+declare const client: Client<AppMap>
+declare const prompt: string
+declare const stop: boolean
+declare function render(token: string): void
+
 for await (const token of client.stream('ask', { prompt })) {
   render(token)
   if (stop) break
@@ -35,6 +47,11 @@ for await (const token of client.stream('ask', { prompt })) {
 </Card>
 <Card title="Server">
 ```ts
+import { createServer } from 'transport-io'
+
+declare const server: ReturnType<typeof createServer<AppMap>>
+declare function model(text: string): AsyncIterable<string>
+
 server.handle('ask', async function* ({ prompt }, ctx) {
   for await (const token of model(prompt)) {
     ctx.signal.throwIfAborted()
@@ -56,7 +73,9 @@ and stops one of them without the other noticing.
 
 ## Reliability is a property of your data
 
-```ts
+```ts standalone
+import { defineContract, type MapOf, type$ } from 'transport-io'
+
 export const contract = defineContract({
   chat:   { lane: 'reliable',   payload: type$<{ body: string }>() },
   cursor: { lane: 'unreliable', payload: type$<{ x: number; y: number }>() },

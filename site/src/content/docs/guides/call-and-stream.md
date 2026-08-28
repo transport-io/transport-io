@@ -8,10 +8,21 @@ declares `yields` is **streamed** and answers with a sequence. They are mutually
 and the choice lives in the contract.
 
 ```ts
+import { Client, createServer, defineContract, type MapOf, type$ } from 'transport-io'
+
 export const contract = defineContract({
   save: { lane: 'reliable', payload: type$<{ text: string }>(), returns: type$<{ n: number }>() },
   ask:  { lane: 'reliable', payload: type$<{ prompt: string }>(), yields: type$<string>() },
 })
+export interface AppMap extends MapOf<typeof contract> {}
+
+declare const client: Client<AppMap>
+declare const server: ReturnType<typeof createServer<AppMap>>
+declare function model(text: string): AsyncIterable<string>
+// Shadows the DOM's `prompt()`, which is what a reader's own variable does too.
+declare const prompt: string
+declare const userStopped: boolean
+declare function render(token: string): void
 ```
 
 `call('ask', …)` does not compile and neither does `stream('save', …)`. At runtime both are
