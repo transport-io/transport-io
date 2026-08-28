@@ -146,8 +146,11 @@ type IsUnknown<T> = IsAny<T> extends true ? false : unknown extends T ? true : f
  * rather than at `emit()` because this is where the mistake is, and where someone is
  * looking when they make it.
  *
- * Taken as the parameter type rather than intersected with `C`: the intersection produces a
- * three-line error repeating the object type, this produces one line.
+ * Intersected with `C` rather than taken alone, which costs error quality and buys the
+ * TypeScript 5.0 floor. Alone it produces a one-line error, and on 5.0 it stops inferring
+ * `returns` out of the contract: `CallableOf` collapses to `never` and every `handle()` in
+ * a consumer's project fails with `event: never`. The floor gate caught it. The intersection
+ * repeats the object type before naming the event, so the useful line is the last one.
  */
 export type CheckPayloads<C extends Contract> = {
   [K in keyof C]: IsUnknown<Infer<C[K]['payload']>> extends true
@@ -155,7 +158,7 @@ export type CheckPayloads<C extends Contract> = {
     : C[K]
 }
 
-export function defineContract<const C extends Contract>(contract: CheckPayloads<C>): C {
+export function defineContract<const C extends Contract>(contract: C & CheckPayloads<C>): C {
   return contract as unknown as C
 }
 
