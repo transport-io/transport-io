@@ -8,18 +8,17 @@
 Real-time apps over WebTransport. Socket.IO's shape, on a transport with multiple streams
 and datagrams, without Socket.IO's mistakes.
 
-Framing, length prefixes, buffer accumulation and stream lifecycle are hidden. Reliability is
-not: an event declares `reliable` or `unreliable` in the contract, and "this message may be
-dropped" is a property of your data that lives in the type system. The reliable lane is
-carried on QUIC streams, the unreliable lane on QUIC datagrams.
+Framing, length prefixes, buffer accumulation and stream lifecycle are handled for you. An
+event declares `reliable` or `unreliable` in the contract, so "this message may be dropped"
+is visible in the type system. The reliable lane is carried on QUIC streams, the unreliable
+lane on QUIC datagrams.
 
-A request answers with a value or with a **sequence**. `call()` awaits one result;
-`stream()` gives an async iterable, and `break` resets the QUIC stream so the server
-generator's `finally` runs. Cancellation costs no extra API.
+A request answers with a value or with a sequence. `call()` awaits one result. `stream()`
+returns an async iterable, and leaving the loop resets the QUIC stream so the server
+generator's `finally` runs.
 
 **Read [KNOWN-ISSUES.md](https://github.com/transport-io/transport-io/blob/main/KNOWN-ISSUES.md)
-before you start.** It is what this library refuses to do and will not change, plus the one
-measured defect. Full documentation is in the
+before you start.** It lists what this library will not do, and the one measured defect. Full documentation is in the
 [repository README](https://github.com/transport-io/transport-io#readme). The short version:
 
 - **WebTransport only.** No WebSocket fallback, deliberately - a fallback would silently

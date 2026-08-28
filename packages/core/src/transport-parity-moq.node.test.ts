@@ -11,7 +11,7 @@ import { randomPort, runParity } from './transport/parity-suite.ts'
 // This comment used to be stacked on top of an earlier, stale one that ended "un-skip when
 // that is understood". It *is* understood, and following that instruction would hang the
 // required integration job for its full timeout on every pull request. A skip reason that
-// outlives its own investigation is worse than none: it invites exactly the wrong action.
+// outlives its own investigation invites the wrong action.
 //
 // Root-caused, not guessed. Minimal reproduction with no transport-io involved, kept at
 // bench/moq-close-deadlock.node.ts:

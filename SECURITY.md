@@ -14,7 +14,7 @@ version receives fixes. There are no backports.
 
 Use GitHub's private vulnerability reporting on this repository:
 **Security > Report a vulnerability**. That opens a private advisory visible only to the
-maintainers, which is the right channel for anything exploitable.
+maintainers. Use it for anything exploitable.
 
 Please do not open a public issue for a vulnerability. Do open a public issue for the
 limitations listed below, which are documented rather than secret.
@@ -25,8 +25,8 @@ than a patch.
 
 ## What this library does not protect you from
 
-These are deliberate, not vulnerabilities. They are here so you can see them before you
-depend on the library, instead of finding them later.
+These are deliberate design positions rather than vulnerabilities. They are listed here so
+you can see them before depending on the library.
 
 **It authenticates nothing.** `Connection` exposes no headers, no URL, no peer address and
 no identity, and `ServerOptions` has no reject hook. The only control an application has is

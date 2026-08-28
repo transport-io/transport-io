@@ -8,12 +8,10 @@
 Real-time apps over WebTransport. Socket.IO's shape, on a transport with multiple streams
 and datagrams, without Socket.IO's mistakes.
 
-**Hide the mechanism, expose the guarantee.** Framing, length prefixes, buffer
-accumulation and stream lifecycle are hidden - nobody should ever write framing code.
-Bounds are not hidden: a streaming responder runs at most 32 frames ahead of its consumer,
-and that number is documented because you can hit it. Reliability semantics are always visible: "this message may be
-dropped" is a property of your data, not an implementation detail, and it lives in the
-type system.
+Framing, length prefixes, buffer accumulation and stream lifecycle are handled for you.
+Bounds are documented rather than hidden: a streaming responder runs at most 32 frames ahead
+of its consumer, and an application can reach that limit. Reliability is declared in the
+contract, so "this message may be dropped" is visible in the type system.
 
 ```ts
 import { defineContract } from 'transport-io'
@@ -25,12 +23,10 @@ export const teaser = defineContract({
 })
 ```
 
-`chat` will arrive. `cursor` may not. The contract is the only place that says so, and
-both sides infer from it.
+`chat` will arrive. `cursor` may not. The contract is the only place that says so, and both
+sides infer from it.
 
-The lane names the guarantee, not the machinery: the **reliable** lane is carried on QUIC
-streams, the **unreliable** lane on QUIC datagrams. You write down what your data needs and
-the library picks the mechanism.
+The reliable lane is carried on QUIC streams and the unreliable lane on QUIC datagrams.
 
 ## Install
 
@@ -166,37 +162,31 @@ export async function render(client: Client<GenMap>, prompt: string): Promise<st
 generator does not resume until its frame is accepted, and the producer may be at most 32
 frames ahead of what the consumer has taken.
 
-A wrong event name or payload fails to compile, and the error names the event rather than
+A wrong event name or payload fails to compile. The error names the event instead of
 unrolling the contract type.
 
 ## What is different
 
-**Acknowledgements are streams, not bookkeeping.** Each `call` opens its own bidirectional
-stream: write the request, half-close to end it, read until the peer closes. The stream
-*is* the correlation, so there are no acknowledgement identifiers, no pending-callback map
-and no timeout tracking - and a stalled call cannot block another one. Cancellation is a
-QUIC stream reset: immediate, costing no application message, and the responder's signal
-fires without the client sending anything.
+**Acknowledgements are streams.** Each `call` opens its own bidirectional stream: write the
+request, half-close to end it, read until the peer closes. The stream is the correlation, so
+there are no acknowledgement identifiers, no pending-callback map and no timeout tracking. A
+stalled call does not block other calls. Cancellation is a QUIC stream reset, which costs no
+application message and reaches the responder's signal without the client sending anything.
 
-**Responses can be sequences, and cancelling one is `break`.** An event declaring `yields`
-answers with an async iterable instead of a value. Leaving the loop resets the QUIC stream,
-which fires the handler's `ctx.signal` and runs its `finally`; there is no cancel method
-because there is nothing for one to do. The producer runs at most 32 frames ahead of what
-the consumer has taken, accounted for by this library rather than assumed of the transport.
+**Responses can be sequences.** An event declaring `yields` answers with an async iterable
+instead of a value. Leaving the loop resets the QUIC stream, which fires the handler's
+`ctx.signal` and runs its `finally`. The producer runs at most 32 frames ahead of what the
+consumer has taken. That bound is this library's own accounting, not the transport's.
 
-**No default call timeout.** A dead peer is detected by the QUIC idle timeout, which
-rejects every pending call - the case a timeout is usually reached for is already handled.
-Pass `AbortSignal.timeout(ms)` when you want one.
+**No default call timeout.** A dead peer is detected by the QUIC idle timeout, which rejects
+every pending call. Pass `AbortSignal.timeout(ms)` when you want a deadline.
 
 **A documented wire protocol.** [`PROTOCOL.md`](PROTOCOL.md) is written so someone can
-implement an interoperable server in another language without reading this source. Socket.IO's
-real sin was an undocumented protocol only its own client could speak.
+implement an interoperable server in another language without reading this source.
 
-**Batteries included, no infrastructure.** `MemoryAdapter` is the default, so `npm install`
-and run. If you write your own adapter, `transport-io/testing` exports `HostileAdapter`,
-which serialises frames through bytes, adds latency, reorders, duplicates and fails on
-command - because an adapter that only passes against an in-memory map has not been tested
-against anything.
+**No infrastructure required.** `MemoryAdapter` is the default. If you write your own
+adapter, `transport-io/testing` exports `HostileAdapter`, which serialises frames through
+bytes, adds latency, reorders, duplicates and fails on command.
 
 ## Not in this version
 

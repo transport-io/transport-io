@@ -4,8 +4,8 @@
  * D57 says the two-line contract pattern keeps `emit` hover at 126 characters instead of
  * 303, and adds that "the 126-character form is pinned in the type-level test". It is not.
  * `types.test-d.ts` uses the pattern but asserts nothing about hover width, so four
- * documents have been quoting a number nothing checks. That is the D69 defect wearing a
- * decision's clothes: a promise written down, believed, and never wired to anything.
+ * documents have been quoting a number nothing checks. Same defect as D69, in a decision
+ * rather than a document.
  *
  * This wires it up. TypeScript 7.0 has no compiler API until 7.1, but `tsc --lsp --stdio`
  * speaks LSP, and `textDocument/hover` returns exactly the string an editor renders.

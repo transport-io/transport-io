@@ -1,11 +1,10 @@
 ---
 title: call() and stream()
-description: One value or a sequence, decided in the contract and not at the call site.
+description: One value or a sequence, decided in the contract.
 ---
 
-An event that declares `returns` is **called** and answers with one value. An event that
-declares `yields` is **streamed** and answers with a sequence. They are mutually exclusive,
-and the choice lives in the contract.
+An event that declares `returns` is called and answers with one value. An event that
+declares `yields` is streamed and answers with a sequence. An event cannot declare both.
 
 ```ts
 import { Client, createServer, defineContract, type MapOf, type$ } from 'transport-io'
@@ -25,21 +24,13 @@ declare const userStopped: boolean
 declare function render(token: string): void
 ```
 
-`call('ask', …)` does not compile and neither does `stream('save', …)`. At runtime both are
+`call('ask', …)` does not compile, and neither does `stream('save', …)`. At runtime both are
 refused with an error naming the method that would have worked.
 
-## Why the contract and not the call site
-
-This is the question that gets asked, and the answer is on the wire rather than in taste.
-
-A handler that yields nothing closes the stream with **zero response frames**. That is byte
-for byte what a broken `call()` responder produces. Identical bytes, two meanings: a
-protocol error in one shape, a clean empty sequence in the other. The only thing that can
-tell them apart is the contract, which both peers exchange at handshake before any response
-arrives.
-
-A per-call-site choice would leave someone implementing this protocol in another language
-with a case they cannot resolve.
+The shape is fixed in the contract because an empty sequence and a broken response are the
+same bytes on the wire: zero response frames followed by stream close. A receiver decides
+which it is from the event's contract entry, exchanged during the handshake. See ADR 0012
+if you want the full argument.
 
 ## call()
 
@@ -47,13 +38,12 @@ with a case they cannot resolve.
 const { n } = await client.call('save', { text: 'hello' })
 ```
 
-Each call opens its own bidirectional stream, so the stream **is** the correlation: no
-identifiers, no pending-callback map, no timer per request. A stalled call cannot block
-another one.
+Each call opens its own bidirectional stream. The stream is the correlation, so there are no
+request identifiers, no pending-callback map and no timer per request. A stalled call does
+not block other calls.
 
-**There is no default timeout.** A dead peer is detected by the QUIC idle timeout, which
-rejects every pending call, so the case a timeout is usually reached for is already handled.
-When you want a deadline, say so:
+There is no default timeout. A dead peer is detected by the QUIC idle timeout, which rejects
+every pending call. Pass a signal when you want a deadline:
 
 ```ts
 await client.call('save', { text: 'hi' }, { signal: AbortSignal.timeout(5_000) })
@@ -77,13 +67,12 @@ server.handle('ask', async function* ({ prompt }, ctx) {
 })
 ```
 
-**`break` is the cancel.** Leaving the loop calls the iterator's `return()`, which resets the
-QUIC stream, which arrives at the responder as STOP_SENDING, which fires `ctx.signal` and
-runs the generator's own `finally`. There is no `.cancel()` because there is nothing for one
-to do. An `AbortSignal` does the same thing from outside the loop, which is what a React
-effect cleanup will call.
+Leaving the loop cancels the stream. `break` calls the iterator's `return()`, which resets
+the QUIC stream. The responder sees STOP_SENDING. Its `ctx.signal` fires and any `finally`
+in the generator runs. Passing an `AbortSignal` to `stream()` has the same effect from
+outside the loop, which is what a React effect cleanup would use.
 
-`collect()` takes the whole sequence when you do not want a loop:
+`collect()` returns the whole sequence as an array:
 
 ```ts
 const tokens = await client.stream('ask', { prompt }).collect()
@@ -91,19 +80,17 @@ const tokens = await client.stream('ask', { prompt }).collect()
 
 ## Errors partway through
 
-The consumer already has elements when the handler throws. Those elements stay delivered:
-the loop yields what arrived and then throws. You cannot un-yield.
+When a handler throws after yielding some elements, the consumer keeps those elements. The
+loop yields what arrived, then throws.
 
-`collect()` **rejects** rather than resolving with the partial, because a partial array
-returned as if it were the whole answer is worse than an error. If you want what arrived
-before the failure, use the loop, which is the API that can express it.
+`collect()` rejects and discards the partial result. Use the loop if you need what arrived
+before the failure.
 
-## The budget
+## Concurrency
 
-A session allows **256 concurrent streams**, shared by `call()` and `stream()`. The 257th is
-refused with `WT_TOO_MANY_STREAMS` and the session stays up.
+A session allows 256 concurrent streams, shared by `call()` and `stream()`. The 257th is
+refused with `WT_TOO_MANY_STREAMS`, and the session stays open.
 
-The unit changed meaning when `stream()` arrived. A call holds its slot for a round trip; a
-stream holds one for as long as it runs. Ten concurrent generations occupy ten slots for
-minutes at a time, which is fine and well inside the cap. Ten thousand is not, and the
-failure is a clean refusal rather than a degradation.
+A call holds its slot for a round trip. A stream holds one for as long as it runs, so ten
+concurrent generations occupy ten slots for however many minutes they take. Ten thousand
+concurrent streams on one session will be refused.

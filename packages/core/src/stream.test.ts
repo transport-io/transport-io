@@ -423,7 +423,7 @@ describe('a producer with no credit', () => {
     await Promise.all([server.accept(serverSide), client.connect()])
 
     // One element, then stop asking. The consumer is slow, not gone, and there is no way
-    // for the responder to tell those apart - which is the point: it waits.
+    // for the responder to tell those apart, so it waits.
     const it = client.stream('ask', { prompt: 'x' })[Symbol.asyncIterator]()
     await it.next()
     await new Promise((r) => setTimeout(r, 150))

@@ -35,9 +35,9 @@ export type CallHandler = (
 ) => Promise<unknown>
 
 /**
- * A responder for an event declaring `yields`. The generator shape is the design: the loop
- * cannot advance until the body returns and `yield` does not resume until the write is
- * accepted, so flow control is the language's rather than a queue we would have to bound.
+ * A responder for an event declaring `yields`. The generator's `next()` is what the credit
+ * scheme counts: the consumer asking for another element is what refills the window. The
+ * transport does not provide the bound, so this library keeps it (D93).
  */
 export type StreamHandler = (
   payload: unknown,
@@ -133,10 +133,9 @@ export class Session {
   readonly #callHandlers = new Map<string, CallHandler | StreamHandler>()
   /**
    * Every inbound call or stream currently being served. A streaming responder parked for
-   * credit is waiting on a peer that may never come back, and nothing in the credit scheme
-   * can tell "slow" from "gone" - that is what session liveness is for. Without this, a
-   * parked generator outlives its session, holding a stream slot and whatever the handler
-   * had open. Measured: it did.
+   * credit waits on a peer that may never return, and the credit scheme cannot distinguish
+   * a slow consumer from a departed one. Session liveness does. Without this set, a parked
+   * generator outlived its session and held a stream slot open.
    */
   readonly #inflight = new Set<AbortController>()
   #openCalls = 0
@@ -879,8 +878,8 @@ export class Session {
    * frame overhead once per batch instead of once per element.
    *
    * `writer.ready` before every write is where the bound lives. If it resolves
-   * unconditionally the language is not holding anything back and this is a lie, which is
-   * why the number is measured rather than asserted (D77).
+   * unconditionally, nothing is held back and the bound is not real. The number is
+   * measured rather than asserted (D77).
    */
   async #serveStream(
     handler: StreamHandler,

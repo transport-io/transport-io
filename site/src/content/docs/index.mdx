@@ -18,11 +18,10 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components'
 
-## Concurrent streaming, with cancellation that actually lands
+## Streaming responses
 
-One side yields, the other consumes. `break` resets the QUIC stream, which fires the
-handler's `ctx.signal` and runs its `finally`. There is no cancel method because there is
-nothing for one to do.
+The server yields, the client consumes. Leaving the loop resets the QUIC stream. The
+handler's `ctx.signal` fires and its `finally` runs.
 
 <CardGrid>
 <Card title="Client">
@@ -62,16 +61,15 @@ server.handle('ask', async function* ({ prompt }, ctx) {
 </Card>
 </CardGrid>
 
-Each `stream()` and each `call()` owns its own QUIC stream, so a stalled one blocks nothing
-else. That is the property, and it is the reason the demo below runs two generations at once
-and stops one of them without the other noticing.
+Each `stream()` and each `call()` owns its own QUIC stream, so a stalled one does not block
+the others. The recording below runs two generations at once and stops one of them.
 
 <div class="tio-demo-slot">
   <p><strong>Recording goes here.</strong> There is no live demo on this page, and there will
   not be a fake one: the server needs raw UDP ingress, which GitHub Pages does not have.</p>
 </div>
 
-## Reliability is a property of your data
+## The contract declares reliability
 
 ```ts standalone
 import { defineContract, type MapOf, type$ } from 'transport-io'
@@ -84,14 +82,12 @@ export const contract = defineContract({
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-`chat` arrives. `cursor` may not. `ask` answers with a sequence. The lane names the
-guarantee, not the machinery: the reliable lane is carried on QUIC streams, the unreliable
-lane on QUIC datagrams.
+`chat` arrives. `cursor` may not. `ask` answers with a sequence. The reliable lane is carried
+on QUIC streams and the unreliable lane on QUIC datagrams.
 
-## Before you invest an afternoon
+## Before you start
 
-Every one of these is a property of the library, not a caveat to grow out of. They are here
-rather than three pages deep because finding them later is worse.
+These are properties of the library, not things it will grow out of.
 
 - **Chrome and Firefox only.** Safari establishes a session and then never sends.
 - **No fallback, deliberately.** A WebSocket would make the unreliable lane reliable, which
@@ -111,4 +107,4 @@ second rather than 67,616 on the reference binding. A language model emits on th
 for. Both numbers are measured over localhost.
 </div>
 
-[Read the full list](/limitations/), which is the honest version of this section.
+[Read the full list](/limitations/).

@@ -208,9 +208,8 @@ export async function render(client: Cs<GenMap>): Promise<string[]> {
 
 **`break` is the cancel.** Leaving the loop calls the iterator's `return()`, which resets the
 QUIC stream, which fires the handler's `ctx.signal` and runs any `finally` inside the
-generator. There is no cancel method because there is nothing for one to do. An
-`AbortSignal` option does the same thing from outside the loop, which is what a React effect
-cleanup will call:
+generator. An `AbortSignal` option does the same from outside the loop, which is what a
+React effect cleanup would use:
 
 ```ts
 export async function withDeadline(client: Cs<GenMap>): Promise<number> {
@@ -235,20 +234,20 @@ array returned as if it were the whole answer is worse than an error.
 
 **Backpressure is accounted for, not assumed.** The generator does not resume until its
 frame has been accepted, and the responder may be at most **32 frames** ahead of what the
-consumer has taken. That window is this library's own accounting rather than the
-transport's: measured on the reference binding, a `WritableStreamDefaultWriter`'s `ready`
+consumer has taken. That window is this library's own accounting, not the transport's: measured on the reference binding, a `WritableStreamDefaultWriter`'s `ready`
 resolves unconditionally, and without the window a producer ran 136,523 frames and roughly
 53 MB ahead of a consumer that had taken 40. See ADR 0012.
 
-`yields` and `returns` are mutually exclusive, and the choice is in the contract rather than
-at the call site. `call()` on a streaming event refuses and names `stream()`; `stream()` on a
-call event refuses and names `call()`. The reason is not symmetry: a handler that yields
-nothing closes the stream with zero response frames, which is byte for byte what a broken
-`call()` responder produces, so only the contract can tell an empty sequence from a fault.
+`yields` and `returns` are mutually exclusive, and the choice is made in the contract.
+`call()` on a streaming event refuses and names `stream()`. `stream()` on a call event
+refuses and names `call()`.
 
-A streaming call holds one of the session's 256 stream slots **for as long as it runs**,
-rather than for a round trip. Ten concurrent generations use ten slots for minutes, which is
-fine; ten thousand is not.
+The shape has to be fixed in the contract because a handler that yields nothing closes the
+stream with zero response frames, which is the same on the wire as a broken `call()`
+responder. The contract is what distinguishes an empty sequence from a fault.
+
+A streaming call holds one of the session's 256 stream slots for as long as it runs, not for
+a round trip. Ten concurrent generations use ten slots for minutes at a time.
 
 ### 2.4 Observable state
 

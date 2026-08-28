@@ -256,15 +256,15 @@ export async function consume(client: Client<AskMap>): Promise<string[]> {
 }
 ```
 
-Rules that will bite you if you guess:
+Rules:
 
-- `yields` and `returns` are **mutually exclusive**. `call()` on a `yields` event throws and
-  names `stream()`; `stream()` on a `returns` event throws and names `call()`.
-- **`break` is the cancel.** It resets the QUIC stream, fires the handler's `ctx.signal`, and
-  runs any `finally` in the generator. There is no `.cancel()`. `{ signal }` does the same
-  from outside the loop.
-- `.collect()` gives the whole sequence as one array. It **rejects** on a mid-stream error
-  rather than resolving with the partial.
+- `yields` and `returns` are mutually exclusive. `call()` on a `yields` event throws and
+  names `stream()`. `stream()` on a `returns` event throws and names `call()`.
+- Leaving the loop cancels. `break` resets the QUIC stream, fires the handler's `ctx.signal`
+  and runs any `finally` in the generator. There is no `.cancel()` method. Passing
+  `{ signal }` does the same from outside the loop.
+- `.collect()` returns the whole sequence as an array. It rejects on a mid-stream error and
+  discards the partial result.
 - An error partway through delivers the elements that preceded it, then throws. Elements are
   never retracted.
 - A yielding handler may run at most **32 frames** ahead of what the consumer has taken. That

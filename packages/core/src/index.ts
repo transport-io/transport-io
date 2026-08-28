@@ -55,7 +55,7 @@ export type { SessionStats, StreamResult } from './session.ts'
 /**
  * Hand-maintained and asserted against `package.json` by `index.test.ts`, because
  * `isolatedDeclarations` forbids inferring it from an import and a version that drifts from
- * its manifest is a lie in the one place a user checks first.
+ * its manifest misreports the version in the first place a user looks.
  *
  * `changeset version` moves the manifest, so this moves in the same commit - which the test
  * enforces rather than trusting anyone to remember.

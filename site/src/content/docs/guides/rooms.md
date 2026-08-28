@@ -3,8 +3,8 @@ title: Rooms
 description: Server-authoritative membership, and what a reconnect does to it.
 ---
 
-A room is a name. Peers join it, the server broadcasts to it, and nothing else about it is
-persistent.
+A room is a name. Peers join it and the server broadcasts to it. Nothing about a room is
+persisted.
 
 ```ts
 import { createServer, defineContract, type MapOf, TransportError, type$ } from 'transport-io'
@@ -36,10 +36,9 @@ server.onSession((peer) => {
 A client cannot join a room by sending a frame. There is no `client.join()`, and a
 client-sent `JOIN` is a protocol error.
 
-This is not an oversight. Room membership is an authorisation decision, and the only place
-that can make it is the side that knows who the peer is. An application that wants
-client-initiated subscription implements it as a `call()`, which is already the path where
-you can check something before saying yes:
+Room membership is an authorisation decision, and only the server knows who the peer is. If
+you want client-initiated subscription, implement it as a `call()` and check the request
+before joining:
 
 ```ts
 server.onSession((peer) => {
@@ -53,9 +52,9 @@ server.onSession((peer) => {
 })
 ```
 
-Clients still learn their own membership: the server sends `JOIN` and `LEAVE` frames so
-`client.getSnapshot().rooms` stays accurate. Those frames report a decision, they do not
-request one.
+Clients still learn their own membership. The server sends `JOIN` and `LEAVE` frames to keep
+`client.getSnapshot().rooms` accurate. Those frames report a decision the server has already
+made.
 
 ## Broadcasting
 
@@ -68,22 +67,18 @@ server.to('lobby').emit('chat', msg)                    // everyone in the room
 server.to('lobby').except(peer.id).emit('cursor', pos)  // everyone but the sender
 ```
 
-`except` matters more than it looks on the unreliable lane. You already know where your own
-pointer is, so echoing it back is pure waste on a lane where every frame competes with a
-fresher one.
+`except` is worth using on the unreliable lane. Echoing a peer's own cursor position back to
+it wastes bandwidth that a fresher frame could use.
 
 ## A reconnect is a new session
 
-**Room membership does not survive a reconnect.** Neither do pending calls, which reject.
+Room membership does not survive a reconnect. Pending calls reject.
 
-This is deliberate and it is the one piece of lifecycle you have to write yourself. The
-alternative is a library that silently re-joins rooms on your behalf, and it cannot know
-whether that is safe: whether the authorisation still holds, whether a call it retried was
-already executed on the far side. Whether a request completed before the connection dropped
-is unknowable from the client, and pretending otherwise means silently risking duplicate
-execution.
+Rejoining is your code, not the library's. Automatic rejoin would have to assume the
+authorisation still holds, and automatic retry would have to assume the original call did
+not execute before the connection dropped. The client cannot know either.
 
-So the primitive and the hook are yours:
+The hook you need:
 
 ```ts
 client.subscribe(() => {
@@ -98,6 +93,5 @@ client.subscribe(() => {
 process, implement the `Adapter` interface: frames cross it as bytes, never live objects,
 and every method is async.
 
-Test yours against `HostileAdapter` from `transport-io/testing`, which serialises through
-bytes, adds latency, reorders, duplicates and fails on command. An adapter that only passes
-against an in-memory map has not been tested against anything.
+Test yours against `HostileAdapter` from `transport-io/testing`. It serialises through
+bytes, adds latency, reorders, duplicates and fails on command.

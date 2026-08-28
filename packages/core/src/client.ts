@@ -161,7 +161,7 @@ export class Client<M extends AnyMap = AnyMap> {
 
       // Chrome implements neither `requireUnreliable` nor `reliability`, so `undefined`
       // must pass or every session on the dominant browser would be refused. Only an
-      // explicit reliable-only is a lie about the unreliable lane.
+      // explicit reliable-only would misreport what the unreliable lane does.
       if (conn.reliability() === 'reliable-only') {
         // §10.2 code 1006. Throwing without closing left the peer holding a session this
         // side had already abandoned, with nothing on the wire to say why.
