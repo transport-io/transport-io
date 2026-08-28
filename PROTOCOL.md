@@ -250,7 +250,7 @@ frame boundaries.
 <!-- norm: reserved-field-zero -> packages/core/src/framer.test.ts -->
 | Event ID | 4 | §5.4 |
 | **Fixed overhead** | **12** | 4 length + 8 header |
-| Payload | 1 to 1 048 576 | |
+| Payload | 1 to 1 048 576 | 1 to 16 777 216 on the call frames; see the caps below |
 
 `Length` MUST be at least **9** - eight header bytes plus at least one payload byte.
 <!-- norm: length-minimum-nine -> packages/core/src/framer.test.ts -->
@@ -262,9 +262,11 @@ halts on a zero-length application write. Receivers MUST reject such a frame rat
 <!-- norm: zero-length-payload-rejected -> packages/core/src/framer.test.ts -->
 forward it.
 
-`Length` exceeding `1048584` (1 MiB payload plus the 8 header bytes it counts) is a
-protocol error. `Length` counts only bytes *after* itself, so the four bytes of the Length
-field are not included - the same convention its minimum of 9 already reflects.
+On every frame type except the call frames, `Length` exceeding `1048584` (1 MiB payload plus
+the 8 header bytes it counts) is a protocol error. `Length` counts only bytes *after* itself,
+so the four bytes of the Length field are not included - the same convention its minimum of 9
+already reflects. The call frames carry a larger cap, stated immediately below; read both
+before implementing either.
 
 The 16 MiB cap applies to the **call frames** - `CALL_REQUEST`, `CALL_RESPONSE` and
 `CALL_ERROR` - because a call is the documented home for payloads too large to emit and
