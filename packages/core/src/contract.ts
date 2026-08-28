@@ -87,8 +87,112 @@ export type StreamableOf<M extends AnyMap> = {
   [K in keyof M]: [M[K]['yields']] extends [never] ? never : K
 }[keyof M]
 
-export function defineContract<const C extends Contract>(contract: C): C {
-  return contract
+/**
+ * `unknown` and `any` both satisfy `unknown extends T`, so the `any` check runs first. An
+ * event whose payload is deliberately untyped writes `any` and says so at the call site.
+ */
+type IsAny<T> = 0 extends 1 & T ? true : false
+type IsUnknown<T> = IsAny<T> extends true ? false : unknown extends T ? true : false
+
+/**
+ * Replaces any event whose payload infers `unknown` with a sentence, so the error lands on
+ * the offending property inside the contract literal and names the event.
+ *
+ * `reliable()` with no type argument and no schema infers `unknown`, which would otherwise
+ * compile and accept anything for the rest of the application's life. The check lives here
+ * rather than at `emit()` because this is where the mistake is, and where someone is
+ * looking when they make it.
+ *
+ * Taken as the parameter type rather than intersected with `C`: the intersection produces a
+ * three-line error repeating the object type, this produces one line.
+ */
+export type CheckPayloads<C extends Contract> = {
+  [K in keyof C]: IsUnknown<Infer<C[K]['payload']>> extends true
+    ? `event '${K & string}' has an unknown payload: pass a type argument or a schema`
+    : C[K]
+}
+
+export function defineContract<const C extends Contract>(contract: CheckPayloads<C>): C {
+  return contract as unknown as C
+}
+
+/**
+ * Sugar over the object literal. The literal keeps working, and anything generating a
+ * contract programmatically needs it, so these add nothing the literal cannot express.
+ *
+ * Each takes either a type argument or a Standard Schema, because validation is
+ * bring-your-own and must not become second class. `id` is reached by spreading:
+ * `{ ...reliable<T>(), id: 0x31e06f7d }`.
+ *
+ * `rpc` and `streaming` are reliable by construction. An unreliable event has no response
+ * path, so the lane is not a parameter and the combination stops being expressible.
+ */
+export function reliable<T>(): {
+  readonly lane: 'reliable'
+  readonly payload: StandardSchemaV1<unknown, T>
+}
+export function reliable<S extends Schema>(
+  schema: S,
+): { readonly lane: 'reliable'; readonly payload: S }
+export function reliable(schema?: Schema): {
+  readonly lane: 'reliable'
+  readonly payload: Schema
+} {
+  return { lane: 'reliable', payload: schema ?? type$<unknown>() }
+}
+
+export function unreliable<T>(): {
+  readonly lane: 'unreliable'
+  readonly payload: StandardSchemaV1<unknown, T>
+}
+export function unreliable<S extends Schema>(
+  schema: S,
+): { readonly lane: 'unreliable'; readonly payload: S }
+export function unreliable(schema?: Schema): {
+  readonly lane: 'unreliable'
+  readonly payload: Schema
+} {
+  return { lane: 'unreliable', payload: schema ?? type$<unknown>() }
+}
+
+export function rpc<P, R>(): {
+  readonly lane: 'reliable'
+  readonly payload: StandardSchemaV1<unknown, P>
+  readonly returns: StandardSchemaV1<unknown, R>
+}
+export function rpc<P extends Schema, R extends Schema>(
+  payload: P,
+  returns: R,
+): { readonly lane: 'reliable'; readonly payload: P; readonly returns: R }
+export function rpc(
+  payload?: Schema,
+  returns?: Schema,
+): { readonly lane: 'reliable'; readonly payload: Schema; readonly returns: Schema } {
+  return {
+    lane: 'reliable',
+    payload: payload ?? type$<unknown>(),
+    returns: returns ?? type$<unknown>(),
+  }
+}
+
+export function streaming<P, Y>(): {
+  readonly lane: 'reliable'
+  readonly payload: StandardSchemaV1<unknown, P>
+  readonly yields: StandardSchemaV1<unknown, Y>
+}
+export function streaming<P extends Schema, Y extends Schema>(
+  payload: P,
+  yields: Y,
+): { readonly lane: 'reliable'; readonly payload: P; readonly yields: Y }
+export function streaming(
+  payload?: Schema,
+  yields?: Schema,
+): { readonly lane: 'reliable'; readonly payload: Schema; readonly yields: Schema } {
+  return {
+    lane: 'reliable',
+    payload: payload ?? type$<unknown>(),
+    yields: yields ?? type$<unknown>(),
+  }
 }
 
 /** A types-only schema, for inference without runtime validation. */

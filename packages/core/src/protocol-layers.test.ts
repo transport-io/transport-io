@@ -50,15 +50,15 @@ describe('event identity', () => {
   test('is stable under insertion - the whole reason it is not positional', async () => {
     const before = await buildEventTable(
       defineContract({
-        chat: { lane: 'reliable', payload: type$<unknown>() },
-        cursor: { lane: 'unreliable', payload: type$<unknown>() },
+        chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+        cursor: { lane: 'unreliable', payload: type$<{ body: string }>() },
       }),
     )
     const after = await buildEventTable(
       defineContract({
-        archive: { lane: 'reliable', payload: type$<unknown>() }, // sorts first
-        chat: { lane: 'reliable', payload: type$<unknown>() },
-        cursor: { lane: 'unreliable', payload: type$<unknown>() },
+        archive: { lane: 'reliable', payload: type$<{ body: string }>() }, // sorts first
+        chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+        cursor: { lane: 'unreliable', payload: type$<{ body: string }>() },
       }),
     )
     // Positional ids would have shifted both existing events by one.
@@ -69,8 +69,8 @@ describe('event identity', () => {
   test('a collision is a build-time error naming both events and the fix', async () => {
     const id = await eventIdOf('chat')
     const contract = defineContract({
-      chat: { lane: 'reliable', payload: type$<unknown>() },
-      other: { lane: 'reliable', payload: type$<unknown>(), id },
+      chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+      other: { lane: 'reliable', payload: type$<{ body: string }>(), id },
     })
     try {
       await buildEventTable(contract)
@@ -86,14 +86,14 @@ describe('event identity', () => {
   test('the reserved id 0 is refused', async () => {
     await expect(
       buildEventTable(
-        defineContract({ x: { lane: 'reliable', payload: type$<unknown>(), id: 0 } }),
+        defineContract({ x: { lane: 'reliable', payload: type$<{ body: string }>(), id: 0 } }),
       ),
     ).rejects.toThrow(TransportError)
   })
 
   test('entries expose name, id and lane for the wire table', async () => {
     const t = await buildEventTable(
-      defineContract({ chat: { lane: 'reliable', payload: type$<unknown>() } }),
+      defineContract({ chat: { lane: 'reliable', payload: type$<{ body: string }>() } }),
     )
     const entry = t.byName('chat') as EventEntry
     expect(entry.lane).toBe('reliable')
@@ -104,8 +104,8 @@ describe('event identity', () => {
 describe('handshake negotiation', () => {
   const table = async (c: Parameters<typeof buildEventTable>[0]) => await buildEventTable(c)
   const base = defineContract({
-    chat: { lane: 'reliable', payload: type$<unknown>() },
-    cursor: { lane: 'unreliable', payload: type$<unknown>() },
+    chat: { lane: 'reliable', payload: type$<{ body: string }>() },
+    cursor: { lane: 'unreliable', payload: type$<{ body: string }>() },
   })
 
   test('reserved feature tokens are declared, not invented at the call site', () => {
@@ -117,7 +117,10 @@ describe('handshake negotiation', () => {
   test('an added event is NOT a mismatch - additive change is rolling-deploy safe', async () => {
     const local = buildHandshake(await table(base))
     const peer = buildHandshake(
-      await table({ ...base, typing: { lane: 'reliable', payload: type$<unknown>() } }),
+      await table({
+        ...base,
+        typing: { lane: 'reliable', payload: type$<{ body: string }>() },
+      }),
     )
     const n = negotiate(local, peer)
     expect(n.peerOnly).toEqual(['typing'])
@@ -129,7 +132,10 @@ describe('handshake negotiation', () => {
   test('negotiate() rejects a lane disagreement - it is a guarantee, not a detail', async () => {
     const local = buildHandshake(await table(base))
     const peer = buildHandshake(
-      await table({ ...base, cursor: { lane: 'reliable', payload: type$<unknown>() } }),
+      await table({
+        ...base,
+        cursor: { lane: 'reliable', payload: type$<{ body: string }>() },
+      }),
     )
     try {
       negotiate(local, peer)

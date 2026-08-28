@@ -23,9 +23,13 @@ export {
   type Infer,
   type Lane,
   type MapOf,
+  reliable,
+  rpc,
   type Schema,
   type StreamableOf,
+  streaming,
   type$,
+  unreliable,
 } from './contract.ts'
 export { maxDatagramPayload } from './datagram.ts'
 export { TransportError, type TransportErrorCode } from './errors.ts'
