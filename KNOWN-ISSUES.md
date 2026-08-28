@@ -149,6 +149,53 @@ is the promise that a minor bump is safe, and that is deliberate: `call()` ships
 documented upstream leak, and an audit shortly before this release turned up thirty-one
 things worth fixing. The API is not settled yet. See D83.
 
+## A call handler does not know which peer called it
+
+`server.handle(event, handler)` registers one handler for every peer, and the context it
+receives is `{ signal }`. There is no `ctx.peer`, so a call cannot join the caller to a room,
+check the caller's permissions, or answer differently per peer. Taking a peer id in the
+payload does not close the gap, because the server cannot verify a client sent its own.
+
+Per-peer handlers exist and they are event handlers: `peer.on(...)` inside `onSession` has
+the peer. So an authenticated request with a reply is written as two events, one in each
+direction, which is the bookkeeping `call()` exists to remove. The
+[reconnect guide](https://transport-io.github.io/transport-io/guides/reconnect/) spells the
+shape out.
+
+This is a gap rather than a decision. It is recorded here because it changes what an
+application can write today.
+
+## One event name for both directions is a modelling tax
+
+An event that a client sends and a server rebroadcasts is one contract entry doing two jobs,
+and the payload ends up being the union of what both directions need. `examples/chat` shows
+it: `cursor` carries `from`, which the sender fills in about itself and every receiver reads
+about someone else. The server has to either trust that field or overwrite it.
+
+Modelled cleanly it is two entries, `cursor` outbound and something like `cursorMoved`
+inbound, which doubles the contract for every broadcast event and puts two names in the
+reader's head for one idea.
+
+Both shapes are available today and neither is enforced. No design is being rushed for it:
+the cost is real and the fix is not obviously better than the tax. Documented so the choice
+is made deliberately rather than discovered halfway through an application.
+
+## A call handler does not know which peer called it
+
+`server.handle(event, handler)` registers one handler for every peer, and the context it
+receives is `{ signal }`. There is no `ctx.peer`, so a call cannot join the caller to a room,
+check the caller's permissions, or answer differently per peer. Taking a peer id in the
+payload does not close the gap, because the server cannot verify a client sent its own.
+
+Per-peer handlers exist and they are event handlers: `peer.on(...)` inside `onSession` has
+the peer. So an authenticated request with a reply is written as two events, one in each
+direction, which is the bookkeeping `call()` exists to remove. The
+[reconnect guide](https://transport-io.github.io/transport-io/guides/reconnect/) spells the
+shape out.
+
+This is a gap rather than a decision. It is recorded here because it changes what an
+application can write today.
+
 ---
 
 Security-relevant limits, including the fact that this library authenticates nothing, are
