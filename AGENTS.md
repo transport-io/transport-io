@@ -47,14 +47,9 @@ export const contract = defineContract({
 
 export interface AppMap extends MapOf<typeof contract> {}
 
-declare module 'transport-io' {
-  interface Register {
-    map: AppMap
-  }
-}
 ```
 
-Three parts, all three required.
+Two parts, both required.
 
 **The helpers.** `reliable(payload?)` and `unreliable(payload?)` for events with no answer,
 `rpc(payload?, returns?)` for one value back, `streaming(payload?, yields?)` for a sequence.
@@ -66,10 +61,15 @@ a contract assembled programmatically.
 characters and `Client<MapOf<typeof contract>>` at 377, with the validator's internal types
 in it, because TypeScript preserves interface names and expands alias instantiations.
 
-**The registration.** It makes `AppMap` the default for `Client`, `Server`, `ServerPeer` and
-`RoomTarget`, so nothing in the application carries a type argument. Pass one explicitly only
-when a process speaks two contracts. Without a registration, every call site fails with
-`no contract registered`, naming this block.
+**Passing it.** `AppMap` goes to each end once: `new Client<AppMap>({ contract })` and
+`createServer<AppMap>({ contract })`. The type follows the import, so two contracts in one
+process are two types.
+
+A map can instead be registered globally with `declare module 'transport-io'`, which drops the
+type argument everywhere. It is opt-in: it buys no readability (hover is 107 characters either
+way, measured), it is one slot per process, two contracts conflict, and the resulting type
+depends on load order rather than on imports. `@transport-io/react` is the one thing that
+currently requires it. See API.md §7.
 
 ### A type, or a schema
 
@@ -126,7 +126,7 @@ It does not bundle browser code. Run your own bundler and pass `--static <dir>`.
 import { Client } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 
-const client = new Client({
+const client = new Client<AppMap>({
   contract,
   // No `certificateHash`: ordinary CA validation, which is the production path. Pass one
   // only to pin a self-signed certificate locally.
@@ -165,7 +165,7 @@ client.disconnect()
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'   // in a *.node.ts file
 
-const server = createServer({ contract })
+const server = createServer<AppMap>({ contract })
 
 server.handle('save', async ({ text }) => ({ revision: text.length }))
 
@@ -291,7 +291,7 @@ async generator, client consumes an async iterable:
 ```ts
 import type { Server } from 'transport-io'
 
-export async function serveAsk(server: Server): Promise<void> {
+export async function serveAsk(server: Server<AppMap>): Promise<void> {
   server.handle('ask', async function* ({ prompt }) {
     for (const word of prompt.split(' ')) {
       yield word
@@ -299,7 +299,7 @@ export async function serveAsk(server: Server): Promise<void> {
   })
 }
 
-export async function consume(client: Client): Promise<string[]> {
+export async function consume(client: Client<AppMap>): Promise<string[]> {
   const out: string[] = []
   for await (const token of client.stream('ask', { prompt: 'a b c' })) {
     out.push(token)
@@ -308,7 +308,7 @@ export async function consume(client: Client): Promise<string[]> {
   return out
 }
 
-export async function consumeWithHelpers(client: Client): Promise<string[]> {
+export async function consumeWithHelpers(client: Client<AppMap>): Promise<string[]> {
   return await client.stream('ask', { prompt: 'a b c' }).take(2).toArray()
 }
 ```

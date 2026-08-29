@@ -46,11 +46,6 @@ export const contract = defineContract({
 
 export interface AppMap extends MapOf<typeof contract> {}
 
-declare module 'transport-io' {
-  interface Register {
-    map: AppMap
-  }
-}
 ```
 
 `resume` carries whatever your application uses to prove identity. `since` carries a
@@ -67,7 +62,7 @@ declare function verify(token: string): Promise<{ userId: string } | null>
 declare function mayJoin(userId: string, room: string): Promise<boolean>
 declare function history(room: string, after: number): Promise<readonly Message[]>
 
-export function install(server: Server): void {
+export function install(server: Server<AppMap>): void {
   server.handle('resume', async ({ token, room }, ctx) => {
     const who = await verify(token)
     if (who === null) {
@@ -123,7 +118,7 @@ millisecond. An id is cheaper than being careful.
 `connected` and do the work there.
 
 ```ts
-export function keepUp(client: Client, token: string, room: string): () => void {
+export function keepUp(client: Client<AppMap>, token: string, room: string): () => void {
   let previous: ClientState['status'] = client.getSnapshot().status
   let inFlight: Promise<void> | null = null
 

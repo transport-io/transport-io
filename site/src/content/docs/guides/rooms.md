@@ -26,14 +26,9 @@ const contract = defineContract({
 })
 interface AppMap extends MapOf<typeof contract> {}
 
-declare module 'transport-io' {
-  interface Register {
-    map: AppMap
-  }
-}
 
-declare const server: Server
-declare const client: Client
+declare const server: Server<AppMap>
+declare const client: Client<AppMap>
 declare function allowed(room: string): boolean
 declare function resubscribe(): Promise<void>
 

@@ -15,14 +15,9 @@ export const contract = defineContract({
 })
 export interface AppMap extends MapOf<typeof contract> {}
 
-declare module 'transport-io' {
-  interface Register {
-    map: AppMap
-  }
-}
 
-declare const client: Client
-declare const server: Server
+declare const client: Client<AppMap>
+declare const server: Server<AppMap>
 declare function model(text: string): AsyncIterable<string>
 declare function enrich(chunk: string): Promise<string>
 // Shadows the DOM's `prompt()`, which is what a reader's own variable does too.

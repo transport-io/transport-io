@@ -52,21 +52,16 @@ export const contract = defineContract({
 })
 
 export interface AppMap extends MapOf<typeof contract> {}
-
-declare module 'transport-io' {
-  interface Register {
-    map: AppMap
-  }
-}
 ```
 
-The `declare module` block registers the map. It is what keeps the rest of this page free of
-type arguments: `createServer({ contract })` and `new Client({ … })` below are typed from it.
+Write both lines. `AppMap` is what you pass to a client or a server, once at each end, the way
+you would pass a router type to a typed client.
 
-Write both of the first two lines. The second keeps hover readable: with it, hovering `emit` shows 107
-characters, without it 377, including your validator's internal types. Hover width is a
-property of your contract rather than of the library, so those figures belong to the
-contract pinned in the project's hover gate and are re-measured on every CI run.
+The second line is not decoration. With it, hovering `emit` shows 107 characters; passing
+`MapOf<typeof contract>` inline shows 377, including your validator's internal types.
+TypeScript preserves interface names and expands alias instantiations, so nothing on the
+library side removes the need for it. Those figures are for the contract pinned in the
+project's hover gate and are re-measured on every CI run.
 
 ### Types, or a schema
 
@@ -115,7 +110,7 @@ import { listenHttp3 } from 'transport-io/node-transport'
 declare const cert: string
 declare const privKey: string
 
-const server = createServer({ contract })
+const server = createServer<AppMap>({ contract })
 
 server.onSession((peer) => {
   void peer.join('lobby')
@@ -146,13 +141,13 @@ declare function moveDot(x: number, y: number): void
 // In production, omit `certificateHash` entirely. The connection is then validated against
 // the platform's own CA store like any other HTTPS origin, which is what you want with a
 // real certificate. Pinning is a local-development affordance, not how this library works.
-const production = new Client({
+const production = new Client<AppMap>({
   contract,
   connect: () => connectBrowser({ url: 'https://example.com:443/' }),
 })
 
 // In development, against a self-signed certificate, pin it by hash.
-const client = new Client({
+const client = new Client<AppMap>({
   contract,
   connect: () => connectBrowser({ url: 'https://127.0.0.1:8080/', certificateHash }),
 })
@@ -185,7 +180,7 @@ certificate to your server by environment. Two lines connect the two halves. On 
 import type { Server } from 'transport-io'
 import { listenDev } from 'transport-io/node-transport'
 
-export async function serveInDev(server: Server): Promise<void> {
+export async function serveInDev(server: Server<AppMap>): Promise<void> {
   await server.listen(await listenDev())
 }
 ```
@@ -195,8 +190,8 @@ And in the browser, `connectDev` fetches the hash the command published:
 ```ts
 import { connectDev } from 'transport-io/dev-transport'
 
-export function devClient(): Client {
-  return new Client({ contract, connect: () => connectDev() })
+export function devClient(): Client<AppMap> {
+  return new Client<AppMap>({ contract, connect: () => connectDev() })
 }
 ```
 
@@ -230,6 +225,39 @@ openssl req -new -x509 -key key.pem -out cert.pem -days 14 \
 ECDSA P-256 and a maximum of 14 days are constraints imposed by
 `serverCertificateHashes`. Pass the SHA-256 of the certificate's DER bytes to
 `connectBrowser` as `certificateHash`.
+
+## Registering the map (optional)
+
+Passing `AppMap` at each construction site is the default because it is explicit: the type
+follows the import, and two contracts in one process are simply two types.
+
+An application that builds clients or servers in many files can register the map once instead,
+and then drop the type argument everywhere:
+
+```ts standalone
+import { Client, defineContract, type MapOf, reliable } from 'transport-io'
+
+export const contract = defineContract({ chat: reliable<{ body: string }>() })
+export interface AppMap extends MapOf<typeof contract> {}
+
+declare module 'transport-io' {
+  interface Register {
+    map: AppMap
+  }
+}
+
+// `Client` and `Server` now default to AppMap, with no type argument anywhere.
+declare const client: Client
+client.emit('chat', { body: 'hi' })
+```
+
+**The tradeoff, which is why this is not the default.** It is a global augmentation, so there
+is one slot per process: two contracts in the same process conflict, and the type a file sees
+depends on which module was loaded rather than on what that file imported. It also buys
+nothing in readability. Hovering `emit` is 107 characters either way, measured; registration
+removes the type argument and nothing else.
+
+`@transport-io/react` currently requires it, which is the one place it is not optional.
 
 ## Where next
 

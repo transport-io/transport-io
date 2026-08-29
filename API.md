@@ -27,18 +27,13 @@ export const contract = defineContract({
 })
 
 export interface AppMap extends MapOf<typeof contract> {}
-
-declare module 'transport-io' {
-  interface Register {
-    map: AppMap
-  }
-}
 ```
 
 `reliable` and `unreliable` take the payload. `rpc` and `streaming` take the payload and
-what comes back: `save` answers with one value, `ask` with a sequence. The `declare module` block registers the map, so no `Client` or
-`createServer` in the application carries a type argument; every example on this page relies
-on it.
+what comes back: `save` answers with one value, `ask` with a sequence.
+
+`AppMap` is passed at each construction site, which is what every example on this page does.
+Registering it globally makes that argument implicit and is opt-in; see §7.
 
 **Write both lines.** The second is what keeps every hover readable.
 With it, hovering `emit` shows 107 characters. Without it - passing the contract inline -
@@ -141,7 +136,7 @@ import { Client, type ClientOptions } from 'transport-io'
 // Supplied by the transport seam, so this module never imports a transport.
 declare const openConnection: ClientOptions['connect']
 
-export const client = new Client({ contract, connect: openConnection })
+export const client = new Client<AppMap>({ contract, connect: openConnection })
 
 export async function main(): Promise<void> {
   await client.connect()
@@ -210,7 +205,7 @@ use.
 import { createServer } from 'transport-io'
 
 export async function serve(): Promise<void> {
-  const server = createServer({ contract })
+  const server = createServer<AppMap>({ contract })
   server.handle('save', async ({ text }) => ({ revision: text.length }))
   await server.listen()
 }
@@ -226,7 +221,7 @@ join its own caller to a room:
 ```ts
 import type { Server } from 'transport-io'
 
-export function installSave(server: Server): void {
+export function installSave(server: Server<AppMap>): void {
   server.handle('save', async ({ text }, ctx) => {
     // The caller is known here, so the responder can act on it.
     await ctx.peer.join('editors')
@@ -249,7 +244,7 @@ gets an async iterable, the server writes an async generator.
 ```ts
 import type { Server } from 'transport-io'
 
-export async function serveTokens(server: Server): Promise<void> {
+export async function serveTokens(server: Server<AppMap>): Promise<void> {
   server.handle('ask', async function* ({ prompt }) {
     for (const token of prompt.split(' ')) {
       yield token
@@ -369,7 +364,7 @@ most common way this shape is implemented incorrectly. There is an explicit test
 type Conn = Awaited<ReturnType<ClientOptions['connect']>>
 
 export async function start(incoming: { sessions(): AsyncIterable<Conn> }): Promise<void> {
-  const server = createServer({ contract })
+  const server = createServer<AppMap>({ contract })
 
   server.onSession((peer) => {
     void peer.join('lobby')
@@ -405,19 +400,19 @@ guide](https://transport-io.github.io/transport-io/guides/reconnect/) spells out
 ```ts
 import type { RoomTarget, ServerPeer } from 'transport-io'
 
-export async function moveRooms(peer: ServerPeer): Promise<readonly string[]> {
+export async function moveRooms(peer: ServerPeer<AppMap>): Promise<readonly string[]> {
   await peer.join('lobby')
   await peer.leave('lobby')
   return peer.rooms
 }
 
-export function narrow(target: RoomTarget, exclude: string): RoomTarget {
+export function narrow(target: RoomTarget<AppMap>, exclude: string): RoomTarget<AppMap> {
   return target.except(exclude)
 }
 ```
 
-`Server`, `ServerPeer` and `RoomTarget` default to the registered map, so an annotation
-needs no type argument either.
+`Server`, `ServerPeer` and `RoomTarget` each take the map, and each falls back to the
+registered one if you opt into registration.
 
 `server.memberCount(room)` returns how many local peers are in a room, counted on this
 node rather than across the adapter. It is a number for a health endpoint or a log line, not
@@ -578,3 +573,44 @@ export function useConnectionStatus(client: Client): Status {
 That block compiles like every other one here. It is also what `@transport-io/react` does for
 you: [`useConnection`](https://transport-io.github.io/transport-io/guides/react/) is this plus
 the connection calls, a stable return and a server snapshot.
+
+---
+
+## 7. `Register`, and why it is not the default
+
+A map can be registered once, globally, and then omitted everywhere:
+
+```ts standalone
+import { Client, defineContract, type MapOf, reliable } from 'transport-io'
+
+export const contract = defineContract({ chat: reliable<{ body: string }>() })
+export interface AppMap extends MapOf<typeof contract> {}
+
+declare module 'transport-io' {
+  interface Register {
+    map: AppMap
+  }
+}
+
+// `Client`, `Server`, `ServerPeer` and `RoomTarget` now default to `AppMap`.
+declare const client: Client
+client.emit('chat', { body: 'hi' })
+```
+
+`Register` must stay an interface: only interfaces can be augmented by `declare module`, and
+a type alias fails every registration with "Duplicate identifier". Without a registration,
+`Registered` resolves to a sentinel whose only key is the instruction, so the first `emit`
+fails with a message naming this block rather than with `never`.
+
+It is opt-in, and the reasons are worth stating rather than discovering.
+
+**It buys no readability.** Hovering `emit` is 107 characters with an explicit `Client<AppMap>`
+and 107 characters registered, measured. What registration removes is the type argument at
+construction, of which an application has about two.
+
+**It is global.** One slot per process. Two contracts in the same process conflict, and the
+type a file sees depends on which module was loaded rather than on what that file imported.
+The explicit form has neither property: the type follows the import.
+
+`@transport-io/react` is the one place it is currently required, because the hooks are typed
+off the registered map.

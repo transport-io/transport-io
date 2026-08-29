@@ -13,6 +13,17 @@ npm install @transport-io/react
 React and react-dom are peer dependencies, and the floor is **React 19.2**, because
 `useEvent` is built on `useEffectEvent`. There is no runtime dependency beyond that.
 
+## This binding requires the registered map
+
+Everywhere else in these docs the contract is passed explicitly, as `Client<AppMap>`. The
+hooks are the exception: they are typed off the registered map, so `@transport-io/react`
+needs the `declare module` block below and does not work without it.
+
+That is a limitation of the binding as it shipped rather than a recommendation. Registration
+is global: one slot per process, two contracts conflict, and the resulting type depends on
+which module loaded rather than on what a file imported. See
+[Registering the map](/getting-started/#registering-the-map-optional) for the tradeoff.
+
 ## The provider takes a client
 
 It does not make one. Building a client needs a `connect` function, which is

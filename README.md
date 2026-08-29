@@ -103,11 +103,6 @@ export const contract = defineContract({
 
 export interface AppMap extends MapOf<typeof contract> {}
 
-declare module 'transport-io' {
-  interface Register {
-    map: AppMap
-  }
-}
 ```
 
 `reliable` and `unreliable` take the payload. `rpc` and `streaming` take the payload and
@@ -119,9 +114,13 @@ is 169 against 439 and `stream` 157 against 427. Hover width is a property of th
 not of this library, so those figures are for the contract pinned in
 `scripts/check-hover.ts` and are re-measured on every CI run.
 
-The `declare module` block registers the map, which is what keeps type arguments out of the
-rest of the application: `new Client({ … })` and `createServer({ … })` below are typed from
-it. Pass an explicit argument only when one process speaks two contracts.
+`AppMap` is what each end is given, once: `new Client<AppMap>({ … })` and
+`createServer<AppMap>({ … })` below. The type follows the import, so two contracts in one
+process are simply two types.
+
+A map can instead be registered once globally, which drops the type argument everywhere. That
+is opt-in, it buys no readability, and it has real costs; see
+[Registering the map](https://transport-io.github.io/transport-io/getting-started/#registering-the-map-optional).
 
 ### A type, or a schema
 
@@ -152,7 +151,7 @@ import { listenHttp3 } from 'transport-io/node-transport'
 
 // `cert` and `privKey` are the PEM text, not paths to it.
 export async function serve(cert: string, privKey: string): Promise<void> {
-  const server = createServer({ contract })
+  const server = createServer<AppMap>({ contract })
 
   server.handle('save', async ({ text }) => ({ revision: text.length }))
 
@@ -184,7 +183,7 @@ export async function run(url: string): Promise<number> {
   // No `certificateHash`, so the certificate is validated against the platform's CA store
   // like any other HTTPS origin. Pass one only to pin a self-signed certificate in
   // development, which is what `transport-io dev` sets up for you.
-  const client = new Client({ contract, connect: () => connectBrowser({ url }) })
+  const client = new Client<AppMap>({ contract, connect: () => connectBrowser({ url }) })
   await client.connect()
 
   client.emit('chat', { from: 'me', body: 'hello' }) // arrives
@@ -200,7 +199,7 @@ An event can answer with a **sequence** instead of a value. Declare `yields` ins
 ```ts
 import type { Client } from 'transport-io'
 
-export async function render(client: Client, prompt: string): Promise<string[]> {
+export async function render(client: Client<AppMap>, prompt: string): Promise<string[]> {
   const out: string[] = []
   for await (const token of client.stream('ask', { prompt })) {
     out.push(token)
@@ -219,7 +218,7 @@ loop reads worse than the thing it is doing, and `cancel()` stops a stream from 
 loop, which is what a stop button needs:
 
 ```ts
-export async function withHelpers(client: Client, stop: { onclick: () => void }): Promise<void> {
+export async function withHelpers(client: Client<AppMap>, stop: { onclick: () => void }): Promise<void> {
   const first20 = await client.stream('ask', { prompt: 'hello' }).take(20).toArray()
   console.log(first20.length)
 

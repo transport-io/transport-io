@@ -18,6 +18,70 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components'
 
+## The whole thing
+
+One file says what every event is and whether it can be dropped. Both ends import it.
+
+```ts
+// contract.ts
+import { defineContract, type MapOf, reliable, unreliable } from 'transport-io'
+
+export const contract = defineContract({
+  chat: reliable<{ from: string; body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>(),
+})
+
+export interface AppMap extends MapOf<typeof contract> {}
+```
+
+<CardGrid>
+<Card title="Server">
+```ts
+import { createServer } from 'transport-io'
+
+const server = createServer<AppMap>({ contract })
+
+server.onSession((peer) => {
+  void peer.join('lobby')
+  peer.on('chat', (m) => void server.to('lobby').emit('chat', m))
+})
+
+await server.listen(listener)
+```
+</Card>
+<Card title="Client">
+```ts
+import { Client } from 'transport-io'
+
+const client = new Client<AppMap>({ contract, connect })
+await client.connect()
+
+client.on('chat', (m) => render(m))
+
+client.emit('chat', { from: 'me', body: 'hi' }) // arrives
+client.emit('cursor', { x: 12, y: 40 })         // may not
+```
+</Card>
+</CardGrid>
+
+`chat` arrives. `cursor` may not. The contract is the only place that says so, and both
+sides infer from it: a wrong event name or payload does not compile.
+
+`AppMap` is passed once on each end, the way you would pass a router type to a typed client.
+Nothing is registered globally and nothing is augmented.
+
+## What that costs, compared
+
+Socket.IO's own front page is eight lines of server and six of client, and neither is typed:
+`socket.on('message', …)` gives you `any`, and nothing says whether a message can be dropped.
+
+Typing it means declaring `ServerToClientEvents` and `ClientToServerEvents` by hand and
+mirroring both as generics on `Server<…>` and `Socket<…>` at each end. Two interfaces, four
+generic arguments, kept in step manually.
+
+Here the contract is the source of both directions, `MapOf` derives the types, and each end
+names it once. Reliability is part of it rather than a comment.
+
 ## Streaming responses
 
 The server yields, the client consumes. Leaving the loop resets the QUIC stream. The
@@ -28,18 +92,12 @@ handler's `ctx.signal` fires and its `finally` runs.
 ```ts
 import { type Client, defineContract, type MapOf, streaming } from 'transport-io'
 
-const contract = defineContract({
+const gen = defineContract({
   ask: streaming<{ prompt: string }, string>(),
 })
-interface AppMap extends MapOf<typeof contract> {}
+interface GenMap extends MapOf<typeof gen> {}
 
-declare module 'transport-io' {
-  interface Register {
-    map: AppMap
-  }
-}
-
-declare const client: Client
+declare const client: Client<GenMap>
 declare const prompt: string
 declare const stop: boolean
 declare function render(token: string): void
@@ -54,7 +112,7 @@ for await (const token of client.stream('ask', { prompt })) {
 ```ts
 import type { Server } from 'transport-io'
 
-declare const server: Server
+declare const server: Server<GenMap>
 declare function model(text: string): AsyncIterable<string>
 
 server.handle('ask', async function* ({ prompt }) {
@@ -74,22 +132,6 @@ the others.
   then open the printed URL in two tabs. There is no live demo on this page, and there will
   not be a fake one: the server needs raw UDP ingress, which GitHub Pages does not have.</p>
 </div>
-
-## The contract declares reliability
-
-```ts standalone
-import { defineContract, type MapOf, reliable, streaming, unreliable } from 'transport-io'
-
-export const contract = defineContract({
-  chat: reliable<{ body: string }>(),
-  cursor: unreliable<{ x: number; y: number }>(),
-  ask: streaming<{ prompt: string }, string>(),
-})
-export interface AppMap extends MapOf<typeof contract> {}
-```
-
-`chat` arrives. `cursor` may not. `ask` answers with a sequence. The reliable lane is carried
-on QUIC streams and the unreliable lane on QUIC datagrams.
 
 ## Before you start
 
