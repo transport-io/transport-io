@@ -77,6 +77,8 @@ declare module 'transport-io' {
 }
 
 export const api = createHooks<AppMap>()
+// The same factory without the interface line, which is what the guides warn against.
+export const bare = createHooks<MapOf<typeof contract>>()
 
 export function Probe(): null {
   useEvent('chat', () => {})
@@ -85,6 +87,7 @@ export function Probe(): null {
   api.useEvent('chat', () => {})
   api.useCall('save')
   api.useStream('ask')
+  bare.useEvent('chat', () => {})
   return null
 }
 `
@@ -153,6 +156,20 @@ const MAX_INTERFACE_CHARS: Readonly<Record<string, number>> = {
   stream: 173,
 }
 const MAX_RATIO = 0.75
+
+/**
+ * The hook equivalent of `MAX_RATIO`, and the reason the guides tell you to write the
+ * `MapOf` line.
+ *
+ * `createHooks<AppMap>()` and `createHooks<MapOf<typeof contract>>()` are the same call; the
+ * only difference is whether the map has a name. Handing in the alias expands it, and the
+ * hover fills with the validator's internals. If that gap ever closes the advice stops being
+ * worth giving, which a ceiling on the good form alone would never notice.
+ *
+ * This exists because both guides quoted the bad number with nothing behind it, and an
+ * ungated number in two documents is a shape that has drifted in this repository before.
+ */
+const MAX_HOOK_RATIO = 0.5
 
 interface Lsp {
   request(method: string, params: unknown): Promise<Record<string, unknown>>
@@ -364,6 +381,37 @@ try {
       `  ${hook.padEnd(10)} ${String(sig.length).padStart(4)} chars (ceiling ${ceiling})`,
     )
     console.log(`             ${sig}`)
+  }
+
+  const measureHook = async (label: string): Promise<number> => {
+    const line = hookLines.findIndex((l) => l.includes(`${label}(`))
+    if (line < 0) return Number.NaN
+    const needle = label.includes('.') ? label.slice(label.indexOf('.') + 1) : label
+    const hover = await lsp.request('textDocument/hover', {
+      textDocument: { uri: hookUri },
+      position: { line, character: (hookLines[line] ?? '').indexOf(needle) + 2 },
+    })
+    const sig = signatureOf(hover)
+    return sig === undefined || sig.length === 0 ? Number.NaN : sig.length
+  }
+
+  const named = await measureHook('api.useEvent')
+  const anonymous = await measureHook('bare.useEvent')
+  if (!Number.isFinite(named) || !Number.isFinite(anonymous)) {
+    problems.push('the named/anonymous hook comparison measured nothing')
+  } else {
+    const ratio = named / anonymous
+    console.log(
+      `\n  api.useEvent ${named} chars against ${anonymous} without the interface line ` +
+        `(${(ratio * 100).toFixed(0)}%, ceiling ${MAX_HOOK_RATIO * 100}%)`,
+    )
+    if (ratio > MAX_HOOK_RATIO) {
+      problems.push(
+        `naming the map saves only ${(100 - ratio * 100).toFixed(0)}% of the hover, under the ` +
+          `${(100 - MAX_HOOK_RATIO * 100).toFixed(0)}% the guides claim.\n` +
+          '    Either the gap closed and the advice should go, or something regressed.',
+      )
+    }
   }
 } finally {
   lsp.stop()
