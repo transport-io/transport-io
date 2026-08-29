@@ -78,9 +78,7 @@ export function installCommands(markdown: string): string[] {
  * below asks the registry, and a package that has since been published fails until its entry
  * is removed, so this cannot quietly become permanent.
  */
-const PENDING_PUBLISH: Readonly<Record<string, string>> = {
-  '@transport-io/react': 'the React binding, built and documented before its first publish',
-}
+const PENDING_PUBLISH: Readonly<Record<string, string>> = {}
 
 /** True when the registry has never heard of it. */
 async function isUnpublished(pkg: string): Promise<boolean> {
@@ -149,24 +147,39 @@ if (commands.length === 0) {
       writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'probe', private: true }))
       execFileSync('sh', ['-c', cmd], { cwd: dir, stdio: 'ignore', timeout: 180_000 })
 
-      const installed = join(dir, 'node_modules', LIBRARY, 'package.json')
+      /**
+       * The package the line names, not a fixed one.
+       *
+       * This used to assert that `transport-io` landed whatever the command said, so
+       * `npm install @transport-io/react` passed for the wrong reason: npm installs peer
+       * dependencies, `transport-io` is one, and the gate found it and reported success
+       * without ever checking that the package the reader was told to install had arrived.
+       */
+      const named = cmd
+        .replace(/^\s*npm\s+install\s+/, '')
+        .split(/\s+/)
+        .filter((t) => t.length > 0 && !t.startsWith('-'))
       const rootLanded = join(dir, 'node_modules', ROOT_PACKAGE, 'package.json')
       if (existsSync(rootLanded)) {
         problems.push(
           `${doc}: \`${cmd}\` installs '${ROOT_PACKAGE}' - the private monorepo root.\n` +
             `    \`import … from '${LIBRARY}'\` fails for anyone who follows this line.`,
         )
-      } else if (!existsSync(installed)) {
-        problems.push(`${doc}: \`${cmd}\` did not install '${LIBRARY}' at all.`)
+      } else if (named.length === 0) {
+        problems.push(`${doc}: \`${cmd}\` names no package to install.`)
       } else {
-        const pkg = JSON.parse(readFileSync(installed, 'utf8')) as {
-          name: string
-          main?: string
-        }
-        if (pkg.name !== LIBRARY) {
-          problems.push(`${doc}: \`${cmd}\` installed '${pkg.name}', not '${LIBRARY}'.`)
-        } else {
-          console.log(`install: \`${cmd}\` -> ${pkg.name} (from ${doc})`)
+        for (const want of named) {
+          const manifest = join(dir, 'node_modules', want, 'package.json')
+          if (!existsSync(manifest)) {
+            problems.push(`${doc}: \`${cmd}\` did not install '${want}' at all.`)
+            continue
+          }
+          const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as { name: string }
+          if (pkg.name !== want) {
+            problems.push(`${doc}: \`${cmd}\` installed '${pkg.name}', not '${want}'.`)
+          } else {
+            console.log(`install: \`${cmd}\` -> ${pkg.name} (from ${doc})`)
+          }
         }
       }
     } catch (e) {
