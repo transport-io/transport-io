@@ -38,6 +38,7 @@ export interface AppMap extends MapOf<typeof contract> {}
 <Card title="Server">
 ```ts
 import { createServer } from 'transport-io'
+import { listenDev } from 'transport-io/node-transport'
 
 const server = createServer<AppMap>({ contract })
 
@@ -46,17 +47,18 @@ server.onSession((peer) => {
   peer.on('chat', (m) => void server.to('lobby').emit('chat', m))
 })
 
-await server.listen(listener)
+await server.listen(await listenDev())
 ```
 </Card>
 <Card title="Client">
 ```ts
 import { Client } from 'transport-io'
+import { connectDev } from 'transport-io/dev-transport'
 
-const client = new Client<AppMap>({ contract, connect })
+const client = new Client<AppMap>({ contract, connect: () => connectDev() })
 await client.connect()
 
-client.on('chat', (m) => render(m))
+client.on('chat', (m) => console.log(m.from, m.body))
 
 client.emit('chat', { from: 'me', body: 'hi' }) // arrives
 client.emit('cursor', { x: 12, y: 40 })         // may not
@@ -72,15 +74,20 @@ Nothing is registered globally and nothing is augmented.
 
 ## What that costs, compared
 
-Socket.IO's own front page is eight lines of server and six of client, and neither is typed:
-`socket.on('message', …)` gives you `any`, and nothing says whether a message can be dropped.
+The panels above are the whole typed setup: one contract, one `MapOf` line, and the map named
+once at each end.
 
-Typing it means declaring `ServerToClientEvents` and `ClientToServerEvents` by hand and
-mirroring both as generics on `Server<…>` and `Socket<…>` at each end. Two interfaces, four
-generic arguments, kept in step manually.
+Socket.IO's own TypeScript guide asks for more. Its documented example declares **four**
+interfaces by hand - `ServerToClientEvents`, `ClientToServerEvents`, `InterServerEvents` and
+`SocketData` - then passes four generic arguments on the server and two on the client, and the
+two event interfaces are given in the **opposite order** at each end because the client's
+perspective is reversed. Four hand-written interfaces to keep in step, and an argument order
+that is wrong in a way the compiler cannot catch, because both slots take the same kind of
+thing.
 
-Here the contract is the source of both directions, `MapOf` derives the types, and each end
-names it once. Reliability is part of it rather than a comment.
+Here one contract is the source of both directions, `MapOf` derives the types from it, and
+each end names the same `AppMap`. There is no second interface to keep in step and no order
+to get backwards. Reliability is part of the contract rather than a comment beside it.
 
 ## Streaming responses
 
@@ -97,13 +104,12 @@ const gen = defineContract({
 })
 interface GenMap extends MapOf<typeof gen> {}
 
-declare const client: Client<GenMap>
+declare const gpt: Client<GenMap>
 declare const prompt: string
 declare const stop: boolean
-declare function render(token: string): void
 
-for await (const token of client.stream('ask', { prompt })) {
-  render(token)
+for await (const token of gpt.stream('ask', { prompt })) {
+  console.log(token)
   if (stop) break
 }
 ```
@@ -112,10 +118,10 @@ for await (const token of client.stream('ask', { prompt })) {
 ```ts
 import type { Server } from 'transport-io'
 
-declare const server: Server<GenMap>
+declare const gptServer: Server<GenMap>
 declare function model(text: string): AsyncIterable<string>
 
-server.handle('ask', async function* ({ prompt }) {
+gptServer.handle('ask', async function* ({ prompt }) {
   for await (const token of model(prompt)) {
     yield token
   }
