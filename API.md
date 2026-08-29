@@ -447,6 +447,27 @@ neither loss nor congestion, so no count here claims to be the network's.
 
 ---
 
+### 3.3 Certificates, and the one error everyone hits first
+
+Omit `certificateHash` and the connection is validated against the platform's CA store like
+any other HTTPS origin. That is the production path. Pass one only to pin a self-signed
+certificate locally, which is what `transport-io dev` sets up.
+
+When a handshake fails, the browser gives the same `WebTransportError` - message
+`Opening handshake failed.`, `code: 0`, no own properties - for a wrong hash, an expired
+certificate, and a server that is not listening. Measured in Chromium; all three are
+identical.
+
+`connectBrowser` therefore raises `WT_HANDSHAKE_FAILED`, whose remedy lists those three in
+the order worth ruling out, and keeps the browser's error as `cause`. It does not name a
+single cause, because it cannot know which one it is.
+
+`connectDev` can know, and does. The dev server publishes the certificate's expiry with its
+hash, so an expired certificate raises `WT_CERT_EXPIRED` before any connection is attempted,
+naming the command that mints a new one.
+
+---
+
 ## 4. Errors
 
 ```ts

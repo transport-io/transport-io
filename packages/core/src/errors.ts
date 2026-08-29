@@ -19,13 +19,20 @@ export type TransportErrorCode =
   | 'WT_TOO_MANY_STREAMS'
   | 'WT_RELIABILITY_REFUSED'
   | 'WT_DEV_ONLY'
+  | 'WT_HANDSHAKE_FAILED'
+  | 'WT_CERT_EXPIRED'
 
 export class TransportError extends Error {
   readonly code: TransportErrorCode
   readonly remedy: string
 
-  constructor(code: TransportErrorCode, message: string, remedy: string) {
-    super(`${code}: ${message} - ${remedy}`)
+  /**
+   * `cause` carries the error being wrapped, where there is one. The browser's
+   * `WebTransportError` has no own enumerable properties, so wrapping it without keeping a
+   * reference would throw away the only artefact anyone could inspect in a debugger.
+   */
+  constructor(code: TransportErrorCode, message: string, remedy: string, cause?: unknown) {
+    super(`${code}: ${message} - ${remedy}`, cause === undefined ? undefined : { cause })
     this.name = 'TransportError'
     this.code = code
     this.remedy = remedy

@@ -89,6 +89,50 @@ describe('the manifest itself is checked', () => {
   })
 })
 
+describe('an expired certificate is refused before dialling', () => {
+  const iso = (offsetMs: number): string => new Date(Date.now() + offsetMs).toISOString()
+
+  test('a manifest whose certificate has expired throws WT_CERT_EXPIRED', async () => {
+    servePage('localhost')
+    serveManifest({ sha256: [1], url: 'https://127.0.0.1:4433/', expiresAt: iso(-60_000) })
+    const err = await connectDev().catch((e: unknown) => e)
+    expect((err as TransportError).code).toBe('WT_CERT_EXPIRED')
+    expect((err as TransportError).remedy).toContain('transport-io dev')
+  })
+
+  test('it fires before the URL check, because it is the more useful answer', async () => {
+    // A remote URL would normally be refused with WT_DEV_ONLY. Expiry is the real problem
+    // here and it is a fact rather than an inference, so it must win.
+    servePage('localhost')
+    serveManifest({ sha256: [1], url: 'https://evil.example.com/', expiresAt: iso(-1) })
+    const err = await connectDev().catch((e: unknown) => e)
+    expect((err as TransportError).code).toBe('WT_CERT_EXPIRED')
+  })
+
+  test('a certificate still inside its window is not refused for expiry', async () => {
+    servePage('localhost')
+    // Gets past expiry and fails on the target instead, which is how we know it passed.
+    serveManifest({ sha256: [1], url: 'https://example.com/', expiresAt: iso(60_000) })
+    const err = await connectDev().catch((e: unknown) => e)
+    expect((err as TransportError).code).toBe('WT_DEV_ONLY')
+  })
+
+  test('an older dev server that publishes no expiresAt still works', async () => {
+    servePage('localhost')
+    serveManifest({ sha256: [1], url: 'https://example.com/' })
+    const err = await connectDev().catch((e: unknown) => e)
+    // Not WT_CERT_EXPIRED: a missing field is unknown, not expired.
+    expect((err as TransportError).code).toBe('WT_DEV_ONLY')
+  })
+
+  test('an unparseable expiresAt is ignored rather than treated as expired', async () => {
+    servePage('localhost')
+    serveManifest({ sha256: [1], url: 'https://example.com/', expiresAt: 'not a date' })
+    const err = await connectDev().catch((e: unknown) => e)
+    expect((err as TransportError).code).toBe('WT_DEV_ONLY')
+  })
+})
+
 describe('the endpoint is fixed so neither side configures it', () => {
   test('the default path is the well-known one', () => {
     expect(DEV_ENDPOINT).toBe('/.well-known/transport-io-dev')

@@ -778,6 +778,9 @@ Raised by an implementation to its own application and never transmitted.
 | `WT_DATAGRAM_TOO_LARGE` | Payload exceeded §7.4. Shorten it, or move the event to the reliable lane. |
 | `WT_ROOM_NOT_JOINED` | Broadcast to a room this session is not in. Join first. |
 | `WT_SESSION_CLOSED` | The session closed while the operation was pending. Reconnect and retry. |
+| `WT_HANDSHAKE_FAILED` | The transport-level handshake failed. A browser reports one error for a wrong pinned hash, an expired certificate and an unreachable server alike, so the remedy names all three rather than guessing. |
+| `WT_CERT_EXPIRED` | A pinned development certificate is past its validity. Mint a new one and reload the client so it picks up the new hash. |
+| `WT_DEV_ONLY` | A development-only affordance was reached from somewhere that is not loopback. |
 
 ---
 

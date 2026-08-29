@@ -48,6 +48,8 @@ function refuse(what: string, host: string): never {
 interface DevManifest {
   readonly sha256: readonly number[]
   readonly url: string
+  /** ISO 8601. Absent when an older `transport-io dev` is serving the manifest. */
+  readonly expiresAt?: string
 }
 
 export interface DevConnectOptions {
@@ -89,6 +91,26 @@ export async function connectDev(opts: DevConnectOptions = {}): Promise<Connecti
       `the dev manifest at ${endpoint} is not {sha256, url}`,
       'Something other than `transport-io dev` is serving that path.',
     )
+  }
+
+  /**
+   * Expiry is checked before dialling, and this is the whole reason the manifest carries it.
+   *
+   * A pinned certificate is capped at 14 days, so it expiring is normal operation rather
+   * than a fault. Once it has, the browser's failure is indistinguishable from a server that
+   * is down or a hash that never matched - one `WebTransportError`, no properties. Here we
+   * do not have to infer anything: the process that minted the certificate published when it
+   * expires, so this is a fact rather than a guess, and it is the one path a newcomer takes.
+   */
+  if (manifest.expiresAt !== undefined) {
+    const expires = Date.parse(manifest.expiresAt)
+    if (!Number.isNaN(expires) && expires <= Date.now()) {
+      throw new TransportError(
+        'WT_CERT_EXPIRED',
+        `the pinned development certificate expired on ${new Date(expires).toUTCString()}`,
+        'Restart `npx transport-io dev`, which mints a new one, then reload this page so it picks up the new hash.',
+      )
+    }
   }
 
   // The URL is checked as well as the page, because the manifest is data from the network

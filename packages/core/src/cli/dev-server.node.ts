@@ -41,7 +41,12 @@ export interface DevServerOptions {
   /** The package's `dist`, served under `LIB_PREFIX`. */
   readonly distDir: string
   /** What the browser must pin, and where it should connect. */
-  readonly manifest: { readonly sha256: readonly number[]; readonly url: string }
+  readonly manifest: {
+    readonly sha256: readonly number[]
+    readonly url: string
+    /** ISO 8601, so the browser can refuse a stale certificate before it dials. */
+    readonly expiresAt: string
+  }
 }
 
 /**

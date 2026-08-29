@@ -31,10 +31,18 @@ no own enumerable properties at all:
 - a correct hash for a certificate that has expired,
 - nothing listening on the port.
 
-So the browser gives a client no way to tell them apart, and neither can this library. That
-is worth knowing before you spend an afternoon on the wrong one: check that the server is
-running and that the certificate has not passed its fourteen days, in that order, before
-suspecting the hash itself.
+So the browser gives a client no way to tell them apart. Two things reduce how much that
+costs you.
+
+`connectBrowser` no longer passes that error through untouched: it raises
+`WT_HANDSHAKE_FAILED`, whose remedy names all three candidates in the order worth ruling them
+out, and keeps the original error as `cause`. It does not guess which one it was, because
+naming a cause would be wrong two times in three.
+
+`connectDev` does better, because it does not have to infer anything. `transport-io dev`
+publishes the certificate's expiry alongside its hash, so an expired certificate is refused
+before the connection is attempted, with `WT_CERT_EXPIRED` and the command that fixes it.
+That removes the trap entirely from the path a newcomer takes.
 
 ## There is no fallback
 

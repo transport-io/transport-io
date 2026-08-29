@@ -120,6 +120,33 @@ export async function connectBrowser(opts: BrowserConnectOptions): Promise<Conne
     // offer HTTP/2 at all is the actual guarantee.
     requireUnreliable: true,
   })
-  await session.ready
+  try {
+    await session.ready
+  } catch (cause) {
+    /**
+     * Every reason this can fail looks identical from JavaScript.
+     *
+     * Measured in Chromium against a real server: a hash that does not match, a correct hash
+     * for an expired certificate, and nothing listening on the port all produce the same
+     * `WebTransportError` with the message "Opening handshake failed.", `code: 0`,
+     * `source: "session"`, and no own enumerable properties at all. There is nothing to
+     * branch on, so this deliberately does not guess which one it was: claiming "certificate
+     * expired" when the server is simply down would be a confident wrong answer, and that is
+     * worse than an honest vague one.
+     *
+     * What it can do is turn a dead end into a checklist, ordered by what is cheapest to
+     * rule out.
+     */
+    throw new TransportError(
+      'WT_HANDSHAKE_FAILED',
+      `the WebTransport handshake to ${opts.url} failed`,
+      'The browser reports one error for every cause here, so check in this order: (1) the ' +
+        'server is running and its UDP port is reachable; (2) if you pinned a certificate, ' +
+        'that it has not passed its 14-day limit; (3) that the hash matches the certificate ' +
+        'the server is serving - it is SHA-256 over the DER, not over cert.pem. ' +
+        '`npx transport-io dev` handles all three for local development.',
+      cause,
+    )
+  }
   return new BrowserConnection(session)
 }

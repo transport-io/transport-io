@@ -119,7 +119,11 @@ async function main(): Promise<void> {
     ...(staticDir === undefined ? {} : { staticDir }),
     ...(demoPage === undefined ? {} : { indexHtml: demoPage }),
     distDir,
-    manifest: { sha256: [...cert.sha256], url: wtUrl },
+    manifest: {
+      sha256: [...cert.sha256],
+      url: wtUrl,
+      expiresAt: cert.validTo.toISOString(),
+    },
   })
 
   const short = Buffer.from(cert.sha256).toString('hex').slice(0, 6)
