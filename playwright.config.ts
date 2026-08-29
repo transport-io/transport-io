@@ -20,6 +20,11 @@ const E2E_ORIGIN = `http://localhost:${E2E_PORT}`
  * never used this library seeing two tabs talk after one command - so it is a second thing
  * to maintain. This is what stops it rotting: if `dev --demo` breaks, this suite is red.
  */
+/** The React binding's fixture, on its own ports, under the real `dev` command. */
+const REACT_PORT = process.env.E2E_REACT_PORT ?? '3220'
+const REACT_WT_PORT = process.env.E2E_REACT_WT_PORT ?? '4520'
+export const REACT_ORIGIN = `http://localhost:${REACT_PORT}`
+
 const DEMO_PORT = process.env.E2E_DEMO_PORT ?? '3210'
 const DEMO_WT_PORT = process.env.E2E_DEMO_WT_PORT ?? '4510'
 export const DEMO_ORIGIN = `http://localhost:${DEMO_PORT}`
@@ -37,6 +42,17 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
+    {
+      command:
+        `npm run build:e2e-app && node packages/core/dist/cli/main.node.js dev ` +
+        `packages/react/e2e-app/server.node.ts ` +
+        `--static packages/react/e2e-app/dist --port ${REACT_PORT} --wt-port ${REACT_WT_PORT}`,
+      url: `${REACT_ORIGIN}/.well-known/transport-io-dev`,
+      reuseExistingServer: false,
+      timeout: 90_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
     {
       command: `node packages/core/dist/cli/main.node.js dev --demo --port ${DEMO_PORT} --wt-port ${DEMO_WT_PORT}`,
       url: `${DEMO_ORIGIN}/.well-known/transport-io-dev`,

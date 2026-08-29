@@ -40,6 +40,7 @@ export default defineConfig({
             { label: 'call() and stream()', slug: 'guides/call-and-stream' },
             { label: 'Backpressure', slug: 'guides/backpressure' },
             { label: 'Reconnecting', slug: 'guides/reconnect' },
+            { label: 'React', slug: 'guides/react' },
           ],
         },
         { label: 'Reference', slug: 'reference' },

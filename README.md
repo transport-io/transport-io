@@ -232,6 +232,9 @@ export async function withHelpers(client: Client, stop: { onclick: () => void })
 A wrong event name or payload fails to compile. The error names the event instead of
 unrolling the contract type.
 
+**React:** [`@transport-io/react`](https://www.npmjs.com/package/@transport-io/react) is the
+binding, published separately.
+
 ## What is different
 
 **Acknowledgements are streams.** Each `call` opens its own bidirectional stream: write the
