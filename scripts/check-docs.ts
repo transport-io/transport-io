@@ -60,22 +60,25 @@ interface Block {
    * import, so every form of concatenation accepted it and the reader got a broken file.
    */
   readonly standalone: boolean
+  /** From a ```tsx fence. Compiled as `.tsx` with `--jsx react-jsx`. */
+  readonly jsx: boolean
 }
 
 function extractBlocks(file: string): Block[] {
   if (!existsSync(file)) return []
   const text = readFileSync(file, 'utf8')
   const out: Block[] = []
-  for (const m of text.matchAll(/^```(?:ts|typescript)([^\n]*)\n([\s\S]*?)^```/gm)) {
-    const info = (m[1] ?? '').trim()
+  for (const m of text.matchAll(/^```(tsx|ts|typescript)([^\n]*)\n([\s\S]*?)^```/gm)) {
+    const info = (m[2] ?? '').trim()
     if (info.includes('ignore') || info.includes('no-check')) {
       ignoredBlocks++
       continue
     }
     out.push({
       line: text.slice(0, m.index).split('\n').length,
-      body: m[2] ?? '',
+      body: m[3] ?? '',
       standalone: info.includes('standalone'),
+      jsx: m[1] === 'tsx',
     })
   }
   return out
@@ -85,11 +88,12 @@ function extractBlocks(file: string): Block[] {
  * A block tagged `ignore` is not compiled. The count is printed on every run and may only
  * go down, so the exemption cannot quietly become permanent.
  *
- * It is not a promise to implement anything. The one exemption today is a React binding in
- * API.md, and React is deliberately never a dependency of this repository, so that block
- * will never compile here and is not waiting for anything.
+ * It is not a promise to implement anything, and there is nothing exempt today: the last
+ * exemption was a React snippet that could not compile because React was absent, and it
+ * compiles now that `@transport-io/react` put React in the tree and this gate learned the
+ * ```tsx fence.
  */
-const MAX_IGNORED_BLOCKS = 1
+const MAX_IGNORED_BLOCKS = 0
 
 /**
  * Floors, because finding nothing is far more often a broken glob than a clean repository.
@@ -126,6 +130,7 @@ const COMPILED_DOCS = [
   'site/src/content/docs/guides/call-and-stream.md',
   'site/src/content/docs/guides/backpressure.md',
   'site/src/content/docs/guides/reconnect.md',
+  'site/src/content/docs/guides/react.md',
 ] as const
 
 /**
@@ -208,7 +213,9 @@ for (const doc of COMPILED_DOCS) {
         return kept.length === 0 ? '' : `${head} ${kept.join(', ')} ${mid}${module_}${tail}`
       })
       .join('\n')
-    const name = `${doc.replace(/\W/g, '_')}__${String(b.line).padStart(4, '0')}.ts`
+    const name =
+      `${doc.replace(/\W/g, '_')}__${String(b.line).padStart(4, '0')}` +
+      (b.jsx || prefix.some((_, i) => blocks[i]?.jsx === true) ? '.tsx' : '.ts')
     writeFileSync(
       join(OUT, name),
       `// generated from ${doc}, blocks up to line ${b.line}\n${source}`,
@@ -512,6 +519,9 @@ if (fileCount > 0) {
           '--target',
           'es2023',
           '--ignoreConfig',
+          // A .tsx snippet is a React example. JSX in a .ts file fails at parse, so the
+          // extension and the flag move together.
+          ...(f.endsWith('.tsx') ? ['--jsx', 'react-jsx'] : []),
           join(OUT, f),
         ],
         { stdio: 'inherit' },

@@ -562,7 +562,7 @@ isolation on the server and makes tests order-dependent.
 
 A binding built on this surface is a few lines:
 
-```ts ignore
+```tsx standalone
 import { useSyncExternalStore } from 'react'
 import type { Client, Status } from 'transport-io'
 
@@ -575,5 +575,6 @@ export function useConnectionStatus(client: Client): Status {
 }
 ```
 
-That last block is tagged `ignore` because React is not a dependency of this repository and
-never will be. It is the only exempt block in this document.
+That block compiles like every other one here. It is also what `@transport-io/react` does for
+you: [`useConnection`](https://transport-io.github.io/transport-io/guides/react/) is this plus
+the connection calls, a stable return and a server snapshot.
