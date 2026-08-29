@@ -24,7 +24,7 @@ import { startDevServer } from './dev-server.node.ts'
 const DEFAULT_PORT = 3000
 const DEFAULT_WT_PORT = 4433
 
-interface Args {
+export interface Args {
   readonly entry: string | undefined
   readonly demo: boolean
   readonly port: number
@@ -33,7 +33,11 @@ interface Args {
   readonly help: boolean
 }
 
-function parse(argv: readonly string[]): Args {
+export function parseArgs(input: readonly string[]): Args {
+  // The command word is dropped here rather than by the caller, so there is one place that
+  // knows about it. Leaving it in made `dev ./server.ts` take `dev` as the entry and fail
+  // with "Cannot find module .../dev", naming something the user never typed.
+  const argv = input[0] === 'dev' ? input.slice(1) : input
   let entry: string | undefined
   let demo = false
   let port = DEFAULT_PORT
@@ -82,8 +86,8 @@ function findStatic(explicit: string | undefined): string | undefined {
 }
 
 async function main(): Promise<void> {
-  const args = parse(process.argv.slice(2))
   const command = process.argv[2]
+  const args = parseArgs(process.argv.slice(2))
 
   if (args.help || command === undefined || (command !== 'dev' && !command.startsWith('-'))) {
     if (command !== undefined && command !== 'dev' && !command.startsWith('-')) {
@@ -161,7 +165,20 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((e: unknown) => {
-  console.error(e instanceof Error ? e.message : String(e))
-  process.exit(1)
-})
+/**
+ * Only when this file is the process entry.
+ *
+ * Without the guard, importing it to test `parseArgs` runs the whole command: the test
+ * printed the usage text and exited. Compared by resolved path rather than `import.meta.main`
+ * so it behaves the same under node and bun.
+ */
+const isEntry =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+
+if (isEntry) {
+  main().catch((e: unknown) => {
+    console.error(e instanceof Error ? e.message : String(e))
+    process.exit(1)
+  })
+}
