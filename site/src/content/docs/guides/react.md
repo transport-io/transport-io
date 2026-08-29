@@ -19,7 +19,7 @@ React and react-dom are peer dependencies, and the floor is **React 19.2**, beca
 it matches how the rest of this library is used: the map is passed explicitly, so the type
 follows the import and two contracts in one process are simply two objects.
 
-```ts
+```ts file=api.ts
 // api.ts
 import { defineContract, type MapOf, reliable, rpc, streaming } from 'transport-io'
 import { createHooks } from '@transport-io/react'
@@ -58,8 +58,8 @@ import { Client } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 import { TransportProvider } from '@transport-io/react'
 import { type ReactNode, useState } from 'react'
+import { type AppMap, contract } from './api.ts'
 
-// `contract` and `AppMap` come from api.ts above.
 export function Providers({ children }: { children: ReactNode }): ReactNode {
   // `useState` with an initialiser, so one client per mounted tree rather than one per
   // render, and never one shared between server requests.
@@ -86,6 +86,9 @@ second call.
 ## Connection state
 
 ```tsx
+import type { ReactNode } from 'react'
+import { api } from './api.ts'
+
 export function Status(): ReactNode {
   const { status, rooms, lastError } = api.useConnection()
   if (status === 'closed' && lastError !== null) return <p>offline: {lastError.code}</p>
@@ -108,7 +111,9 @@ has nothing to reconcile. The connect effect then drives the only transition.
 ## Events
 
 ```tsx
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
+import { api } from './api.ts'
+
 export function Messages(): ReactNode {
   const [lines, setLines] = useState<string[]>([])
 
@@ -131,6 +136,9 @@ State is a discriminated union rather than independent flags, so checking `statu
 `data` and the impossible combinations cannot be written down.
 
 ```tsx
+import type { ReactNode } from 'react'
+import { api } from './api.ts'
+
 export function Save(): ReactNode {
   const [save, state] = api.useCall('save')
 
@@ -155,6 +163,9 @@ has a server-side effect that must finish regardless, so pass
 ## Streams
 
 ```tsx
+import type { ReactNode } from 'react'
+import { api } from './api.ts'
+
 export function Ask(): ReactNode {
   const [ask, state, stop] = api.useStream('ask')
 
