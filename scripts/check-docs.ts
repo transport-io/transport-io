@@ -62,6 +62,15 @@ interface Block {
   readonly standalone: boolean
   /** From a ```tsx fence. Compiled as `.tsx` with `--jsx react-jsx`. */
   readonly jsx: boolean
+  /**
+   * From ```ts file=api.ts. The block is written under that name as well, so later blocks can
+   * `import { api } from './api.ts'` and have it resolve.
+   *
+   * This exists so a guide's examples can be copy-pasteable. Without it the only way to make
+   * a later block compile was to drop its imports and lean on the prefix, which compiles
+   * here and leaves a reader who copies one block with undefined names.
+   */
+  readonly fileName: string | undefined
 }
 
 function extractBlocks(file: string): Block[] {
@@ -79,6 +88,7 @@ function extractBlocks(file: string): Block[] {
       body: m[3] ?? '',
       standalone: info.includes('standalone'),
       jsx: m[1] === 'tsx',
+      fileName: /(?:^|\s)file=([\w.-]+)/.exec(info)?.[1],
     })
   }
   return out
@@ -181,6 +191,14 @@ for (const doc of COMPILED_DOCS) {
   const prefix: string[] = []
   for (const b of blocks) {
     const own = `// ${doc}:${b.line}\n${b.body}`
+    if (b.fileName !== undefined) {
+      // Written under its own name so later blocks can import it, and compiled on its own
+      // rather than joining the prefix: it is a module they import, not a step in the page's
+      // running program.
+      writeFileSync(join(OUT, b.fileName), own)
+      fileCount++
+      continue
+    }
     // A standalone block is not part of the page's running program, so it neither reads from
     // the prefix nor joins it. Accumulating it anyway made a page that shows one construct
     // two ways - a contract with types beside the same contract with a schema - fail as a
@@ -511,6 +529,9 @@ if (fileCount > 0) {
         './node_modules/typescript/bin/tsc',
         [
           '--noEmit',
+          // This repository writes `./util.ts` in its own source, so snippets do too, and a
+          // guide whose blocks import a sibling module has to be able to say so.
+          '--allowImportingTsExtensions',
           '--strict',
           '--skipLibCheck',
           '--module',
