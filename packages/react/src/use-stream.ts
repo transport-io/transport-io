@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type Registered, type StreamableOf, TransportError } from 'transport-io'
+import { type AnyMap, type Registered, type StreamableOf, TransportError } from 'transport-io'
 import { useClient } from './context.tsx'
 
 /** `elements` is present in every state after the first, so a render never loses what arrived. */
@@ -22,9 +22,9 @@ export interface UseStreamOptions<T> {
   readonly onElement?: (element: T) => void
 }
 
-export type UseStreamResult<K extends StreamableOf<Registered> & string> = readonly [
-  (payload: Registered[K]['payload']) => void,
-  StreamState<Registered[K]['yields']>,
+export type UseStreamResult<M extends AnyMap, K extends StreamableOf<M> & string> = readonly [
+  (payload: M[K]['payload']) => void,
+  StreamState<M[K]['yields']>,
   () => void,
 ]
 
@@ -47,7 +47,7 @@ function asTransportError(e: unknown): TransportError {
 export function useStream<K extends StreamableOf<Registered> & string>(
   event: K,
   options?: UseStreamOptions<Registered[K]['yields']>,
-): UseStreamResult<K> {
+): UseStreamResult<Registered, K> {
   type T = Registered[K]['yields']
   const client = useClient()
   const [state, setState] = useState<StreamState<T>>({ status: 'idle' })

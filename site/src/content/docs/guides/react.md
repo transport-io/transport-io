@@ -13,16 +13,37 @@ npm install @transport-io/react
 React and react-dom are peer dependencies, and the floor is **React 19.2**, because
 `useEvent` is built on `useEffectEvent`. There is no runtime dependency beyond that.
 
-## This binding requires the registered map
+## Bind the hooks to your map
 
-Everywhere else in these docs the contract is passed explicitly, as `Client<AppMap>`. The
-hooks are the exception: they are typed off the registered map, so `@transport-io/react`
-needs the `declare module` block below and does not work without it.
+`createHooks<AppMap>()` returns the hooks typed for one contract. That is the whole setup, and
+it matches how the rest of this library is used: the map is passed explicitly, so the type
+follows the import and two contracts in one process are simply two objects.
 
-That is a limitation of the binding as it shipped rather than a recommendation. Registration
-is global: one slot per process, two contracts conflict, and the resulting type depends on
-which module loaded rather than on what a file imported. See
-[Registering the map](/getting-started/#registering-the-map-optional) for the tradeoff.
+```ts
+// api.ts
+import { defineContract, type MapOf, reliable, rpc, streaming } from 'transport-io'
+import { createHooks } from '@transport-io/react'
+
+export const contract = defineContract({
+  chat: reliable<{ from: string; body: string }>(),
+  save: rpc<{ text: string }, { n: number }>(),
+  ask: streaming<{ prompt: string }, string>(),
+})
+export interface AppMap extends MapOf<typeof contract> {}
+
+export const api = createHooks<AppMap>()
+```
+
+Then `api.useEvent('chat', …)` anywhere, or destructure it:
+`export const { useEvent, useCall } = createHooks<AppMap>()`.
+
+Write the `MapOf` line. Passing `MapOf<typeof contract>` straight into `createHooks` takes
+`api.useEvent`'s hover from 129 characters to 411, with your validator's internals in it.
+
+The named exports (`useEvent`, `useCall`, …) still exist and read the globally registered map
+instead. They work, and they are the older path; see
+[Registering the map](/getting-started/#registering-the-map-optional) for why registration is
+opt-in.
 
 ## The provider takes a client
 
@@ -33,30 +54,18 @@ leak** on anything rendering more than one user, so build it inside the componen
 
 ```tsx
 'use client'
-import { Client, defineContract, type MapOf, reliable, rpc, streaming } from 'transport-io'
+import { Client } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 import { TransportProvider } from '@transport-io/react'
 import { type ReactNode, useState } from 'react'
 
-export const contract = defineContract({
-  chat: reliable<{ from: string; body: string }>(),
-  save: rpc<{ text: string }, { n: number }>(),
-  ask: streaming<{ prompt: string }, string>(),
-})
-export interface AppMap extends MapOf<typeof contract> {}
-
-declare module 'transport-io' {
-  interface Register {
-    map: AppMap
-  }
-}
-
+// `contract` and `AppMap` come from api.ts above.
 export function Providers({ children }: { children: ReactNode }): ReactNode {
   // `useState` with an initialiser, so one client per mounted tree rather than one per
   // render, and never one shared between server requests.
   const [client] = useState(
     () =>
-      new Client({
+      new Client<AppMap>({
         contract,
         connect: () => connectBrowser({ url: 'https://127.0.0.1:4433/' }),
       }),
@@ -77,10 +86,8 @@ second call.
 ## Connection state
 
 ```tsx
-import { useConnection } from '@transport-io/react'
-
 export function Status(): ReactNode {
-  const { status, rooms, lastError } = useConnection()
+  const { status, rooms, lastError } = api.useConnection()
   if (status === 'closed' && lastError !== null) return <p>offline: {lastError.code}</p>
   return (
     <p>
@@ -101,14 +108,12 @@ has nothing to reconcile. The connect effect then drives the only transition.
 ## Events
 
 ```tsx
-import { useEvent } from '@transport-io/react'
 import { useState } from 'react'
-
 export function Messages(): ReactNode {
   const [lines, setLines] = useState<string[]>([])
 
   // A fresh arrow every render, and the subscription still happens once.
-  useEvent('chat', (msg) => {
+  api.useEvent('chat', (msg) => {
     setLines((prev) => [...prev, `${msg.from}: ${msg.body}`])
   })
 
@@ -126,10 +131,8 @@ State is a discriminated union rather than independent flags, so checking `statu
 `data` and the impossible combinations cannot be written down.
 
 ```tsx
-import { useCall } from '@transport-io/react'
-
 export function Save(): ReactNode {
-  const [save, state] = useCall('save')
+  const [save, state] = api.useCall('save')
 
   return (
     <>
@@ -147,15 +150,13 @@ export function Save(): ReactNode {
 **Unmounting aborts an in-flight call.** An unmounted component's answer goes nowhere, and
 aborting is a QUIC stream reset that costs no application message. That bites when the call
 has a server-side effect that must finish regardless, so pass
-`useCall('save', { abortOnUnmount: false })` for those.
+`api.useCall('save', { abortOnUnmount: false })` for those.
 
 ## Streams
 
 ```tsx
-import { useStream } from '@transport-io/react'
-
 export function Ask(): ReactNode {
-  const [ask, state, stop] = useStream('ask')
+  const [ask, state, stop] = api.useStream('ask')
 
   return (
     <>

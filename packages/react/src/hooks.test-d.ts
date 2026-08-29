@@ -7,18 +7,18 @@
  * actually read, so it is pinned the way core pins its six.
  */
 import { expectTypeOf } from 'expect-type'
-import type { TransportError } from 'transport-io'
+import { defineContract, type MapOf, reliable, type TransportError } from 'transport-io'
+import type { TestMap } from './harness.tsx'
 import type { CallState, UseCallResult } from './use-call.ts'
 import { useCall } from './use-call.ts'
 import type { useConnection } from './use-connection.ts'
 import { useEvent } from './use-event.ts'
 import type { StreamState, UseStreamResult } from './use-stream.ts'
 import { useStream } from './use-stream.ts'
-import './harness.tsx'
 
 // --- tuples stay tuples ---
 
-declare const callResult: UseCallResult<'save'>
+declare const callResult: UseCallResult<TestMap, 'save'>
 expectTypeOf(callResult).toEqualTypeOf<
   readonly [(payload: { text: string }) => Promise<void>, CallState<{ n: number }>]
 >()
@@ -26,7 +26,7 @@ expectTypeOf(callResult).toEqualTypeOf<
 expectTypeOf(callResult[0]).parameter(0).toEqualTypeOf<{ text: string }>()
 expectTypeOf(callResult[1]).toEqualTypeOf<CallState<{ n: number }>>()
 
-declare const streamResult: UseStreamResult<'ask'>
+declare const streamResult: UseStreamResult<TestMap, 'ask'>
 expectTypeOf(streamResult).toEqualTypeOf<
   readonly [(payload: { prompt: string }) => void, StreamState<string>, () => void]
 >()
@@ -80,3 +80,44 @@ expectTypeOf(conn.status).toEqualTypeOf<
 expectTypeOf(conn.rooms).toEqualTypeOf<readonly string[]>()
 expectTypeOf(conn.connect).toEqualTypeOf<() => Promise<void>>()
 expectTypeOf(conn.disconnect).toEqualTypeOf<() => void>()
+
+// --- createHooks: the same types, bound to a map rather than to a registration ---
+
+import { createHooks } from './create-hooks.ts'
+
+const api = createHooks<TestMap>()
+
+// Destructuring keeps the types, which is how most people will use it.
+const { useEvent: onEvent } = createHooks<TestMap>()
+
+// A second contract in the same file, which is the thing registration cannot do.
+const otherContract = defineContract({ ping: reliable<{ seq: number }>() })
+interface OtherMap extends MapOf<typeof otherContract> {}
+const other = createHooks<OtherMap>()
+
+// Inside a component, because hooks may only be called from one.
+export function FactoryTypes(): null {
+  api.useEvent('chat', (p) => {
+    expectTypeOf(p).toEqualTypeOf<{ body: string }>()
+  })
+  expectTypeOf(api.useCall('save')).toEqualTypeOf<UseCallResult<TestMap, 'save'>>()
+  expectTypeOf(api.useStream('ask')).toEqualTypeOf<UseStreamResult<TestMap, 'ask'>>()
+
+  // @ts-expect-error 'chatt' is not an event in this contract
+  api.useEvent('chatt', () => {})
+
+  // @ts-expect-error 'chat' declares no `returns`, so it is not callable
+  api.useCall('chat')
+
+  onEvent('chat', (p) => {
+    expectTypeOf(p).toEqualTypeOf<{ body: string }>()
+  })
+
+  other.useEvent('ping', (p) => {
+    expectTypeOf(p).toEqualTypeOf<{ seq: number }>()
+  })
+  // @ts-expect-error the two maps do not bleed into each other
+  other.useEvent('chat', () => {})
+
+  return null
+}

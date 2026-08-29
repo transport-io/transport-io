@@ -1,10 +1,10 @@
 /** The fixture's server. Started by `transport-io dev`, so the certificate is handled. */
 import { createServer } from 'transport-io'
 import { listenDev } from 'transport-io/node-transport'
-import { contract } from './contract.ts'
+import { contract, type E2EMap } from './contract.ts'
 
 const ROOM = 'e2e'
-const server = createServer({ contract })
+const server = createServer<E2EMap>({ contract })
 
 let broadcasts = 0
 let sessions = 0

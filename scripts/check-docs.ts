@@ -131,6 +131,7 @@ const COMPILED_DOCS = [
   'site/src/content/docs/guides/backpressure.md',
   'site/src/content/docs/guides/reconnect.md',
   'site/src/content/docs/guides/react.md',
+  'packages/react/README.md',
 ] as const
 
 /**

@@ -1,4 +1,6 @@
 /** Shared by the fixture's server and its page, so the two cannot drift apart. */
+
+import { createHooks } from '@transport-io/react'
 import { defineContract, type MapOf, reliable, rpc, streaming } from 'transport-io'
 
 export const contract = defineContract({
@@ -9,8 +11,5 @@ export const contract = defineContract({
 
 export interface E2EMap extends MapOf<typeof contract> {}
 
-declare module 'transport-io' {
-  interface Register {
-    map: E2EMap
-  }
-}
+/** The documented default: hooks bound to this map, with nothing registered globally. */
+export const api = createHooks<E2EMap>()

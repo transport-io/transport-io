@@ -10,12 +10,15 @@ import { createContext, type ReactNode, useContext, useEffect } from 'react'
  * than one user, so the documented pattern builds one per browser session inside a client
  * component and the server never shares it.
  */
-import type { Client } from 'transport-io'
+import type { AnyMap, Client, Registered } from 'transport-io'
 
-const ClientContext = createContext<Client | null>(null)
+// Stored loosely and narrowed on the way out. The provider is generic so it accepts a client
+// for any map, which is what `createHooks` needs: nothing is registered, so `Client` alone
+// would mean `Client<NoContractRegistered>` and reject every real client.
+const ClientContext = createContext<Client<AnyMap> | null>(null)
 
-export interface TransportProviderProps {
-  readonly client: Client
+export interface TransportProviderProps<M extends AnyMap = Registered> {
+  readonly client: Client<M>
   /**
    * Connect while the provider is mounted. On by default: `connect` and `disconnect` are
    * idempotent and refcounted in core, so mounting twice is safe, and every application
@@ -25,11 +28,11 @@ export interface TransportProviderProps {
   readonly children?: ReactNode
 }
 
-export function TransportProvider({
+export function TransportProvider<M extends AnyMap = Registered>({
   client,
   autoConnect = true,
   children,
-}: TransportProviderProps): ReactNode {
+}: TransportProviderProps<M>): ReactNode {
   useEffect(() => {
     if (!autoConnect) return
     // A failed connect is reported through `lastError` on the snapshot, which is what
@@ -41,7 +44,9 @@ export function TransportProvider({
     }
   }, [client, autoConnect])
 
-  return <ClientContext.Provider value={client}>{children}</ClientContext.Provider>
+  return (
+    <ClientContext.Provider value={client as Client<AnyMap>}>{children}</ClientContext.Provider>
+  )
 }
 
 /**
@@ -50,7 +55,7 @@ export function TransportProvider({
  * Throws a plain `Error` rather than a `TransportError`: nothing has gone wrong on the
  * wire, and core must never gain a React-shaped error code.
  */
-export function useClient(): Client {
+export function useClient(): Client<Registered> {
   const client = useContext(ClientContext)
   if (client === null) {
     throw new Error(
@@ -59,5 +64,5 @@ export function useClient(): Client {
         'of the file that renders it.',
     )
   }
-  return client
+  return client as Client<Registered>
 }

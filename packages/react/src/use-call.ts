@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type CallableOf, type Registered, TransportError } from 'transport-io'
+import { type AnyMap, type CallableOf, type Registered, TransportError } from 'transport-io'
 import { useClient } from './context.tsx'
 
 /**
@@ -28,9 +28,9 @@ export interface UseCallOptions {
   readonly abortOnUnmount?: boolean
 }
 
-export type UseCallResult<K extends CallableOf<Registered> & string> = readonly [
-  (payload: Registered[K]['payload']) => Promise<void>,
-  CallState<Registered[K]['returns']>,
+export type UseCallResult<M extends AnyMap, K extends CallableOf<M> & string> = readonly [
+  (payload: M[K]['payload']) => Promise<void>,
+  CallState<M[K]['returns']>,
 ]
 
 function asTransportError(e: unknown): TransportError {
@@ -46,7 +46,7 @@ function asTransportError(e: unknown): TransportError {
 export function useCall<K extends CallableOf<Registered> & string>(
   event: K,
   options?: UseCallOptions,
-): UseCallResult<K> {
+): UseCallResult<Registered, K> {
   const client = useClient()
   const [state, setState] = useState<CallState<Registered[K]['returns']>>({ status: 'idle' })
   const abortOnUnmount = options?.abortOnUnmount ?? true

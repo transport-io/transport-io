@@ -6,14 +6,14 @@
  * Chromium. Deliberately ugly - it is a fixture, and every element exists to be asserted on.
  */
 
-import { TransportProvider, useConnection, useEvent } from '@transport-io/react'
+import { TransportProvider } from '@transport-io/react'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Client } from 'transport-io'
 import { connectDev } from 'transport-io/dev-transport'
-import { contract } from './contract.ts'
+import { api, contract, type E2EMap } from './contract.ts'
 
-const client = new Client({ contract, connect: () => connectDev() })
+const client = new Client<E2EMap>({ contract, connect: () => connectDev() })
 ;(globalThis as { __client?: unknown }).__client = client
 
 // Fixture instrumentation: how many live `on` subscriptions exist, so a test can tell a
@@ -40,12 +40,12 @@ const client = new Client({ contract, connect: () => connectDev() })
 }
 
 function Panel(): React.ReactNode {
-  const { status } = useConnection()
+  const { status } = api.useConnection()
   const [lines, setLines] = useState<string[]>([])
   const [renders, setRenders] = useState(0)
 
   // A fresh inline handler on every render, which is the case `useEvent` exists for.
-  useEvent('chat', (msg) => {
+  api.useEvent('chat', (msg) => {
     // Counted outside React too, so a test can distinguish a double *delivery* from React
     // applying the updater twice.
     const g = globalThis as { __delivered?: number }

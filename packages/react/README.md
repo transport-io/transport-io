@@ -10,10 +10,32 @@ React and react-dom are peer dependencies and the floor is **React 19.2**, becau
 is built on `useEffectEvent`. There is no other runtime dependency, and core neither depends
 on this package nor mentions it.
 
+## Bind the hooks to your map
+
+```ts
+import { defineContract, type MapOf, reliable } from 'transport-io'
+import { createHooks } from '@transport-io/react'
+
+export const contract = defineContract({ chat: reliable<{ body: string }>() })
+export interface AppMap extends MapOf<typeof contract> {}
+
+export const api = createHooks<AppMap>()
+```
+
+Then `api.useEvent('chat', …)`, or destructure it. Nothing is registered globally, so two
+contracts in one process are two objects, and the type follows the import.
+
+Write the `MapOf` line: passing `MapOf<typeof contract>` straight in takes `api.useEvent`'s
+hover from 129 characters to 411, with your validator's internals in it.
+
+The named exports below also exist and read the globally registered map instead. They work,
+and they are the older path.
+
 ## What it gives you
 
 | | |
 |---|---|
+| `createHooks<AppMap>()` | The hooks, typed for one contract. The documented default. |
 | `<TransportProvider client>` | Holds the client and connects while mounted. Takes a client rather than making one. |
 | `useClient()` | The client itself, for `emit` and anything else. |
 | `useConnection()` | Status, session id, rooms, last error, and the connect and disconnect calls. |
