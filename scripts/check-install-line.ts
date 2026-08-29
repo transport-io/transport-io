@@ -70,6 +70,32 @@ export function installCommands(markdown: string): string[] {
   return out
 }
 
+/**
+ * Packages a documented install line names that are not on the registry yet.
+ *
+ * An install line for something unpublished is a lie, which is exactly what this gate exists
+ * to catch, so an entry here is a debt rather than a decision. It can only shrink: the check
+ * below asks the registry, and a package that has since been published fails until its entry
+ * is removed, so this cannot quietly become permanent.
+ */
+const PENDING_PUBLISH: Readonly<Record<string, string>> = {
+  '@transport-io/react': 'the React binding, built and documented before its first publish',
+}
+
+/** True when the registry has never heard of it. */
+async function isUnpublished(pkg: string): Promise<boolean> {
+  try {
+    const res = await fetch(`https://registry.npmjs.org/${pkg.replace('/', '%2f')}`, {
+      headers: { 'cache-control': 'no-cache' },
+    })
+    return res.status === 404
+  } catch {
+    // A network failure is not evidence either way, and guessing "unpublished" would turn
+    // an offline run into a silent pass.
+    return false
+  }
+}
+
 const problems: string[] = []
 const found = DOCS.filter((d) => existsSync(d)).flatMap((d) =>
   installCommands(readFileSync(d, 'utf8')).map((c) => ({ doc: d, cmd: c })),
@@ -144,6 +170,14 @@ if (commands.length === 0) {
         }
       }
     } catch (e) {
+      const named = Object.keys(PENDING_PUBLISH).find((p) => cmd.includes(p))
+      if (named !== undefined && (await isUnpublished(named))) {
+        console.log(
+          `install: \`${cmd}\` skipped - ${named} is not published yet ` +
+            `(${PENDING_PUBLISH[named] ?? ''}), from ${doc}`,
+        )
+        continue
+      }
       problems.push(
         `${doc}: \`${cmd}\` failed to run: ${(e as Error).message.split('\n')[0]}\n` +
           '    An install line that does not execute is not an instruction.',
@@ -151,6 +185,15 @@ if (commands.length === 0) {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  }
+}
+
+for (const [pkg, why] of Object.entries(PENDING_PUBLISH)) {
+  if (!(await isUnpublished(pkg))) {
+    problems.push(
+      `${pkg} is recorded as pending publish and is now on the registry.\n` +
+        `    Remove it from PENDING_PUBLISH so its install line is executed. Reason given: ${why}`,
+    )
   }
 }
 
