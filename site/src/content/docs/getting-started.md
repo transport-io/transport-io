@@ -257,10 +257,12 @@ depends on which module was loaded rather than on what that file imported. It al
 nothing in readability. Hovering `emit` is 107 characters either way, measured; registration
 removes the type argument and nothing else.
 
-`@transport-io/react` currently requires it, which is the one place it is not optional.
+`@transport-io/react` does not need it either: `createHooks<AppMap>()` binds the hooks to a
+map the same way everything else takes one.
 
 ## Where next
 
 [The two lanes](/guides/lanes/) covers choosing between them.
 [`call()` and `stream()`](/guides/call-and-stream/) covers request shapes.
+[React](/guides/react/) is the binding, if that is what you are building in.
 [Limitations](/limitations/) is worth reading before you commit to this.

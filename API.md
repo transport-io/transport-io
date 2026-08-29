@@ -612,5 +612,5 @@ construction, of which an application has about two.
 type a file sees depends on which module was loaded rather than on what that file imported.
 The explicit form has neither property: the type follows the import.
 
-`@transport-io/react` is the one place it is currently required, because the hooks are typed
-off the registered map.
+Nothing requires it. `@transport-io/react` used to, and does not since `createHooks<AppMap>()`
+gave the hooks a map to bind to.
