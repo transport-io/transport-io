@@ -44,12 +44,6 @@
       ]
     },
     "examples/chat": {
-      // The contract file exports `ChatMap` and then consumes it itself, in the
-      // `declare module` block that registers it. Nothing imports it, because that is
-      // exactly what registering buys, and the export stays because a reader copying this
-      // file into a real application will want it. An export a file uses itself is not
-      // dead, and this says so for the example only.
-      "ignoreExportsUsedInFile": true,
       "entry": [
         "web/main.ts",
         "scripts/*.ts"

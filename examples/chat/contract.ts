@@ -20,11 +20,3 @@ export const contract = defineContract({
 
 // The second line is not optional decoration. It is what keeps hover readable.
 export interface ChatMap extends MapOf<typeof contract> {}
-
-// Registering the map makes it the default everywhere, so nothing else in this example
-// carries a type argument.
-declare module 'transport-io' {
-  interface Register {
-    map: ChatMap
-  }
-}

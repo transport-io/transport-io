@@ -11,9 +11,9 @@ Both lanes in one page, so you can watch the difference.
   growing the line in place. One bidirectional stream, many response frames, consumed with
   `stream()`.
 
-The contract in [`contract.ts`](contract.ts) is the only place that says which is which. It
-also registers the map, which is why neither `createServer({ contract })` in `server.node.ts`
-nor `new Client({ … })` in `web/main.ts` carries a type argument.
+The contract in [`contract.ts`](contract.ts) is the only place that says which is which.
+`ChatMap` is passed once at each end: `createServer<ChatMap>` in `server.node.ts` and
+`new Client<ChatMap>` in `web/main.ts`.
 
 ## Running it
 

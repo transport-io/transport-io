@@ -5,7 +5,7 @@
  */
 import { Client, type TransportError } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
-import { contract } from '../contract.ts'
+import { type ChatMap, contract } from '../contract.ts'
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id)
@@ -52,7 +52,7 @@ const { sha256, port } = (await (await fetch('/cert-hash')).json()) as {
   port: number
 }
 
-const client = new Client({
+const client = new Client<ChatMap>({
   contract,
   connect: () =>
     connectBrowser({

@@ -13,7 +13,7 @@ import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'
-import { contract } from './contract.ts'
+import { type ChatMap, contract } from './contract.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const certDir = join(here, '.cert')
@@ -40,7 +40,7 @@ try {
 
 const names = new Map<string, string>()
 
-const server = createServer({ contract })
+const server = createServer<ChatMap>({ contract })
 
 // Callable: the client asks for a name and gets an answer back on the same stream.
 server.handle('setName', async ({ name }) => {
