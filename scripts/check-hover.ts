@@ -53,6 +53,47 @@ void inline.stream('ask', { prompt: 'x' })
 `
 
 /**
+ * The React hooks, measured the same way and for the same reason.
+ *
+ * These are the signatures a React application reads most, and they sit on top of the same
+ * contract types, so a validator type leaking into `Registered` shows up here first. There
+ * is no interface-versus-inline comparison to make: the hooks are typed off the registered
+ * map and have only one form, so each carries a ceiling and nothing else.
+ */
+const HOOK_PROBE = `import { defineContract, type MapOf, reliable, rpc, streaming } from 'transport-io'
+import { useCall, useEvent, useStream } from '@transport-io/react'
+
+const contract = defineContract({
+  chat: reliable<{ from: string; body: string }>(),
+  save: rpc<{ text: string }, { revision: number }>(),
+  ask: streaming<{ prompt: string }, string>(),
+})
+interface AppMap extends MapOf<typeof contract> {}
+
+declare module 'transport-io' {
+  interface Register {
+    map: AppMap
+  }
+}
+
+export function Probe(): null {
+  useEvent('chat', () => {})
+  useCall('save')
+  useStream('ask')
+  return null
+}
+`
+
+const HOOKS = ['useEvent', 'useCall', 'useStream'] as const
+
+/** Measured from a clean run, and may only go down. */
+const MAX_HOOK_CHARS: Readonly<Record<string, number>> = {
+  useEvent: 130,
+  useCall: 105,
+  useStream: 130,
+}
+
+/**
  * Every method whose hover the two-line pattern is supposed to keep readable, not just the
  * one somebody measured first. `emit` was the only one checked, while D57's claim is about
  * the pattern rather than about `emit`, so a regression in `call` or `stream` was invisible
@@ -177,9 +218,11 @@ writeFileSync(
   }),
 )
 writeFileSync(join(DIR, 'probe.ts'), PROBE)
+writeFileSync(join(DIR, 'hooks-probe.tsx'), HOOK_PROBE)
 
 const lsp = start()
 const uri = `file://${join(DIR, 'probe.ts')}`
+const hookUri = `file://${join(DIR, 'hooks-probe.tsx')}`
 const problems: string[] = []
 
 try {
@@ -192,6 +235,14 @@ try {
   lsp.notify('initialized', {})
   lsp.notify('textDocument/didOpen', {
     textDocument: { uri, languageId: 'typescript', version: 1, text: PROBE },
+  })
+  lsp.notify('textDocument/didOpen', {
+    textDocument: {
+      uri: hookUri,
+      languageId: 'typescriptreact',
+      version: 1,
+      text: HOOK_PROBE,
+    },
   })
   // The project has to load before hover means anything. A null answer here reads as a
   // pass if it is not distinguished from a real one, so it is treated as a failure below.
@@ -250,6 +301,41 @@ try {
         `(ceiling ${ceiling})   interface/inline = ${(ratio * 100).toFixed(0)}%`,
     )
     console.log('')
+  }
+  console.log('\nreact hook hover width\n')
+  const hookLines = HOOK_PROBE.split('\n')
+  for (const hook of HOOKS) {
+    const line = hookLines.findIndex((l) => l.includes(`${hook}(`))
+    if (line < 0) {
+      problems.push(`${hook}: not found in the hook probe, so nothing was measured`)
+      continue
+    }
+    const character = (hookLines[line] ?? '').indexOf(hook) + 2
+    const hover = await Promise.race([
+      lsp.request('textDocument/hover', {
+        textDocument: { uri: hookUri },
+        position: { line, character },
+      }),
+      new Promise<undefined>((r) => setTimeout(() => r(undefined), 20_000)),
+    ])
+    const sig = hover === undefined ? undefined : signatureOf(hover)
+    if (sig === undefined || sig.length === 0) {
+      problems.push(`${hook}: the language server returned no hover, so nothing was measured`)
+      continue
+    }
+    const ceiling = MAX_HOOK_CHARS[hook] ?? 0
+    if (ceiling === 0) {
+      problems.push(`\`${hook}\` has no ceiling; add one measured from a clean run.`)
+    } else if (sig.length > ceiling) {
+      problems.push(
+        `\`${hook}\` hovers at ${sig.length} characters, over the ${ceiling} ceiling.\n` +
+          '    Something leaked a validator or contract internal into the hook signature.',
+      )
+    }
+    console.log(
+      `  ${hook.padEnd(10)} ${String(sig.length).padStart(4)} chars (ceiling ${ceiling})`,
+    )
+    console.log(`             ${sig}`)
   }
 } finally {
   lsp.stop()
