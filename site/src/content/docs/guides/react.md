@@ -39,6 +39,8 @@ Then `api.useEvent('chat', …)` anywhere, or destructure it:
 
 Write the `MapOf` line. Passing `MapOf<typeof contract>` straight into `createHooks` takes
 `api.useEvent`'s hover from 129 characters to 411, with your validator's internals in it.
+Both figures are re-measured on every CI run, and the gap between them is what the project's
+hover gate asserts.
 
 The named exports (`useEvent`, `useCall`, …) still exist and read the globally registered map
 instead. They work, and they are the older path; see

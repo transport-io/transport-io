@@ -26,7 +26,8 @@ Then `api.useEvent('chat', …)`, or destructure it. Nothing is registered globa
 contracts in one process are two objects, and the type follows the import.
 
 Write the `MapOf` line: passing `MapOf<typeof contract>` straight in takes `api.useEvent`'s
-hover from 129 characters to 411, with your validator's internals in it.
+hover from 129 characters to 411, with your validator's internals in it. Both are re-measured
+on every CI run.
 
 The named exports below also exist and read the globally registered map instead. They work,
 and they are the older path.
