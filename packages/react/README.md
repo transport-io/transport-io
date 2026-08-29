@@ -7,8 +7,8 @@ npm install @transport-io/react
 ```
 
 React and react-dom are peer dependencies and the floor is **React 19.2**, because `useEvent`
-is built on `useEffectEvent`. There is no other runtime dependency, and core neither depends
-on this package nor mentions it.
+is built on `useEffectEvent`. There is no other runtime dependency, and no core code depends
+on this package or refers to it.
 
 ## Bind the hooks to your map
 

@@ -3,8 +3,8 @@ title: React
 description: Hooks over useSyncExternalStore, correct under StrictMode, SSR and the App Router.
 ---
 
-`@transport-io/react` is the binding. It is a separate package with its own version, and core
-neither depends on it nor mentions it.
+`@transport-io/react` is the binding. It is a separate package with its own version, and no
+core code depends on it or refers to it.
 
 ```bash
 npm install @transport-io/react
