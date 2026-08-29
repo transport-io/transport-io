@@ -28,6 +28,21 @@
         "src/**/*.ts"
       ]
     },
+    "packages/react": {
+      // The hooks are the entry; the tests and the type tests are entries too, because a
+      // test file is not dead code and knip cannot tell the difference on its own. The
+      // harness consumes its own `TestMap` in a `declare module` block, which is a use knip
+      // does not follow, so an export a file uses itself is not dead here either.
+      "ignoreExportsUsedInFile": true,
+      "entry": [
+        "src/**/*.test.tsx",
+        "src/**/*.test-d.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "src/**/*.tsx"
+      ]
+    },
     "examples/chat": {
       // The contract file exports `ChatMap` and then consumes it itself, in the
       // `declare module` block that registers it. Nothing imports it, because that is

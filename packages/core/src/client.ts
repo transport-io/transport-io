@@ -52,6 +52,16 @@ export class Client<M extends AnyMap = Registered> {
   readonly #listeners = new Set<() => void>()
   readonly #handlers = new Map<string, Set<(payload: unknown) => void>>()
   #session: Session | undefined
+  /**
+   * Bumped by every `disconnect`, so a connect already in flight can tell it was superseded.
+   *
+   * Without it, `disconnect()` during `await connect()` did nothing to the attempt: the
+   * session it eventually produced was adopted anyway and had every stored handler
+   * registered on it, so two sessions dispatched to one handler and every event arrived
+   * twice. React StrictMode does exactly that on each mount in development, and the loopback
+   * transport resolves fast enough to hide it.
+   */
+  #generation = 0
   #snapshot: ClientState = Object.freeze({
     status: 'idle',
     sessionId: null,
@@ -97,8 +107,21 @@ export class Client<M extends AnyMap = Registered> {
   disconnect(): void {
     this.#refs = Math.max(0, this.#refs - 1)
     if (this.#refs > 0) return
+    this.#generation++
     this.#patch({ status: 'closing' })
-    this.#session?.close(CloseCode.WT_NO_ERROR, 'client disconnect')
+    const closing = this.#session
+    closing?.close(CloseCode.WT_NO_ERROR, 'client disconnect')
+    /**
+     * Disposed as well as closed, because closing is not immediate on a real transport.
+     *
+     * `on()` registers a handler on whatever session is current, and `connect()` registers
+     * every stored handler on the new one. Nothing removed them from the old session, so
+     * during a reconnect - which is exactly what React StrictMode does on every mount in
+     * development - both sessions dispatched to the same handler and every event arrived
+     * twice. Over the loopback transport the close is fast enough to hide it; over QUIC it
+     * is not, which is why this was found in a browser and not in a unit test.
+     */
+    closing?.dispose()
     this.#session = undefined
     this.#connecting = undefined
     this.#patch({ status: 'closed', sessionId: null, rooms: [] })
@@ -156,6 +179,7 @@ export class Client<M extends AnyMap = Registered> {
 
   async #doConnect(): Promise<void> {
     this.#patch({ status: 'connecting', lastError: null })
+    const generation = this.#generation
     try {
       const table = await buildEventTable(this.#opts.contract)
       const conn = await this.#opts.connect()
@@ -188,6 +212,13 @@ export class Client<M extends AnyMap = Registered> {
           : { scheduleFlush: this.#opts.scheduleFlush }),
         ...(this.#opts.now === undefined ? {} : { now: this.#opts.now }),
       })
+      // Superseded while the transport was being established. Adopting this session would
+      // register every handler on it alongside the one the newer connect built.
+      if (generation !== this.#generation) {
+        session.dispose()
+        conn.close(CloseCode.WT_NO_ERROR, 'connect superseded')
+        return
+      }
       this.#session = session
 
       for (const [event, handlers] of this.#handlers) {

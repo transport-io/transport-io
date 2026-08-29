@@ -1,0 +1,4 @@
+[test]
+# The React hook tests need a DOM. Registering it here rather than in each file means a new
+# test file gets it by default, which is the direction that fails safe.
+preload = ["./packages/react/src/happy-dom.preload.ts"]

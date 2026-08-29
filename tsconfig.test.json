@@ -6,12 +6,15 @@
     "declaration": false,
     "composite": false,
     "types": ["bun"],
-    "declarationMap": false
+    "declarationMap": false,
+    "jsx": "react-jsx"
   },
   "include": [
     "packages/*/src/**/*.test.ts",
     "packages/*/src/**/*.test-d.ts",
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "packages/*/src/**/*.test.tsx",
+    "packages/*/src/**/*.tsx"
   ],
   "exclude": ["packages/core/src/register.test-d.ts"]
 }
