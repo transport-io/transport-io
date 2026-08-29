@@ -36,11 +36,11 @@
     "@types/react-dom": "^19.2.5",
     "react": ">=19.2",
     "react-dom": ">=19.2",
-    "transport-io": "^0.6.0"
+    "transport-io": "^0.6.1"
   },
   "peerDependencies": {
     "react": ">=19.2",
     "react-dom": ">=19.2",
-    "transport-io": "^0.6.0"
+    "transport-io": "^0.6.1"
   }
 }
