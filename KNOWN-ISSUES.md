@@ -15,6 +15,27 @@ ever flow. That is the worst failure mode available, which is why the client tur
 a named error with a deadline rather than hanging. Safari is unsupported until the fix
 lands upstream.
 
+**Firefox does support `serverCertificateHashes`**, so the local-development recipe is not
+Chrome-only. Its first implementation treated the hashes as an extra check on top of Web PKI
+rather than a replacement for it, which meant self-signed certificates failed even when the
+hash matched; that was Mozilla bug 1873263, resolved fixed, shipped in Firefox 125. The
+support matrix therefore has one answer, not one for development and another for production.
+
+## A wrong pinned certificate is indistinguishable from a server that is down
+
+Measured in Chromium against a real server, all three of these produce the identical error -
+`WebTransportError`, message `Opening handshake failed.`, `code: 0`, `source: 'session'`, and
+no own enumerable properties at all:
+
+- a hash that does not match the certificate,
+- a correct hash for a certificate that has expired,
+- nothing listening on the port.
+
+So the browser gives a client no way to tell them apart, and neither can this library. That
+is worth knowing before you spend an afternoon on the wrong one: check that the server is
+running and that the certificate has not passed its fourteen days, in that order, before
+suspecting the hash itself.
+
 ## There is no fallback
 
 Not to WebSocket, not to anything. A WebSocket is reliable and ordered, so falling back to

@@ -2571,3 +2571,30 @@ and every payload: registration appeared to work and bought nothing.
 The type test that should have caught it asserted only that two server types differ, which is
 true whatever the payload types are. It now asserts the payload types themselves, because
 acceptance is exactly what `AnyMap` also gives.
+
+---
+
+### D106. The dev certificate is minted by shelling out to openssl, not in JavaScript
+
+A pure-JS `mintDevCert()` was proposed, on two grounds: openssl on Windows is a support
+burden, and owning the minting lets the hash come back as `Uint8Array` instead of hex a user
+has to parse.
+
+The second is already solved. `transport-io dev` returns the hash as bytes and publishes it
+at a fixed endpoint, so nobody parses hex; that was the actual complaint, and it is fixed
+without a DER encoder.
+
+The first does not pay for what it costs. Issuing an X.509 certificate in JavaScript means
+writing and maintaining an ASN.1 DER encoder for a TBSCertificate, ECDSA P-256 signing over
+it, and the SAN extension - new cryptographic surface, in a library whose CLI currently has
+no runtime dependencies at all, for a platform this project already does not support for
+development (see "Platform support" in CLAUDE.md). Node cannot help: `crypto.Certificate` is
+SPKAC only and there is no issuance API, which is why openssl is invoked in the first place.
+
+**The known cost, recorded rather than fixed:** `transport-io dev` requires `openssl` on
+`PATH`. It is present by default on macOS and on every mainstream Linux distribution, and the
+CLI names the install command for the platform when it is missing. Windows contributors use
+WSL, where it is present.
+
+**Reconsider when:** somebody reports this as a real blocker rather than a theoretical one, or
+Node gains a certificate-issuance API. The second removes the entire argument.

@@ -150,6 +150,7 @@ pointer rate.
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'
 
+// `cert` and `privKey` are the PEM text, not paths to it.
 export async function serve(cert: string, privKey: string): Promise<void> {
   const server = createServer({ contract })
 
@@ -180,6 +181,9 @@ import { Client } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 
 export async function run(url: string): Promise<number> {
+  // No `certificateHash`, so the certificate is validated against the platform's CA store
+  // like any other HTTPS origin. Pass one only to pin a self-signed certificate in
+  // development, which is what `transport-io dev` sets up for you.
   const client = new Client({ contract, connect: () => connectBrowser({ url }) })
   await client.connect()
 

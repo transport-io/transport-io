@@ -128,6 +128,8 @@ import { connectBrowser } from 'transport-io/browser-transport'
 
 const client = new Client({
   contract,
+  // No `certificateHash`: ordinary CA validation, which is the production path. Pass one
+  // only to pin a self-signed certificate locally.
   connect: () => connectBrowser({ url: 'https://example.com:4433/' }),
 })
 

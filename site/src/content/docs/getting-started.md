@@ -111,7 +111,7 @@ The library depends on none of them.
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'
 
-// From your own configuration: see "The certificate" below.
+// The PEM *text*, not a path to it. See "The certificate" below.
 declare const cert: string
 declare const privKey: string
 
@@ -136,15 +136,27 @@ on the server side and there is no client equivalent.
 import { Client } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 
-// The SHA-256 of your certificate's DER bytes, and your own render functions.
+// SHA-256 over the certificate's DER bytes. Not over `cert.pem`, which is base64 with
+// header lines: hashing the file gives you 32 bytes that look right and never connect.
+//   openssl x509 -in cert.pem -outform der | openssl dgst -sha256 -binary
 declare const certificateHash: Uint8Array
 declare function render(from: string, body: string): void
 declare function moveDot(x: number, y: number): void
 
+// In production, omit `certificateHash` entirely. The connection is then validated against
+// the platform's own CA store like any other HTTPS origin, which is what you want with a
+// real certificate. Pinning is a local-development affordance, not how this library works.
+const production = new Client({
+  contract,
+  connect: () => connectBrowser({ url: 'https://example.com:443/' }),
+})
+
+// In development, against a self-signed certificate, pin it by hash.
 const client = new Client({
   contract,
   connect: () => connectBrowser({ url: 'https://127.0.0.1:8080/', certificateHash }),
 })
+void production
 await client.connect()
 
 client.on('chat', ({ from, body }) => render(from, body))
