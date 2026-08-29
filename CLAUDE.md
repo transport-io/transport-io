@@ -4,6 +4,16 @@ guides. A breaking change needs a changeset and a CHANGELOG
 entry, nothing more. Semver applies at 1.0, which is a
 decision I make explicitly and have not made.
 
+No migration guides, no upgrade sections, no compatibility
+notes anywhere except CHANGELOG.md. The distinction is record
+versus instruction: the changelog says what happened, and
+every other document describes the current version as though
+it is the only one that has ever existed. Sweep for the shape,
+not the word: "upgrading from", "migrating", "in earlier
+versions", "this changed in", "previously", a past release
+named as a worked example. At 1.0 this inverts, and the first
+migration guide gets written deliberately.
+
 # transport-io
 
 A TypeScript library for real-time apps over WebTransport. Socket.IO's shape, on a

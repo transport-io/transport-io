@@ -263,16 +263,6 @@ Namespaces (a room-name prefix covers it), presence, middleware chains
 (auth is one hook), binary payloads (JSON only, with a codec seam reserved), server-initiated
 streaming (a response shape only), framework bindings, and the Redis adapter.
 
-## Upgrading from 0.1.0
-
-**`0.2.0` breaks the wire.** Lane values were renamed, and the handshake carries the lane as
-a literal string, so a `0.1.0` peer and a `0.2.0` peer fail to negotiate with
-`WT_PROTOCOL_ERROR`. Upgrade both sides together; there is no rolling path between them.
-
-In your contracts, `lane: 'stream'` becomes `lane: 'reliable'` and `lane: 'datagram'` becomes
-`lane: 'unreliable'`. Nothing else changed: no error code, no frame type, and `call()`
-behaves exactly as it did.
-
 ## Documentation
 
 - [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) - **read this before you start**: what this library

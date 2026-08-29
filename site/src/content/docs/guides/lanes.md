@@ -10,8 +10,8 @@ Every event declares a lane. The lane names a guarantee.
 | `reliable` | It arrives, in order, or the session fails. | QUIC streams |
 | `unreliable` | It may be dropped, duplicated or reordered. | QUIC datagrams |
 
-The values were `stream` and `datagram` until 0.2.0, when they were renamed to describe the
-guarantee instead of the transport mechanism.
+A lane names the guarantee your data gets, not the mechanism that carries it. That is the
+whole reason the values read the way they do.
 
 ## Choosing a lane
 

@@ -94,8 +94,8 @@ types-only schema the helpers build, exported for the object form.
 ### Rules the contract enforces
 
 - Lanes name guarantees. `reliable` is carried on QUIC streams, `unreliable` on QUIC
-  datagrams. Never write `lane: 'stream'` or `lane: 'datagram'`: those were the 0.1.0
-  spellings and they no longer exist.
+  datagrams. The lane names the guarantee your data gets, never the mechanism that carries
+  it.
 - `returns` is valid **only** on `lane: 'reliable'`. An unreliable event has no response
   path, and the type refuses it.
 - An event's wire id is the first four bytes of SHA-256 of its **name**, so adding or

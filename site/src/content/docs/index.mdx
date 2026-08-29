@@ -148,8 +148,8 @@ These are properties of the library, not things it will grow out of.
   is a lie about your data. An unsupported runtime gets `WT_NO_SUPPORT` and nothing else.
 - **It needs raw UDP ingress to your process.** Many managed platforms do not provide it.
   Check yours before building on this.
-- **`0.x`, so a minor bump may break you.** `0.2.0` renamed both lane values and changed the
-  handshake; a `0.1.0` peer and a `0.2.0` peer refuse each other.
+- **`0.x`, so a minor bump may break you.** A minor release is allowed to change the wire, so
+  two peers on different minors may refuse each other. Pin the minor.
 - **Every bidirectional stream leaks about 5.95 KB of server memory**, upstream in the QUIC
   binding rather than here. Streaming amortises it: a thousand tokens down one stream cost
   what one call does.
