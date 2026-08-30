@@ -13,6 +13,7 @@ import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'
+import { AGENTS, paceOf } from './agents.ts'
 import { type ChatMap, contract } from './contract.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -55,6 +56,28 @@ server.handle('say', async function* ({ text }) {
   for (const word of text.split(/\s+/).filter(Boolean)) {
     await new Promise((r) => setTimeout(r, 80))
     yield word
+  }
+})
+
+// Two of these run at once on `/agents.html`, each on its own bidirectional stream.
+//
+// The `finally` is the half worth reading. Stopping a panel resets that stream, which fires
+// `ctx.signal` and returns this generator, so the server stops producing rather than
+// producing into a reader that has gone away. Watch this log line while you click stop: it
+// is the server-side half of what the page's counters show.
+server.handle('generate', async function* ({ agent }, ctx) {
+  const script = AGENTS[agent]
+  if (script === undefined) throw new Error(`unknown agent '${agent}'`)
+  let sent = 0
+  try {
+    for (const [i, token] of script.tokens.entries()) {
+      await new Promise((r) => setTimeout(r, paceOf(script, i)))
+      yield token
+      sent++
+    }
+    console.log(`generate ${agent}: done, ${sent} tokens`)
+  } finally {
+    if (ctx.signal.aborted) console.log(`generate ${agent}: cancelled after ${sent} tokens`)
   }
 })
 

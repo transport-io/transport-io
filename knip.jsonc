@@ -46,6 +46,7 @@
     "examples/chat": {
       "entry": [
         "web/main.ts",
+        "web/agents.ts",
         "scripts/*.ts"
       ],
       "project": [

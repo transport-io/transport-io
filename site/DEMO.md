@@ -7,37 +7,56 @@ aspect ratio locked, and this is what goes in it.
 The point being demonstrated is the one thing that is hard to believe from prose:
 **two streams running at once, one cancelled, and the other does not notice.**
 
-## What to build first
+## The page
 
-The chat example already streams. For the recording it needs a purpose-built page with two
-panels side by side, which is a small addition to `examples/chat`:
+`examples/chat/web/agents.html`. Two panels, each running `client.stream('generate', …)`
+against the same session, a stop button under each, a token counter and a live rate under
+each, and **open streams** in the header reading `2` and then `1`.
 
-- **Panel A and Panel B**, each running `client.stream('ask', …)` against the same session,
-  rendering tokens as they arrive.
-- **A stop button under panel A**, wired to `break` out of A's loop and nothing else.
-- **A counter under each panel**: elements received, updating live.
-- **A session-wide counter**: open streams, which should read `2`, then `1`.
+```bash
+cd examples/chat && bun run dev   # then http://localhost:8080/agents.html
+```
 
-Everything above already exists in the library. The panel is 30 lines of DOM.
+Both panels start on load and run for about eighteen and twenty-two seconds. That is slower
+than a model answers, and it is set against the clock rather than for realism: at a realistic
+rate both finish in thirteen seconds, which is less time than a first-time visitor takes to
+find the stop button.
+
+The counter that carries the shot is the one that appears beside the panel you did **not**
+stop: `+N since agent-a stopped`, starting at zero and climbing while the other panel sits
+frozen. `e2e/two-streams-one-session.spec.ts` asserts it in both directions against a bound
+computed from the server's own pacing, so a recording can never show something the suite is
+not already holding true.
+
+The tokens come from a fixed script in `examples/chat/agents.ts` and no model is called.
+Pacing is a function of the token index rather than a random source, so two takes of the same
+run are identical - which is the difference between recording this once and recording it
+eleven times.
 
 ## Shot list
 
-Nine seconds of real content, looped. No cuts, no speed-ups: a cut is where a viewer assumes
-you hid the latency.
+Eleven seconds of real content, looped. No cuts, no speed-ups: a cut is where a viewer
+assumes you hid the latency.
+
+Press **restart both** off camera, then start recording.
 
 | t | what is on screen |
 |---|---|
-| 0.0s | Both panels empty. Stream counter reads `0`. |
-| 0.5s | Both start. Tokens begin filling A and B at slightly different rates. |
-| 3.0s | Both mid-generation, both counters climbing, stream counter reads `2`. |
-| 4.0s | Cursor moves to **Stop** under panel A. Nothing else changes. |
-| 4.5s | Click. **A stops on the same frame.** Its counter freezes. |
-| 4.6s | Stream counter drops to `1`. **B's counter does not pause, stutter or reset.** |
-| 6.0s | B still going, A still frozen, the gap between the two counters growing. |
-| 9.0s | B completes on its own. Loop. |
+| 0.0s | Both panels nearly empty. **open streams** reads `2`. |
+| 0.5s | Tokens filling A and B at visibly different rates. |
+| 3.0s | Both mid-generation, both counters climbing. |
+| 4.0s | Cursor moves to **stop** under panel A. Nothing else changes. |
+| 4.5s | Click. **A stops on the same frame.** Its counter freezes and its state reads `stopped`. |
+| 4.6s | **open streams** drops to `1`. `+N since agent-a stopped` appears under B, at `+1`. |
+| 6.0s | B still going, A still frozen, the `+N` climbing and B's rate unchanged. |
+| 11.0s | Cut. Loop. |
 
 The frame at 4.5s is the whole recording. If the stop is not visibly instant, the take is
 wasted, so record at 60 fps and check that frame before keeping it.
+
+The clip ends mid-generation because a full run is eighteen seconds and the loop has to be
+short. That is fine: nothing in the shot depends on either panel finishing, and B still
+running when the clip cuts is the point rather than a loose end.
 
 ## Format
 

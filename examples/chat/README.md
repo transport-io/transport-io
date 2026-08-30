@@ -1,6 +1,13 @@
-# chat with live cursors
+# chat, cursors, and two streams at once
 
-Both lanes in one page, so you can watch the difference.
+Two pages against one server.
+
+- **`/`** puts both lanes in one screen, so the difference between them is something you
+  watch rather than something you are told.
+- **`/agents.html`** runs two streaming calls at the same time and lets you stop either one.
+  It is the shortest answer to why this is not a WebSocket.
+
+Five events carry all of it:
 
 - **chat** is `reliable()` - reliable and ordered. Nothing sent here is ever lost.
 - **cursor** is `unreliable()` - frames are dropped routinely, which is fine: a cursor
@@ -10,6 +17,7 @@ Both lanes in one page, so you can watch the difference.
 - **say** is `streaming()` - type `/say some words` and the reply arrives one word at a time,
   growing the line in place. One bidirectional stream, many response frames, consumed with
   `stream()`.
+- **generate** is `streaming()` too, and the agents page runs two of them concurrently.
 
 The contract in [`contract.ts`](contract.ts) is the only place that says which is which.
 `ChatMap` is passed once at each end: `createServer<ChatMap>` in `server.node.ts` and
@@ -19,14 +27,39 @@ The contract in [`contract.ts`](contract.ts) is the only place that says which i
 
 ```bash
 bun run cert       # mint a 14-day ECDSA P-256 certificate
-bun run build:web  # bundle the browser client
+bun run build:web  # bundle the browser clients
 bun run start      # http://localhost:8080
 ```
 
 Or `bun run dev`, which does all three.
 
-Open **two** windows. Type in one; it appears in both. Move the pointer in
+Open **two** windows on `/`. Type in one; it appears in both. Move the pointer in
 one; the dot moves in the other, and the drop counters in the header climb under load.
+
+## Two streams at once
+
+Open `/agents.html`. Two panels start generating immediately, each from its own
+`stream('generate', ...)` call, and each call gets its own bidirectional QUIC stream inside
+the one session.
+
+Press **stop** under either one. Three things happen and all three are visible:
+
+- The panel you stopped freezes on the token it was on. Its state reads `stopped`.
+- **open streams** in the header goes from 2 to 1.
+- The other panel gains a counter reading `+N since agent-a stopped`, and that number climbs
+  from zero while the panel beside it sits frozen. Its rate does not dip.
+
+The server half is in the terminal you started it from. Stopping a panel resets that QUIC
+stream, which fires `ctx.signal` in the responder and returns its generator, so the server
+prints something like `generate agent-a: cancelled after 21 tokens` and stops producing. It is not a
+message the client sends and then hopes is honoured; the transport carries it, and the
+generator ends where it stood.
+
+The tokens are generated on the server from a fixed script in [`agents.ts`](agents.ts). **No
+model is called** and nothing leaves the machine. What is real is everything underneath: QUIC
+over UDP, a pinned certificate, two live streams that know nothing about each other. Pacing
+is a function of the token index rather than a random source, so two runs of the page are
+identical, which is what makes the page recordable.
 
 ## Things that will trip you up
 
@@ -56,3 +89,8 @@ where your own pointer is.
 
 `web/main.ts` uses `subscribe`/`getSnapshot` rather than a pile of events - the same two
 methods a React binding would hand to `useSyncExternalStore`.
+
+`web/agents.ts` is the whole two-stream demonstration and there is no framing code in it, no
+correlation identifier and no pending map. Two `stream()` calls, two `for await` loops, and
+`cancel()` for stopping from outside a loop where `break` cannot reach. The panel that keeps
+running is not handled anywhere: it keeps running because nothing connects the two.

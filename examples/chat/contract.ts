@@ -16,6 +16,12 @@ export const contract = defineContract({
   say: streaming<{ text: string }, string>(),
   /** Callable: one value comes back. */
   setName: rpc<{ name: string }, { accepted: boolean; name: string }>(),
+  /**
+   * The second page runs two of these at once. Each `stream()` opens its own bidirectional
+   * stream, so the two are independent all the way down to QUIC, and stopping one is a
+   * reset on that stream and nothing else.
+   */
+  generate: streaming<{ agent: string }, string>(),
 })
 
 // The second line is not optional decoration. It is what keeps hover readable.
