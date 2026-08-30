@@ -52,6 +52,11 @@ jobs:
         run: npx tsc --build
       - name: typecheck (tests and type-level tests)
         run: npx tsc -p tsconfig.test.json
+      # The examples are the only consumer of the published types that lives in this
+      # repository, and nothing was checking them: `bun build` and `node --strip-types` both
+      # erase types without reading them, so the example compiled in the sense that it ran.
+      - name: typecheck (examples, against the built types)
+        run: npx tsc -p examples/chat
       - name: biome
         run: npx biome ci .
       - name: dead code
