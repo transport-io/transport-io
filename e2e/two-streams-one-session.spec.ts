@@ -101,4 +101,10 @@ test('a stream nobody stops runs to completion', async ({ page }) => {
   await expect(page.locator('#a-state')).toHaveText('done', { timeout: 30_000 })
   await expect(page.locator('#a-out')).toContainText('takes nothing else down with it')
   await expect(page.locator('#open')).toHaveText('1')
+
+  // Stopping a panel that already finished stops nothing, so the panel beside it must not
+  // start counting from a moment nothing happened at.
+  await page.click('#a-stop')
+  await expect(page.locator('#a-state')).toHaveText('done')
+  await expect(page.locator('#b-since')).toBeEmpty()
 })

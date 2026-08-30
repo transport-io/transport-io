@@ -55,7 +55,8 @@ client.subscribe(() => {
 
 interface Panel {
   start(): void
-  stop(): void
+  /** True if there was a running stream to stop, so a finished panel does not claim one. */
+  stop(): boolean
   /** Count from here, labelled with whichever panel just stopped. */
   countFrom(label: string): void
   clearCount(): void
@@ -124,6 +125,11 @@ function makePanel(id: 'a' | 'b', name: string): Panel {
       const err = e as TransportError
       // `cancel()` is this page's own doing, so it ends the stream rather than failing it.
       setState(err.code === 'WT_ABORTED' ? 'stopped' : `failed: ${err.code}`)
+    } finally {
+      // However this stream ended, there is nothing left to stop. A panel that has finished
+      // on its own would otherwise report a stop that never happened, and the other panel
+      // would start counting from a moment nothing occurred at.
+      if (mine === generation) handle = null
     }
   }
 
@@ -132,8 +138,10 @@ function makePanel(id: 'a' | 'b', name: string): Panel {
     stop: () => {
       // From outside the loop, where `break` cannot reach. It resets the QUIC stream, the
       // loop above sees WT_ABORTED, and the server's generator is cancelled where it stands.
-      handle?.cancel()
+      if (handle === null) return false
+      handle.cancel()
       handle = null
+      return true
     },
     countFrom: (label) => {
       sinceBase = tokens
@@ -153,12 +161,10 @@ const b = makePanel('b', 'agent-b')
 // Stopping one panel is also what tells the other to start counting. That number is the
 // whole demonstration: it climbs while the panel beside it is frozen.
 $('a-stop').addEventListener('click', () => {
-  a.stop()
-  b.countFrom('agent-a')
+  if (a.stop()) b.countFrom('agent-a')
 })
 $('b-stop').addEventListener('click', () => {
-  b.stop()
-  a.countFrom('agent-b')
+  if (b.stop()) a.countFrom('agent-b')
 })
 $('a-start').addEventListener('click', () => {
   a.start()
