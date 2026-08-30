@@ -77,7 +77,9 @@
   <p>Stop either panel. The other's counter does not pause, and the number that appears beside
   it counts what arrived after you pressed stop.</p>
   <p>Two <code>stream()</code> calls, one session, one UDP flow, two independent QUIC streams.
-  Stop is a reset on one of them and the server's generator for that panel ends with it.</p>
+  Stop is a transport reset rather than a message the server has to cooperate with: the
+  responder's generator ends where it stands, and whatever it had already queued is dropped
+  rather than delivered.</p>
   <p>The words are generated on the server from a fixed script. No model is called. Everything
   under them is real: QUIC over UDP, a pinned certificate, two live streams.</p>
 </footer>
