@@ -204,6 +204,42 @@ test('credit bounds how far the producer runs ahead of a slow consumer', async (
   client.disconnect()
 })
 
+test('a reset discards what the producer had queued, over real QUIC', async () => {
+  reset()
+  const client = await connected()
+
+  const s = client.stream('ask', { prompt: 'forever' })
+  const seen: string[] = []
+
+  // Consumed slowly on purpose. With a consumer that keeps up there is nothing queued at
+  // the moment of the reset, and every assertion below holds for the wrong reason.
+  const consuming = (async () => {
+    for await (const t of s) {
+      seen.push(t)
+      state.consumed++
+      await new Promise((r) => setTimeout(r, 8))
+    }
+  })().catch(() => undefined)
+
+  await until(() => state.consumed >= 15, 5000)
+  const producedAtCancel = state.produced
+  const takenAtCancel = seen.length
+  s.cancel()
+  await consuming
+  // Long enough for anything still in flight to have arrived, if it were going to.
+  await new Promise((r) => setTimeout(r, 300))
+
+  // The guard that stops this passing over an empty queue. Measured at 18 with the window
+  // at 32; ten leaves room without letting the vacuous case through.
+  assert.ok(
+    producedAtCancel - takenAtCancel >= 10,
+    `only ${producedAtCancel - takenAtCancel} frame(s) were queued, so this proves nothing`,
+  )
+  assert.equal(seen.length, takenAtCancel, 'a queued frame was delivered after the reset')
+  assert.equal(state.produced, producedAtCancel, 'the responder kept producing after the reset')
+  client.disconnect()
+})
+
 test('cancel() stops a stream from outside the loop, over real QUIC', async () => {
   reset()
   const client = await connected()
