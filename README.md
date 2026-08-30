@@ -271,7 +271,8 @@ streaming (a response shape only), framework bindings, and the Redis adapter.
 - [`API.md`](API.md) - the TypeScript surface
 - [`DECISIONS.md`](DECISIONS.md) - every question this project raised, answered
 - [`ADR/`](ADR) - the records a future contributor would want to reverse
-- [`examples/chat`](examples/chat) - both lanes in one page
+- [`examples/chat`](examples/chat) - both lanes in one page, and two streaming calls
+  running at once in another, where stopping one leaves the other untouched
 
 ## Licence
 
