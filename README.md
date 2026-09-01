@@ -265,6 +265,62 @@ implement an interoperable server in another language without reading this sourc
 adapter, `transport-io/testing` exports `HostileAdapter`, which serialises frames through
 bytes, adds latency, reorders, duplicates and fails on command.
 
+## Compared with Socket.IO
+
+Socket.IO has supported WebTransport since 4.7.0, released in June 2023. Everything in this
+section comes from Socket.IO's own documentation and source, linked at the end, so each line
+can be checked.
+
+**Where Socket.IO is the better choice.** Socket.IO falls back to WebSocket, and then to HTTP
+long-polling. Safari works, and so do networks that block UDP. transport-io has no fallback:
+an unsupported browser or a UDP-blocked path gets `WT_NO_SUPPORT` and nothing else. If you
+have to support Safari, or cannot rely on UDP reaching your server, use Socket.IO. Socket.IO
+also guarantees ordering across a transport upgrade, buffers client events across a
+reconnection, offers at-least-once client-to-server delivery with `retries`, and has
+namespaces, middleware, a Redis adapter and years of production use. transport-io starts a new
+session on reconnect, keeps no buffer, and has rooms and an in-memory adapter.
+
+**What is the same.** Both servers need the same native QUIC package,
+`@fails-components/webtransport`, because Node has no WebTransport of its own. Both are bound
+by the same rule for a self-signed development certificate: ECDSA, at most fourteen days.
+Neither reaches Safari over WebTransport. The install caveats further down this page are
+properties of the transport stack, not of either library.
+
+**Where they differ**, on points that are visible in Socket.IO's source:
+
+| | Socket.IO | transport-io |
+|---|---|---|
+| Streams | One bidirectional stream per session, carrying every Engine.IO packet behind a length header. The protocol forbids a client from opening a second one. | The emit lane on one stream per direction, and a fresh bidirectional stream for every `call` and `stream`. |
+| Datagrams | Not used. | The unreliable lane. |
+| Acknowledgements | An incrementing id per request and a map from id to callback on each side; the ACK packet carries the id back. | The stream is the correlation. No id, no map. |
+| Cancelling a request in flight | `timeout()` rejects locally after a delay and removes the map entry. Nothing is sent to the peer, whose handler continues. | An `AbortSignal` or `cancel()` resets the QUIC stream. The responder's `signal` fires and its generator's `finally` runs. |
+| Reliability in the types | Events are typed as function signatures and nothing marks delivery. `volatile` is a runtime modifier: the event is discarded if the transport is not writable at that moment, and sent normally otherwise. | `reliable` or `unreliable` on each event in the contract. The lane is a type. |
+| Typed setup | Four interfaces, `ServerToClientEvents`, `ClientToServerEvents`, `InterServerEvents` and `SocketData`, with the two event interfaces passed in opposite order on the server and the client. | One contract, one `MapOf` line, and the same name at each end. |
+
+**Head-of-line blocking.** Socket.IO's documentation describes WebTransport as fixing the
+head-of-line blocking that affects WebSocket. The transport can do it; their use of it does
+not. With one stream, every packet Socket.IO sends is one ordered sequence, and QUIC removes
+head-of-line blocking only between streams, so a lost packet still stalls what is behind it
+on that stream. What a single QUIC stream does gain over TCP is QUIC's loss recovery, which is
+what their documentation means by "the most efficient transport, especially in environments
+prone to packet loss". transport-io puts each call and each stream on its own QUIC stream,
+which is why one stalled call does not delay another, and it is the property the two-panel
+demo in [`examples/chat`](examples/chat) shows.
+
+Sources: the [4.7.0 changelog](https://socket.io/docs/v4/changelog/4.7.0), the
+[WebTransport guide](https://socket.io/get-started/webtransport), the
+[Engine.IO protocol](https://socket.io/docs/v4/engine-io-protocol/) and its
+[client](https://github.com/socketio/socket.io/blob/main/packages/engine.io-client/lib/transports/webtransport.ts)
+and [server](https://github.com/socketio/socket.io/blob/main/packages/engine.io/lib/server.ts)
+transports, the [parser](https://github.com/socketio/socket.io/blob/main/packages/engine.io-parser/lib/index.ts)
+that writes the length header, the
+[client](https://github.com/socketio/socket.io/blob/main/packages/socket.io-client/lib/socket.ts)
+and [server](https://github.com/socketio/socket.io/blob/main/packages/socket.io/lib/socket.ts)
+socket classes for acknowledgements and `timeout()`, the
+[emitting events](https://socket.io/docs/v4/emitting-events/) page for `volatile`, the
+[TypeScript guide](https://socket.io/docs/v4/typescript/), and the
+[delivery guarantees](https://socket.io/docs/v4/delivery-guarantees/) page.
+
 ## Not in this version
 
 Namespaces (a room-name prefix covers it), presence, middleware chains
