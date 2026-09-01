@@ -68,11 +68,11 @@ sed -e 's/"esnext"/"node16"/' -e 's/"bundler"/"node16"/' tsconfig.json > tsconfi
 
 cat > ok.ts <<'TS'
 import { Client, createServer, defineContract, type MapOf, type$, VERSION } from 'transport-io'
-import { connectBrowser } from 'transport-io/browser-transport'
-import { connectDev, DEV_ENDPOINT } from 'transport-io/dev-transport'
+import { browserClient, connectBrowser } from 'transport-io/browser-transport'
+import { connectDev, DEV_ENDPOINT, devClient } from 'transport-io/dev-transport'
 // Type-only: the node transport's declarations were never loaded at the floor version
 // because the probe imported three of the four entry points.
-import type { Http3Listener } from 'transport-io/node-transport'
+import type { Http3ClientOptions, Http3Listener } from 'transport-io/node-transport'
 import { HostileAdapter } from 'transport-io/testing'
 
 export const contract = defineContract({
@@ -87,6 +87,27 @@ export const version: string = VERSION
 export const devEndpoint: string = DEV_ENDPOINT
 export const devConnect: typeof connectDev = connectDev
 export type Listener = Http3Listener
+export type OneCallOptions = Http3ClientOptions
+
+/**
+ * The construct-and-connect form at the floor.
+ *
+ * A generic whose parameter is defaulted and deliberately not inferred from an argument is
+ * exactly the shape 5.0 has broken before: `CallableOf` collapsed to `never` there while
+ * compiling fine on current TypeScript, and only this gate caught it. Loading the
+ * declaration is not the same as instantiating it, so the call is written out.
+ */
+export async function probeOneCall(url: string): Promise<void> {
+  const browser = await browserClient<AppMap>({ contract, url })
+  browser.emit('chat', { body: 'hello' })
+  const { n } = await browser.call('save', { text: 'x' })
+  void n
+  browser.disconnect()
+
+  const dev = await devClient<AppMap>({ contract })
+  dev.emit('cursor', { x: 1, y: 2 })
+  dev.disconnect()
+}
 
 export async function probe(url: string): Promise<number> {
   const server = createServer<AppMap>({ contract, adapter: new HostileAdapter('probe') })
