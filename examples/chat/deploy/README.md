@@ -4,6 +4,36 @@ Nothing in this directory has been provisioned, bought or deployed. It is the de
 configuration, and the steps, for a person to run. Every file here is referenced below by the
 path it lands at on the machine.
 
+## Read this first, and again at 2am
+
+Two things will look like faults and are not.
+
+1. **Every renewal drops every session.** The QUIC binding has no certificate reload, so the
+   certbot hooks stop and start the process. About every sixty days, for ten seconds or so,
+   the demo restarts and every visitor reconnects. `journalctl -u transport-io-demo` shows
+   the pre-hook announcing it. D111.
+2. **The `wt` health step may refuse the certificate.** It pins the on-disk certificate's hash
+   because the Node client has no other way to connect, and the browser rule caps a pinned
+   certificate at fourteen days. Whether the Node binding enforces that cap against a
+   ninety-day Let's Encrypt certificate is **not known**. If `/healthz` shows `wt` failing on
+   validity while the page works in a browser, the demo is fine and the probe is not. The fix
+   is in "Known unknowns": a 160-hour certificate, requested with `--required-profile`.
+
+## What you need
+
+Nothing here assumes anything already bought.
+
+| need | exactly | notes |
+|---|---|---|
+| a VPS | any provider that gives a public IPv4 and does not filter UDP. Smallest Ubuntu 24.04 instance; one shared vCPU and one gigabyte is enough | Not Railway: its public networking documents HTTP and HTTPS only. Fly can do UDP, but the app must bind `fly-global-services` rather than `0.0.0.0`, needs a dedicated IPv4, and has no public IPv6 UDP; this server would need those two changes first, so a plain VPS is the design. |
+| a hostname | a domain or subdomain whose DNS you control | `demo.example.com` throughout this directory |
+| DNS | **one `A` record** to the VPS's IPv4, proxying off | No `AAAA`: the server binds IPv4 only. Publish one only after binding `::` and verifying the binding on it. |
+| a certificate | Let's Encrypt, via certbot from apt | Free. certbot asks for an email at first issuance. |
+| access | SSH to the VPS as a sudoer | |
+
+No CDN, no load balancer, no proxy, and no managed certificate: each of those either
+terminates TLS or drops UDP, and both end the demo.
+
 ## What it is
 
 One plain VPS. DNS with A and AAAA records only, nothing proxying in front of it, because a
@@ -47,7 +77,7 @@ CA store, the way it validates any HTTPS origin, and the page's `connectBrowser`
    Bun on the server). `sudo chown -R transport-io:transport-io /opt/transport-io`.
 4. Firewall: `ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 443/udp`. The third one is
    the one people forget, and without it the page loads and the demo does not.
-5. DNS: `A` and `AAAA` for the host, proxying off.
+5. DNS: one `A` record for the host, proxying off. No `AAAA`; see "What you need".
 6. Certificate, first issuance, with the demo not yet running so port 80 is free:
    ```
    sudo certbot certonly --standalone --key-type ecdsa -d demo.example.com
@@ -157,14 +187,19 @@ Stated so they are found on purpose rather than by a visitor.
   the browser rule caps a pinned certificate at fourteen days. Whether the Node binding
   enforces the same cap is not known. If the step fails naming validity, either drop to the
   other three steps and rely on the checklist for the transport, or switch the certificate to
-  Let's Encrypt's short-lived profile, `--preferred-profile shortlived`, which is six days,
-  fits the cap, and means a restart about every three days.
+  Let's Encrypt's `shortlived` profile, which is 160 hours, fits the cap, and means a restart
+  about every three days. Request it with `--required-profile shortlived`, not
+  `--preferred-profile`: the preferred form falls back to the default profile silently, which
+  would hand you a ninety-day certificate and the same failing probe with no message saying
+  why. Profiles: https://letsencrypt.org/docs/profiles/
 - **The binding's `secret` option** is left at the library default. What it protects is not
   documented by the binding and this runbook does not guess.
 
 ## First deploy checklist
 
-The point of this is the first bullet. Do not skip it because the health check is green.
+In order. Steps one to eight are "Provisioning, not performed" above; this is what to check
+once the units are up. The point of this is the first bullet. Do not skip it because the
+health check is green.
 
 - [ ] In Chrome, open `https://demo.example.com/agents.html`. Both panels stream. In devtools,
       Network, the WebTransport session is listed and established. No certificate warning.

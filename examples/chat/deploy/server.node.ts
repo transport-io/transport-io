@@ -74,6 +74,13 @@ const accepting = (async () => {
 })()
 void accepting.catch((e: unknown) => console.error('accept loop ended:', (e as Error).message))
 console.log(`webtransport  https://${HOST}:443/  (udp)  cap ${MAX_SESSIONS} sessions`)
+// Printed on every start, because a start is when someone is reading this log wondering why
+// the demo went away: a certificate renewal restarts this process and drops every session,
+// since the QUIC binding cannot reload a certificate (D111). If the previous line in the
+// journal is the certbot pre-hook, that is what happened, and nothing is wrong.
+console.log(
+  'note          renewal restarts this process and drops every session; see deploy/README.md',
+)
 
 // ------------------------------------------------------------------ the pages, over https
 

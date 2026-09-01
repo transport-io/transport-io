@@ -119,7 +119,11 @@ try {
   step(
     'wt',
     false,
-    `${msg}. If this names the certificate's validity, the binding refused to pin a long-lived certificate: see the runbook's "Known unknowns".`,
+    `${msg}. If this names the certificate's validity and the page works in a browser, the ` +
+      'demo is fine and this probe is not: the Node client pins the certificate, and the ' +
+      'binding may refuse to pin a ninety-day one. Fix: reissue with ' +
+      '`certbot certonly --standalone --key-type ecdsa --required-profile shortlived -d HOST` ' +
+      '(a 160-hour certificate, so the restart comes every three days). deploy/README.md, "Known unknowns".',
   )
 }
 

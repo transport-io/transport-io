@@ -1,4 +1,10 @@
 # /etc/systemd/system/transport-io-demo.service
+#
+# Two things that are not faults, for whoever is reading this unit at 2am:
+#   - A certificate renewal STOPS and STARTS this service and drops every session. The QUIC
+#     binding cannot reload a certificate. The certbot pre-hook says so in the journal.
+#   - If the health check's `wt` step fails on certificate validity while the page works in a
+#     browser, the probe is wrong, not the demo. deploy/README.md, "Known unknowns".
 [Unit]
 Description=transport-io public demo (WebTransport on UDP 443)
 After=network-online.target
