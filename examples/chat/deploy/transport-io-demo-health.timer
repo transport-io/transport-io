@@ -1,0 +1,11 @@
+# /etc/systemd/system/transport-io-demo-health.timer
+[Unit]
+Description=Run the transport-io demo health check every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,35 @@
+# /etc/systemd/system/transport-io-demo.service
+[Unit]
+Description=transport-io public demo (WebTransport on UDP 443)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=transport-io
+Group=transport-io
+WorkingDirectory=/opt/transport-io
+Environment=DEMO_HOST=demo.example.com
+Environment=DEMO_CERT_DIR=/var/lib/transport-io-demo/cert
+Environment=DEMO_HEALTH_STATE=/var/lib/transport-io-demo/health.json
+Environment=DEMO_MAX_SESSIONS=32
+Environment=DEMO_MAX_GENERATIONS=4
+Environment=DEMO_DRAIN_MS=15000
+ExecStart=/usr/bin/node examples/chat/deploy/server.node.ts
+Restart=always
+RestartSec=2
+# The process drains for DEMO_DRAIN_MS on SIGTERM. This must be longer, so the drain decides.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+# Ports below 1024 without root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/transport-io-demo
+# The native QUIC binding is loaded from node_modules, which is under WorkingDirectory and
+# read-only under ProtectSystem=strict. That is intended.
+
+[Install]
+WantedBy=multi-user.target

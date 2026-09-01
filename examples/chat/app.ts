@@ -1,15 +1,22 @@
 /**
  * The application, registered on a server.
  *
- * `server.node.ts` wires a listener and a static file server around this. Keeping the
- * handlers here rather than in that file means anything else that serves this contract
- * registers the same ones, and the e2e suite that drives the local server is exercising them.
+ * Shared by the local server in `server.node.ts` and the public one in `deploy/server.node.ts`,
+ * so the two cannot drift: the handlers, the room, the generation cap and the loss toggle are
+ * one module, and the e2e suite that drives the local server is exercising the public one's
+ * behaviour too.
  */
 import type { Server, ServerPeer } from 'transport-io'
 import { AGENTS, paceOf } from './agents.ts'
 import type { ChatMap } from './contract.ts'
 
 export interface AttachOptions {
+  /**
+   * Concurrent `generate` streams one session may hold. A public URL must not be able to
+   * spawn unbounded producers, and the library's own per-session stream cap of 256 is far
+   * above what a demo should let one visitor run. Unlimited when absent.
+   */
+  readonly maxGenerationsPerPeer?: number
   readonly room?: string
   readonly log?: (line: string) => void
 }
@@ -20,12 +27,14 @@ const clampPercent = (n: number): number =>
 export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void {
   const room = opts.room ?? 'lobby'
   const log = opts.log ?? console.log
+  const maxGenerations = opts.maxGenerationsPerPeer ?? Number.POSITIVE_INFINITY
 
   const names = new Map<string, string>()
   // Keyed by the peer object rather than its id, so nothing has to be cleaned up when a
   // session ends: there is no close hook on a peer, and a map keyed by id would grow for the
   // life of the process.
   const loss = new WeakMap<ServerPeer<ChatMap>, number>()
+  const generating = new WeakMap<ServerPeer<ChatMap>, number>()
 
   // Callable: the client asks for a name and gets an answer back on the same stream.
   server.handle('setName', async ({ name }) => {
@@ -59,6 +68,11 @@ export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void 
   server.handle('generate', async function* ({ agent }, ctx) {
     const script = AGENTS[agent]
     if (script === undefined) throw new Error(`unknown agent '${agent}'`)
+    const active = generating.get(ctx.peer) ?? 0
+    if (active >= maxGenerations) {
+      throw new Error(`at most ${maxGenerations} generations at once on one session`)
+    }
+    generating.set(ctx.peer, active + 1)
     let sent = 0
     try {
       for (const [i, token] of script.tokens.entries()) {
@@ -68,6 +82,7 @@ export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void 
       }
       log(`generate ${agent}: done, ${sent} tokens`)
     } finally {
+      generating.set(ctx.peer, (generating.get(ctx.peer) ?? 1) - 1)
       if (ctx.signal.aborted) log(`generate ${agent}: cancelled after ${sent} tokens`)
     }
   })

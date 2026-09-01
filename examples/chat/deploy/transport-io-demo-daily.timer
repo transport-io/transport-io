@@ -1,0 +1,11 @@
+# /etc/systemd/system/transport-io-demo-daily.timer
+[Unit]
+Description=Daily restart of the transport-io demo, bounding the per-stream leak
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=10min
+Unit=transport-io-demo-restart.service
+
+[Install]
+WantedBy=timers.target

@@ -23,6 +23,9 @@ Five events carry all of it:
   lose frames while chat arrives one for one. Simulated at the server, and labelled.
 
 The contract in [`contract.ts`](contract.ts) is the only place that says which is which.
+The handlers live in [`app.ts`](app.ts), shared by the local server and the public one in
+[`deploy/`](deploy/), which is the design and runbook for running this on a VPS with a real
+certificate.
 `ChatMap` is passed once at each end: `createServer<ChatMap>` in `server.node.ts` and
 `new Client<ChatMap>` in `web/main.ts`.
 

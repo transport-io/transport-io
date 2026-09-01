@@ -2745,3 +2745,14 @@ rooms sentence, D48, and the site landing page. The README's comparison with Soc
 written after reading their source, and states where they are the better choice inside the
 section rather than in a footnote, because a comparison that omits that makes every other
 line suspect.
+
+### D111. Certificate renewal on the reference transport is a drained restart, not a reload
+The umbrella package exposes `updateCert(cert, privKey)` and calls it on each transport only
+`if (transport.updateCert)`. The quiche transport package, at 1.6.7, defines no such method
+anywhere in its JavaScript or native sources, so on this stack the call is a silent no-op.
+A deployment that renews a certificate therefore restarts the process. The public demo's
+runbook, `examples/chat/deploy/README.md`, is written around that: the certbot deploy hook
+restarts the unit, the process drains on SIGTERM, and every live session drops once per
+renewal. The trigger to revisit is the transport gaining a real `updateCert`, at which point
+the listener grows a matching method and the hook stops restarting.
+

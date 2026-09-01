@@ -6,7 +6,8 @@
     "@moq/web-transport"
   ],
   "ignoreBinaries": [
-    "openssl"
+    "openssl",
+    "ss"
   ],
   "workspaces": {
     ".": {
@@ -47,7 +48,8 @@
       "entry": [
         "web/main.ts",
         "web/agents.ts",
-        "scripts/*.ts"
+        "scripts/*.ts",
+        "deploy/*.node.ts"
       ],
       "project": [
         "**/*.ts"

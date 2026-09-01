@@ -1,0 +1,17 @@
+# /etc/systemd/system/transport-io-demo-health.service
+[Unit]
+Description=transport-io demo health check
+# A failed check restarts the demo. The restart unit is a oneshot so this cannot loop faster
+# than the timer below.
+OnFailure=transport-io-demo-restart.service
+
+[Service]
+Type=oneshot
+User=transport-io
+Group=transport-io
+WorkingDirectory=/opt/transport-io
+Environment=DEMO_HOST=demo.example.com
+Environment=DEMO_CERT_DIR=/var/lib/transport-io-demo/cert
+Environment=DEMO_HEALTH_STATE=/var/lib/transport-io-demo/health.json
+ExecStart=/usr/bin/node examples/chat/deploy/healthcheck.node.ts
+ReadWritePaths=/var/lib/transport-io-demo
