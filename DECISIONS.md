@@ -2708,3 +2708,12 @@ obvious name.
 
 **Reconsider when:** the third case stops being real, which would need a way to observe a
 connection that does not yet exist. It is not obvious what that would look like.
+
+### D109. The README's first screen is the pitch, the contract, the demo, and one command
+Someone deciding whether to read on decides in seconds, and the first screen used to be
+glibc 2.38 and Bun. D47's ordering, limitations above install, still holds; this moves both
+below a first screen that shows the thing itself: the one-line pitch, the `defineContract`
+teaser, the two-stream demo image, and `npx transport-io dev --demo`. The comparison with
+Socket.IO follows, then the limitations, in full and prominently. Install caveats are
+collapsed under a `<details>` in the install section. Nothing D47 required was removed.
+Every limitation stayed, because they are the most credible thing in the repository.
