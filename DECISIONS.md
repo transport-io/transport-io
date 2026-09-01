@@ -2465,8 +2465,53 @@ contract registered: declare module ..."'`. The sentinel must be a **type alias*
 interface has no implicit index signature and fails the `AnyMap` constraint with a second,
 confusing error.
 
-**Reconsider when:** TypeScript preserves alias names in hover output, which would make both
-forms equivalent.
+#### The general rule, measured later
+
+The paragraph above says alias instantiations expand. That is true and it is the narrow case.
+Someone will read it, notice that tRPC's shared type is a plain `export type AppRouter =
+typeof appRouter` with no transform anywhere, and conclude that the fix is to stop
+transforming: have `defineContract` return everything `Client` needs so the user writes
+`type App = typeof contract`.
+
+That was proposed, and measured before building. It does not work, and it does not work for a
+reason the narrow statement does not cover. Six forms against the contract pinned in
+`scripts/check-hover.ts`, measured in one run, with the interface row reproducing the gate's
+own numbers:
+
+| form | emit | call | stream |
+|---|---|---|---|
+| `interface AppMap extends MapOf<typeof contract> {}`, then `Client<AppMap>` | **107** | **169** | **157** |
+| `type App = typeof contract`, then `Client<MapOf<App>>` | 377 | 439 | 427 |
+| `type AppAlias = MapOf<typeof contract>`, then `Client<AppAlias>` | 377 | | |
+| no alias at all, `Client<MapOf<typeof contract>>` | 377 | 439 | 427 |
+| a client parameterised by the **contract**, `ContractClient<App>`, no `MapOf` anywhere | **378** | 431 | 379 |
+| the same, no alias | 378 | | |
+
+Two things fall out of that table.
+
+**A plain `typeof` alias does not preserve its name either.** Rows two, three and four are
+byte-identical. `type App = typeof contract` is not an alias instantiation, and it expands
+anyway, to the contract literal with `StandardSchemaV1<unknown, …>` in it.
+
+**Removing the transform makes it one character worse.** Row five is the proposal taken as
+far as it goes, with `MapOf` nowhere in the user's code, and it prints 378 against 377. What
+expands is the contract literal, not the transform over it. (Rows five and six are only
+comparable to the others on `emit`: that probe's `ContractClient` has a shorter parameter list
+than the real `Client`, which is why its `call` and `stream` read low.)
+
+So the rule to carry forward is broader than the one above:
+
+> **Only an interface name survives being printed as a type argument.** A type alias over an
+> instantiation does not, a `typeof` alias over an object literal does not, and an inline
+> instantiation does not.
+
+The interface line is therefore not a workaround for `MapOf`. It is the only construct
+TypeScript prints by name in that position, and it would be required even if this library did
+no transformation at all.
+
+**Reconsider when:** TypeScript preserves alias names in hover output. Not merely alias
+instantiations: row two is a plain `typeof` alias and expands too, so anything short of
+printing aliases by name in type-argument position leaves this where it is.
 
 ### D101. A verification command that cannot report failure is the soak again
 `export interface Register {}` was rewritten to `export type Register = {}` by `lint:fix`,
@@ -2598,3 +2643,30 @@ WSL, where it is present.
 
 **Reconsider when:** somebody reports this as a real blocker rather than a theoretical one, or
 Node gains a certificate-issuance API. The second removes the entire argument.
+
+### D107. The receiver is the cost, and that is architectural
+
+Recorded as an observation, not a proposal. Nothing here is scheduled.
+
+Every row in D100's table prints the same shape:
+
+```
+(method) Client<M>.emit<"chat">(event: "chat", payload: { from: string; body: string; })
+```
+
+The payload is small in all six. The characters are `M` being printed into the receiver, on
+every method, on every hover. That is a consequence of `Client` being a generic class: the
+type argument is part of the receiver's type, so TypeScript prints it.
+
+tRPC does not read lighter because it avoids a transform. It reads lighter because the router
+type never reaches a printed signature. Procedures hang off a proxy and resolve through
+indexed access to their own input and output types, so what you hover is the procedure, and
+the router is nowhere in it. The difference is the shape of the surface, not the shape of the
+type.
+
+Adopting it here would mean the client's methods stop being methods on a generic class. That
+is a 1.0-scale change to the entire public surface, and it is not worth doing for hover width
+alone while the interface line costs one line and buys 107 against 377.
+
+**Reconsider when:** the surface is being reworked for another reason at 1.0, at which point
+this stops being a change of its own and becomes a property to design for. Not before.
