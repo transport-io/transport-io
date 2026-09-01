@@ -34,6 +34,14 @@ tracked markdown file with a ` ```ts ` block that nobody added is a failure, not
 skip. Blocks
 tagged ` ```ts ignore ` are counted against a ceiling that may only go down.
 
+## `check-prose-budget.ts` - the README stays a README
+
+Counts prose words in `README.md`, outside code fences, HTML tags and link targets, and fails
+above a ceiling that may only go down. The README became a design record three times, each
+time by the same route: a paragraph justifying a decision, with a measurement attached. The
+rule is in CLAUDE.md under "Reader-facing documents answer three questions"; this is the
+mechanism, because rationale is what gets cut when something has to go.
+
 ## `check-workflows.ts` - no outsider-controlled text reaches a shell
 
 Fails on any `${{ ... }}` inside a `run:` block and on any workflow without a top-level

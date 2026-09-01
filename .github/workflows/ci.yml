@@ -63,6 +63,8 @@ jobs:
         run: npx knip
       - name: documentation
         run: bun run scripts/check-docs.ts
+      - name: README prose budget
+        run: bun run scripts/check-prose-budget.ts
       - name: workflows
         run: bun run scripts/check-workflows.ts
       - name: import boundaries
