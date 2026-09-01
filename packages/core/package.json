@@ -60,5 +60,16 @@
   },
   "bin": {
     "transport-io": "./dist/cli/main.node.js"
-  }
+  },
+  "keywords": [
+    "webtransport",
+    "quic",
+    "http3",
+    "realtime",
+    "real-time",
+    "datagrams",
+    "streaming",
+    "typescript",
+    "websocket-alternative"
+  ]
 }
