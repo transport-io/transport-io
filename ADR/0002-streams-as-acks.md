@@ -15,12 +15,26 @@ Both shapes were reserved here and only the first was implemented at the time.
 
 ## Alternative rejected
 
-Socket.IO's model: one multiplexed channel, an incrementing ack id per request, a map from
-id to pending callback, and a timer per entry to clean up.
+Socket.IO's model: one multiplexed channel, an incrementing ack id per request, and a map
+from id to pending callback on each side. Verified against the
+[client](https://github.com/socketio/socket.io/blob/main/packages/socket.io-client/lib/socket.ts)
+and [server](https://github.com/socketio/socket.io/blob/main/packages/socket.io/lib/socket.ts)
+socket classes: `ids++` and an `acks` record on the client, `nsp._ids++` and an `acks: Map` on
+the server, and the ACK packet carries the id back.
 
-That machinery exists only because everything shares one channel. It brings an id space to
-manage, a map that leaks if a response never arrives, a timeout that must be tuned, and
-head-of-line blocking - one slow response delays every other message on the connection.
+That machinery exists because everything shares one channel. It brings an id space to manage;
+a map whose entries stay until acknowledged, timed out, or on the client disconnected, and
+which the server does not clear on disconnect; and one ordered sequence for every packet, so a
+packet lost on the wire stalls whatever is queued behind it.
+
+**Erratum.** This section originally said "a timer per entry to clean up" and "head-of-line
+blocking - one slow response delays every other message on the connection". Both were written
+from memory of how such a design must work, and both were wrong about this one. A timer exists
+only when the caller opted in with `timeout()`, not per entry. And a slow handler delays
+nothing: acknowledgements are asynchronous and other packets keep flowing. What one ordered
+channel does cost is a lost packet stalling the packets behind it, which is a property of the
+transport rather than of the handler. The correction came from Socket.IO's source rather than
+from a better memory. D110 records why that distinction is the point.
 
 ## Why this way
 

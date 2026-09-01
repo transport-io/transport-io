@@ -6,7 +6,7 @@
 </p>
 
 Real-time apps over WebTransport. Socket.IO's shape, on a transport with multiple streams
-and datagrams, without Socket.IO's mistakes.
+and datagrams. Two lanes, one contract, no fallback.
 
 Framing, length prefixes, buffer accumulation and stream lifecycle are handled for you. An
 event declares `reliable` or `unreliable` in the contract, so "this message may be dropped"
@@ -26,6 +26,9 @@ before you start.** It lists what this library will not do, and the one measured
 - **Chrome and Firefox.** Safari cannot talk to a quiche-backed server and is unsupported.
 - **The server needs a separate native install**, and its Linux prebuild needs glibc 2.38 -
   no default Node `-slim` image has it, and Alpine has no prebuild at all.
+  That package, the fourteen-day ECDSA rule for a pinned development certificate, and the
+  Safari gap are the same for Socket.IO's WebTransport transport: properties of the stack,
+  not of this library.
 - **Each bidirectional stream leaks ~5.95 KB of server memory**, upstream in the QUIC
   binding, not in this library. `emit` and datagrams are flat. The leak is per stream rather
   than per message, so a `stream()` of a thousand tokens costs 5.95 KB in total where a

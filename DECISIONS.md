@@ -641,7 +641,7 @@ rather than a pipeline - if clients could self-join, every app would need to val
 names on a join path, which is middleware wearing a different hat. An app that genuinely
 wants client-initiated subscribe routes it through a `call` handler, which is already the
 authenticated path. This also matches the reference: Socket.IO rooms are
-server-authoritative.
+[server-authoritative](https://socket.io/docs/v4/rooms/).
 
 ### D36. Error codes: numeric on the wire, `WT_*` in the API, one table
 PROTOCOL.md carries a single table mapping numeric code ↔ `WT_*` name ↔ meaning ↔ what to
@@ -807,11 +807,18 @@ GitHub-Releases prebuild dependency (F1), the raw-UDP-ingress requirement (D23),
 Chrome-and-Firefox-only support statement (D11), and the cross-room emit blocking (D32).
 
 ### D48. PROTOCOL.md is implementable from the document alone
-The target reader is someone writing a Go server with no access to our source. Socket.IO's
-real sin was an undocumented custom protocol only their own client could speak.
+The target reader is someone writing a Go server with no access to our source.
 
 It must **explicitly state what is not guaranteed on the datagram lane** - not imply it,
 not leave it to inference.
+
+**Erratum.** This entry originally continued: "Socket.IO's real sin was an undocumented
+custom protocol only their own client could speak." That is false. Socket.IO publishes its
+protocol at [socket.io-protocol](https://github.com/socketio/socket.io-protocol), at version
+5 with a version history, and Engine.IO's at
+[engine.io-protocol](https://socket.io/docs/v4/engine-io-protocol/), at version 4.1. The
+sentence was cut rather than corrected because the decision does not depend on it: the bar
+this entry sets for our document is one theirs already meets. See D110.
 
 ### D49. No open-questions file, and the Phase 1 gate
 This project has no `OPEN-QUESTIONS.md` and never will. An open-questions file is where a
@@ -2717,3 +2724,24 @@ teaser, the two-stream demo image, and `npx transport-io dev --demo`. The compar
 Socket.IO follows, then the limitations, in full and prominently. Install caveats are
 collapsed under a `<details>` in the install section. Nothing D47 required was removed.
 Every limitation stayed, because they are the most credible thing in the repository.
+
+### D110. Claims about other projects are sourced or cut
+A third category of documentation drift, after stale and fabricated: confidently wrong about
+someone else. Two entries in this ledger asserted things about Socket.IO from memory of how
+such a system must work, and both were wrong about that one. D48 said its protocol was
+undocumented; it is documented at two levels, with version history. ADR 0002 said a timer
+runs per pending acknowledgement and that a slow response blocks the connection; the timer is
+opt-in and a slow handler blocks nothing.
+
+The rule: a sentence stating what another project does, does wrong, or fails to do carries a
+link to that project's own documentation or source, or it is cut. Commentary about them is
+not a source. When such a sentence is found to be wrong, the entry keeps the original wording
+under an erratum rather than silently losing it. A ledger that quietly loses its errors is
+worth less than one that carries them, because the error is the evidence that the category
+exists.
+
+Applied on 2026-09-01 to README.md, `packages/core/README.md`, CLAUDE.md, ADR 0002, D36's
+rooms sentence, D48, and the site landing page. The README's comparison with Socket.IO was
+written after reading their source, and states where they are the better choice inside the
+section rather than in a footnote, because a comparison that omits that makes every other
+line suspect.

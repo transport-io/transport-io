@@ -17,7 +17,7 @@ migration guide gets written deliberately.
 # transport-io
 
 A TypeScript library for real-time apps over WebTransport. Socket.IO's shape, on a
-transport with multiple streams and datagrams, without Socket.IO's mistakes.
+transport with multiple streams and datagrams. Two lanes, one contract, no fallback.
 
 **Read this file at the start of every session.** If you are about to write a deprecation
 path, a compatibility shim, a migration guide, or a version check against an older release
