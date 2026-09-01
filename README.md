@@ -214,7 +214,7 @@ and the measurements behind each one, and is worth reading before you build on t
   want different payloads.
 
 The certificate rule, the native package and the Safari gap are shared with Socket.IO's
-WebTransport transport. They are properties of the stack, and the section above says so.
+WebTransport transport. They are properties of the stack, and the comparison below says so.
 
 **Not in this version:** namespaces (a room-name prefix covers it), presence, middleware chains
 (auth is one hook), binary payloads (JSON only, with a codec seam reserved), server-initiated
