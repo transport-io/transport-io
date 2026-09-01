@@ -17,6 +17,13 @@ export const contract = defineContract({
   /** Callable: one value comes back. */
   setName: rpc<{ name: string }, { accepted: boolean; name: string }>(),
   /**
+   * The packet-loss toggle. The server drops this share of the caller's cursor frames before
+   * broadcasting them, so the other window watches the unreliable lane lose frames while chat
+   * keeps arriving one for one. Simulated at the server and labelled as such on the page:
+   * real loss looks the same to the application, which is the point of having two lanes.
+   */
+  setLoss: rpc<{ percent: number }, { percent: number }>(),
+  /**
    * The second page runs two of these at once. Each `stream()` opens its own bidirectional
    * stream, so the two are independent all the way down to QUIC, and stopping one is a
    * reset on that stream and nothing else.

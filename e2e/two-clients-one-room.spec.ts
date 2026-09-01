@@ -151,3 +151,52 @@ test('a streaming call renders a word at a time in a real browser', async ({ bro
   await expect(line).toContainText('one', { timeout: 5_000 })
   await expect(line).toContainText('five', { timeout: 10_000 })
 })
+
+test('dialling up datagram loss drops cursors and never a chat message', async ({
+  browser,
+}) => {
+  const alice = await (await browser.newContext()).newPage()
+  const bob = await (await browser.newContext()).newPage()
+  await alice.goto('/')
+  await bob.goto('/')
+  await connected(alice)
+  await connected(bob)
+
+  const surface = alice.locator('#surface')
+  const box = await surface.boundingBox()
+  expect(box).not.toBeNull()
+  if (box === null) return
+
+  // 100% is the only setting that is deterministic, which is what makes it assertable: at
+  // any other value a run that happened to drop nothing would pass for the wrong reason.
+  await alice.locator('#loss').fill('100')
+  await alice.locator('#loss').dispatchEvent('input')
+  await expect(alice.locator('#loss-value')).toHaveText('100%')
+
+  for (let i = 0; i < 12; i++) {
+    await alice.mouse.move(box.x + 40 + i * 10, box.y + 40 + i * 5)
+    await alice.waitForTimeout(25)
+  }
+  // The reliable lane is untouched by the toggle. Sending the chat after the moves also
+  // gives every dropped cursor frame time to have arrived, if the toggle were not working.
+  await alice.fill('#body', 'still arrives')
+  await alice.press('#body', 'Enter')
+  await expect(lines(bob).filter({ hasText: 'still arrives' })).toHaveCount(1, {
+    timeout: 10_000,
+  })
+  await expect(bob.locator('#surface .cursor')).toHaveCount(0)
+  await expect(bob.locator('#rx-cursor')).toHaveText('0')
+
+  // Back to zero, and the same moves land.
+  await alice.locator('#loss').fill('0')
+  await alice.locator('#loss').dispatchEvent('input')
+  await expect(alice.locator('#loss-value')).toHaveText('0%')
+  for (let i = 0; i < 12; i++) {
+    await alice.mouse.move(box.x + 60 + i * 10, box.y + 60 + i * 5)
+    await alice.waitForTimeout(25)
+  }
+  await expect(bob.locator('#surface .cursor')).toHaveCount(1, { timeout: 10_000 })
+
+  await alice.context().close()
+  await bob.context().close()
+})

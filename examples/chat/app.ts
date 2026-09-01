@@ -5,7 +5,7 @@
  * handlers here rather than in that file means anything else that serves this contract
  * registers the same ones, and the e2e suite that drives the local server is exercising them.
  */
-import type { Server } from 'transport-io'
+import type { Server, ServerPeer } from 'transport-io'
 import { AGENTS, paceOf } from './agents.ts'
 import type { ChatMap } from './contract.ts'
 
@@ -14,17 +14,31 @@ export interface AttachOptions {
   readonly log?: (line: string) => void
 }
 
+const clampPercent = (n: number): number =>
+  Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0
+
 export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void {
   const room = opts.room ?? 'lobby'
   const log = opts.log ?? console.log
 
   const names = new Map<string, string>()
+  // Keyed by the peer object rather than its id, so nothing has to be cleaned up when a
+  // session ends: there is no close hook on a peer, and a map keyed by id would grow for the
+  // life of the process.
+  const loss = new WeakMap<ServerPeer<ChatMap>, number>()
 
   // Callable: the client asks for a name and gets an answer back on the same stream.
   server.handle('setName', async ({ name }) => {
     const trimmed = name.trim().slice(0, 24)
     if (trimmed.length === 0) return { accepted: false, name: '' }
     return { accepted: true, name: trimmed }
+  })
+
+  // The packet-loss toggle. It answers with what it actually set, and the page shows that.
+  server.handle('setLoss', async ({ percent }, ctx) => {
+    const p = clampPercent(percent)
+    loss.set(ctx.peer, p / 100)
+    return { percent: p }
   })
 
   // Streaming: one word at a time, on the same kind of stream a call uses. `break` on the
@@ -70,6 +84,11 @@ export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void 
     })
 
     peer.on('cursor', (pos) => {
+      // The toggle: drop this share of the sender's frames before they go anywhere. A frame
+      // the network would have lost and a frame dropped here are the same frame to every
+      // other window, which is what makes a server-side simulation an honest one.
+      const p = loss.get(peer) ?? 0
+      if (p > 0 && Math.random() < p) return
       // Unreliable lane: excluded from the sender, because you already know where your own
       // pointer is, and a dropped one is simply the next frame's problem.
       void server.to(room).except(peer.id).emit('cursor', pos)

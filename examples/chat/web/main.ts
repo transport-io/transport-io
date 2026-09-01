@@ -19,6 +19,10 @@ const input = $<HTMLInputElement>('body')
 const statusEl = $<HTMLSpanElement>('status')
 const roomsEl = $<HTMLSpanElement>('rooms')
 const dropsEl = $<HTMLSpanElement>('drops')
+const rxChatEl = $<HTMLSpanElement>('rx-chat')
+const rxCursorEl = $<HTMLSpanElement>('rx-cursor')
+const lossEl = $<HTMLInputElement>('loss')
+const lossValueEl = $<HTMLElement>('loss-value')
 const surface = $<HTMLDivElement>('surface')
 
 const me = `guest-${Math.trunc(performance.now()).toString(36).slice(-4)}`
@@ -80,8 +84,18 @@ client.subscribe(() => {
     append('system', `${s.lastError.code}: ${s.lastError.remedy}`, Date.now())
 })
 
-client.on('chat', ({ from, body, at }) => append(from, body, at))
-client.on('cursor', ({ from, x, y }) => moveCursor(from, x, y))
+// Counted per lane, so the two windows can be compared: with loss dialled up in one window,
+// the other's cursor count falls behind that window's moves while its chat count does not.
+let rxChat = 0
+let rxCursor = 0
+client.on('chat', ({ from, body, at }) => {
+  rxChatEl.textContent = String(++rxChat)
+  append(from, body, at)
+})
+client.on('cursor', ({ from, x, y }) => {
+  rxCursorEl.textContent = String(++rxCursor)
+  moveCursor(from, x, y)
+})
 
 try {
   await client.connect()
@@ -116,6 +130,14 @@ form.addEventListener('submit', (e) => {
 
   // Reliable lane. This will arrive.
   client.emit('chat', { from: named.name, body, at: Date.now() })
+})
+
+// The loss toggle is a call: one value out, one value back, on its own stream. The server
+// answers with what it actually set, and that is what the label shows.
+lossEl.addEventListener('input', () => {
+  void client.call('setLoss', { percent: Number(lossEl.value) }).then(({ percent }) => {
+    lossValueEl.textContent = `${percent}%`
+  })
 })
 
 // Unreliable lane, at pointer rate. Most of these are redundant the moment they are sent,

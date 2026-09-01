@@ -34,6 +34,9 @@
   <span class="meta">status <span id="status" data-state="idle">idle</span></span>
   <span class="meta">rooms <span id="rooms">-</span></span>
   <span class="meta">drops <span id="drops">-</span></span>
+  <span class="meta">received <span id="rx-chat">0</span> chat &middot; <span id="rx-cursor">0</span> cursor</span>
+  <label class="meta" for="loss">drop <strong id="loss-value">0%</strong> of my cursor frames
+    <input id="loss" type="range" min="0" max="100" step="10" value="0" style="vertical-align:middle;width:110px"></label>
   <a class="meta" href="/agents.html">two streams at once &rarr;</a>
 </header>
 <main>
@@ -43,7 +46,7 @@
     <form id="composer"><input id="body" placeholder="say something" autocomplete="off" /><button>send</button></form>
   </section>
   <section>
-    <div class="label">cursors - <strong>datagram lane</strong>, unreliable. Move your pointer; dropped frames are normal.</div>
+    <div class="label">cursors - <strong>datagram lane</strong>, unreliable. Move your pointer; dropped frames are normal. The slider makes the server drop that share of your frames before sending them, so the other window sees the loss.</div>
     <div id="surface"></div>
   </section>
 </main>

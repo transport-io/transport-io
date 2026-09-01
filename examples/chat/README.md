@@ -18,6 +18,9 @@ Five events carry all of it:
   growing the line in place. One bidirectional stream, many response frames, consumed with
   `stream()`.
 - **generate** is `streaming()` too, and the agents page runs two of them concurrently.
+- **setLoss** is `rpc()` - the slider on the chat page. The server drops that share of your
+  cursor frames before broadcasting them, so the other window watches the unreliable lane
+  lose frames while chat arrives one for one. Simulated at the server, and labelled.
 
 The contract in [`contract.ts`](contract.ts) is the only place that says which is which.
 `ChatMap` is passed once at each end: `createServer<ChatMap>` in `server.node.ts` and
@@ -35,6 +38,8 @@ Or `bun run dev`, which does all three.
 
 Open **two** windows on `/`. Type in one; it appears in both. Move the pointer in
 one; the dot moves in the other, and the drop counters in the header climb under load.
+Drag the loss slider up in one window and keep moving: the other window's cursor count
+stalls while its chat count does not.
 
 ## Two streams at once
 
