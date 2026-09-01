@@ -1,6 +1,6 @@
 {
   "name": "@transport-io/react",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "React bindings for transport-io. Hooks over useSyncExternalStore, correct under StrictMode, SSR and RSC.",
   "license": "MIT",
   "type": "module",
@@ -36,12 +36,12 @@
     "@types/react-dom": "^19.2.5",
     "react": ">=19.2",
     "react-dom": ">=19.2",
-    "transport-io": "^0.6.1"
+    "transport-io": "^0.7.0"
   },
   "peerDependencies": {
     "react": ">=19.2",
     "react-dom": ">=19.2",
-    "transport-io": "^0.6.1"
+    "transport-io": "^0.7.0"
   },
   "publishConfig": {
     "access": "public"

@@ -68,4 +68,4 @@ export type { SessionStats, StreamResult } from './session.ts'
  * `changeset version` moves the manifest, so this moves in the same commit - which the test
  * enforces rather than trusting anyone to remember.
  */
-export const VERSION: string = '0.6.1'
+export const VERSION: string = '0.7.0'
