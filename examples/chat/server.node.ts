@@ -13,7 +13,7 @@ import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'
-import { AGENTS, paceOf } from './agents.ts'
+import { attach } from './app.ts'
 import { type ChatMap, contract } from './contract.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -24,7 +24,6 @@ const certDir = join(here, '.cert')
 // exactly what it did until a fresh-clone run caught it.
 const WT_PORT = Number(process.env.E2E_WT_PORT ?? 4433)
 const WEB_PORT = Number(process.env.E2E_PORT ?? 8080)
-const ROOM = 'lobby'
 
 let cert: string
 let privKey: string
@@ -39,65 +38,8 @@ try {
   process.exit(1)
 }
 
-const names = new Map<string, string>()
-
 const server = createServer<ChatMap>({ contract })
-
-// Callable: the client asks for a name and gets an answer back on the same stream.
-server.handle('setName', async ({ name }) => {
-  const trimmed = name.trim().slice(0, 24)
-  if (trimmed.length === 0) return { accepted: false, name: '' }
-  return { accepted: true, name: trimmed }
-})
-
-// Streaming: one word at a time, on the same kind of stream a call uses. `break` on the
-// client resets it, which fires `ctx.signal` here, which ends the loop below.
-server.handle('say', async function* ({ text }) {
-  for (const word of text.split(/\s+/).filter(Boolean)) {
-    await new Promise((r) => setTimeout(r, 80))
-    yield word
-  }
-})
-
-// Two of these run at once on `/agents.html`, each on its own bidirectional stream.
-//
-// The `finally` is the half worth reading. Stopping a panel resets that stream, which fires
-// `ctx.signal` and returns this generator, so the server stops producing rather than
-// producing into a reader that has gone away. Watch this log line while you click stop: it
-// is the server-side half of what the page's counters show.
-server.handle('generate', async function* ({ agent }, ctx) {
-  const script = AGENTS[agent]
-  if (script === undefined) throw new Error(`unknown agent '${agent}'`)
-  let sent = 0
-  try {
-    for (const [i, token] of script.tokens.entries()) {
-      await new Promise((r) => setTimeout(r, paceOf(script, i)))
-      yield token
-      sent++
-    }
-    console.log(`generate ${agent}: done, ${sent} tokens`)
-  } finally {
-    if (ctx.signal.aborted) console.log(`generate ${agent}: cancelled after ${sent} tokens`)
-  }
-})
-
-server.onSession((peer) => {
-  void peer.join(ROOM)
-  names.set(peer.id, `guest-${peer.origin.toString(16).slice(-4)}`)
-  console.log(`+ ${peer.id} joined (${names.size} online)`)
-
-  peer.on('chat', (msg) => {
-    // Reliable lane: everyone gets it, including the sender, so their own message appears
-    // in the same order everyone else sees it.
-    void server.to(ROOM).emit('chat', { ...msg, at: Date.now() })
-  })
-
-  peer.on('cursor', (pos) => {
-    // Unreliable lane: excluded from the sender, because you already know where your own
-    // pointer is, and a dropped one is simply the next frame's problem.
-    void server.to(ROOM).except(peer.id).emit('cursor', pos)
-  })
-})
+attach(server)
 
 const listener = await listenHttp3({
   port: WT_PORT,

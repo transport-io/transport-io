@@ -83,9 +83,9 @@ will connect - that requirement is in the root README and it is the first thing 
 
 ## What to look at in the code
 
-`server.node.ts` broadcasts chat to the whole room including the sender, so everyone sees
-the same order; and broadcasts cursors with `.except(peer.id)`, because you already know
-where your own pointer is.
+`app.ts`, which `server.node.ts` registers on the server, broadcasts chat to the whole room
+including the sender, so everyone sees the same order; and broadcasts cursors with
+`.except(peer.id)`, because you already know where your own pointer is.
 
 `web/main.ts` uses `subscribe`/`getSnapshot` rather than a pile of events - the same two
 methods a React binding would hand to `useSyncExternalStore`.
