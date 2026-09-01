@@ -128,8 +128,7 @@ on the server side and there is no client equivalent.
 ## The client
 
 ```ts
-import { Client } from 'transport-io'
-import { connectBrowser } from 'transport-io/browser-transport'
+import { browserClient } from 'transport-io/browser-transport'
 
 // SHA-256 over the certificate's DER bytes. Not over `cert.pem`, which is base64 with
 // header lines: hashing the file gives you 32 bytes that look right and never connect.
@@ -141,18 +140,15 @@ declare function moveDot(x: number, y: number): void
 // In production, omit `certificateHash` entirely. The connection is then validated against
 // the platform's own CA store like any other HTTPS origin, which is what you want with a
 // real certificate. Pinning is a local-development affordance, not how this library works.
-const production = new Client<AppMap>({
-  contract,
-  connect: () => connectBrowser({ url: 'https://example.com:443/' }),
-})
+const production = await browserClient<AppMap>({ contract, url: 'https://example.com:443/' })
 
 // In development, against a self-signed certificate, pin it by hash.
-const client = new Client<AppMap>({
+const client = await browserClient<AppMap>({
   contract,
-  connect: () => connectBrowser({ url: 'https://127.0.0.1:8080/', certificateHash }),
+  url: 'https://127.0.0.1:8080/',
+  certificateHash,
 })
 void production
-await client.connect()
 
 client.on('chat', ({ from, body }) => render(from, body))
 client.on('cursor', ({ x, y }) => moveDot(x, y))
@@ -160,6 +156,14 @@ client.on('cursor', ({ x, y }) => moveDot(x, y))
 client.emit('chat', { from: 'me', body: 'hello' })   // arrives
 client.emit('cursor', { x: 12, y: 40 })              // may not
 ```
+
+`browserClient` constructs and connects. It resolves to a connected client, so there is no
+second `connect()` call and no arrow wrapping the transport.
+
+**Pass `<AppMap>`.** It is deliberately not inferred from `contract`. Inferring it would give
+you a working client whose every hover is 377 characters of your validator's internals
+instead of 107, so the shorter spelling is the worse one and the signature refuses to offer
+it. Leave it off and you get the sentinel telling you to register a map or pass one.
 
 Open two browser windows and both receive the chat message. Move the pointer in one and the
 dot moves in the other, with some frames missing.
@@ -188,10 +192,11 @@ export async function serveInDev(server: Server<AppMap>): Promise<void> {
 And in the browser, `connectDev` fetches the hash the command published:
 
 ```ts
-import { connectDev } from 'transport-io/dev-transport'
+import type { Client } from 'transport-io'
+import { devClient } from 'transport-io/dev-transport'
 
-export function devClient(): Client<AppMap> {
-  return new Client<AppMap>({ contract, connect: () => connectDev() })
+export function connect(): Promise<Client<AppMap>> {
+  return devClient<AppMap>({ contract })
 }
 ```
 

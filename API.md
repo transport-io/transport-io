@@ -124,11 +124,55 @@ helpers.
 
 ## 2. Client
 
-A `Connection` comes from the transport seam, and which one you import decides where the
-code runs. `transport-io/browser-transport` uses the platform's own `WebTransport` and
-loads nothing native. `transport-io/node-transport` loads the QUIC binding and must only be
-imported from a file named `*.node.ts` - a lint rule enforces that, because the binding
-segfaults Bun on exit.
+Each transport module exports a **construct-and-connect** function that resolves to a
+connected client. This is what an application writes:
+
+```ts
+import { browserClient } from 'transport-io/browser-transport'
+
+export async function open(url: string): Promise<void> {
+  const client = await browserClient<AppMap>({ contract, url })
+  client.emit('chat', { room: 'lobby', body: 'hello' })
+  client.disconnect()
+}
+```
+
+| function | module | connection options |
+|---|---|---|
+| `browserClient<M>(options)` | `transport-io/browser-transport` | `url`, `certificateHash?` |
+| `devClient<M>(options)` | `transport-io/dev-transport` | `endpoint?` |
+| `http3Client<M>(options)` | `transport-io/node-transport` | `url`, `certificateHash` |
+
+Each takes every `ClientOptions` field except `connect`, plus its transport's own options.
+
+**`M` is never inferred from `contract`.** Inferring it would resolve to
+`Client<MapOf<typeof contract>>`, whose `emit` hover is 377 characters against 107 for a
+named interface (D100), so the shorter spelling would be the worse one. Omitting the argument
+falls to `Registered` instead: either the application registered a map, or the first `emit`
+fails with the sentence naming the fix.
+<!-- norm: client-map-never-inferred -> packages/core/src/transport-clients.test-d.ts -->
+
+Which module you import decides where the code runs. `transport-io/browser-transport` uses
+the platform's own `WebTransport` and loads nothing native. `transport-io/node-transport`
+loads the QUIC binding and must only be imported from a file named `*.node.ts` - a lint rule
+enforces that, because the binding segfaults Bun on exit.
+
+### 2.0 Assembling it yourself
+
+`new Client({ contract, connect })` takes the seam directly and is not going anywhere. The
+rule for choosing between them is one line: **the one-call form hands back a client that is
+already connected, so anything that needs the client before that has to construct it
+itself.**
+
+Three cases qualify:
+
+- **A transport of your own.** `connect` is the seam. Supply any function returning a
+  `Connection`.
+- **React.** `TransportProvider` takes an unconnected client and connects it in an effect, so
+  the client has to exist synchronously, inside a `useState` initialiser.
+- **Rendering connection state.** `connecting` is observable only if you are holding the
+  thing doing the connecting. Both pages in `examples/chat` show a status indicator, and use
+  the seam form for exactly that reason.
 
 ```ts
 import { Client, type ClientOptions } from 'transport-io'

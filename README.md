@@ -114,9 +114,11 @@ is 169 against 439 and `stream` 157 against 427. Hover width is a property of th
 not of this library, so those figures are for the contract pinned in
 `scripts/check-hover.ts` and are re-measured on every CI run.
 
-`AppMap` is what each end is given, once: `new Client<AppMap>({ … })` and
+`AppMap` is what each end is given, once: `browserClient<AppMap>({ … })` and
 `createServer<AppMap>({ … })` below. The type follows the import, so two contracts in one
-process are simply two types.
+process are simply two types. It is never inferred from the contract, because the inferred
+spelling is the 377-character one and the shorter thing that compiles must not be the worse
+one.
 
 A map can instead be registered once globally, which drops the type argument everywhere. That
 is opt-in, it buys no readability, and it has real costs; see
@@ -176,15 +178,13 @@ export async function serve(cert: string, privKey: string): Promise<void> {
 
 ```ts
 // client
-import { Client } from 'transport-io'
-import { connectBrowser } from 'transport-io/browser-transport'
+import { browserClient } from 'transport-io/browser-transport'
 
 export async function run(url: string): Promise<number> {
   // No `certificateHash`, so the certificate is validated against the platform's CA store
   // like any other HTTPS origin. Pass one only to pin a self-signed certificate in
   // development, which is what `transport-io dev` sets up for you.
-  const client = new Client<AppMap>({ contract, connect: () => connectBrowser({ url }) })
-  await client.connect()
+  const client = await browserClient<AppMap>({ contract, url })
 
   client.emit('chat', { from: 'me', body: 'hello' }) // arrives
   client.emit('cursor', { x: 12, y: 40 }) // may not
@@ -192,6 +192,14 @@ export async function run(url: string): Promise<number> {
   return revision
 }
 ```
+
+`browserClient` constructs and connects, and resolves to a connected client. `devClient` and
+`http3Client` are the same shape for local development and for Node.
+
+`new Client({ contract, connect })` is still there, and the rule for choosing is that the
+one-call form hands back a client that is *already connected*. Anything needing it before
+then constructs it itself: a transport of your own, React, or a page that renders
+`connecting`.
 
 An event can answer with a **sequence** instead of a value. Declare `yields` instead of
 `returns`, write an async generator, consume an async iterable:

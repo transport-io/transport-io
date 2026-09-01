@@ -15,7 +15,12 @@ import { after, before, test } from 'node:test'
 import { Client } from './client.ts'
 import { defineContract, type MapOf, type$ } from './contract.ts'
 import { createServer } from './server.ts'
-import { connectHttp3, type Http3Listener, listenHttp3 } from './transport/fails.node.ts'
+import {
+  connectHttp3,
+  type Http3Listener,
+  http3Client,
+  listenHttp3,
+} from './transport/fails.node.ts'
 
 const contract = defineContract({
   chat: { lane: 'reliable', payload: type$<{ room: string; body: string }>() },
@@ -128,3 +133,45 @@ test('two clients in one room exchange a message on each lane over real QUIC', a
   a.disconnect()
   b.disconnect()
 })
+
+/**
+ * The construct-and-connect form, over the same real transport.
+ *
+ * `new Client({ connect })` above stays exercised on purpose: it is the seam, and a test is
+ * one of the two places it still earns its place. This is the form every example writes, and
+ * without a test of its own the only thing holding it would be that it compiles.
+ *
+ * Reuses the listener and the accept loop the test above started, so this asserts the
+ * connect actually happened rather than that a constructor returned.
+ */
+test('http3Client hands back a client that is already connected', async () => {
+  const client = await http3Client<AppMap>({
+    contract,
+    url: `https://127.0.0.1:${PORT}/`,
+    certificateHash: certHash,
+  })
+
+  // No `connect()` call anywhere above this line.
+  assert.equal(client.getSnapshot().status, 'connected')
+
+  const seen: unknown[] = []
+  client.on('chat', (p) => seen.push(p))
+  client.emit('chat', { room: 'lobby', body: 'from a one-call client' })
+  await new Promise((r) => setTimeout(r, 400))
+  assert.deepEqual(seen, [{ room: 'lobby', body: 'from a one-call client' }])
+
+  client.disconnect()
+})
+
+/**
+ * Type-level, and never called. Omitting the map must fall to `Registered`, which is the
+ * sentinel in this program, exactly as it does for `devClient` and `browserClient`. One of
+ * the three being wired differently is how this comes back, and the other two are pinned in
+ * `transport-clients.test-d.ts`, which cannot import a `*.node.ts` module.
+ */
+async function sentinelIsWiredForHttp3(): Promise<void> {
+  const unbound = await http3Client({ contract, url: '', certificateHash: certHash })
+  // @ts-expect-error nothing is registered in this program, so the sentinel refuses every event
+  unbound.emit('chat', { room: 'lobby', body: 'x' })
+}
+void sentinelIsWiredForHttp3

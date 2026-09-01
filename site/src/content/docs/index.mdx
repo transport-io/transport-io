@@ -52,11 +52,9 @@ await server.listen(await listenDev())
 </Card>
 <Card title="Client">
 ```ts
-import { Client } from 'transport-io'
-import { connectDev } from 'transport-io/dev-transport'
+import { devClient } from 'transport-io/dev-transport'
 
-const client = new Client<AppMap>({ contract, connect: () => connectDev() })
-await client.connect()
+const client = await devClient<AppMap>({ contract })
 
 client.on('chat', (m) => console.log(m.from, m.body))
 

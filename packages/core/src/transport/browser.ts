@@ -5,6 +5,8 @@
  * so importing this on a server, which Next.js will do, is safe. There is no native
  * addon and no binding, which is why this file is not `*.node.ts`.
  */
+import { Client, type ClientOptions } from '../client.ts'
+import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
@@ -149,4 +151,36 @@ export async function connectBrowser(opts: BrowserConnectOptions): Promise<Conne
     )
   }
   return new BrowserConnection(session)
+}
+
+/**
+ * Everything `Client` needs except `connect`, which is what this module is for.
+ *
+ * `Omit` rather than a hand-written list, so an option added to `ClientOptions` arrives here
+ * without anyone remembering to copy it.
+ */
+export interface BrowserClientOptions
+  extends Omit<ClientOptions, 'connect'>,
+    BrowserConnectOptions {}
+
+/**
+ * A connected client, in one call.
+ *
+ * `new Client({ connect: () => connectBrowser({ url }) })` followed by `await connect()` is
+ * two statements and an arrow that exists only to defer the call. This module already knows
+ * it is building a client for a browser, so it can do both.
+ *
+ * **Pass the map explicitly, or register it.** The type argument is deliberately not
+ * inferred from `contract`: inferring it would hand back `Client<MapOf<typeof contract>>`,
+ * whose hover is 377 characters of validator internals against 107 for a named interface
+ * (D100). Omitting it therefore falls to `Registered`, which is either the map the
+ * application registered or the sentinel that names the fix. There is no third case, and
+ * that is the point: the shorter thing that compiles cannot be the worse one.
+ */
+export async function browserClient<M extends AnyMap = Registered>(
+  options: BrowserClientOptions,
+): Promise<Client<M>> {
+  const client = new Client<M>({ ...options, connect: () => connectBrowser(options) })
+  await client.connect()
+  return client
 }

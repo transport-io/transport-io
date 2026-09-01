@@ -14,6 +14,8 @@
  *     recoverable only by parsing a message string
  */
 import { Http3Server, quicheLoaded, WebTransport } from '@fails-components/webtransport'
+import { Client, type ClientOptions } from '../client.ts'
+import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
@@ -217,12 +219,12 @@ export async function listenDev(): Promise<Http3Listener> {
   return await listenHttp3({ port: Number(port), host: '127.0.0.1', cert, privKey, path: '/' })
 }
 
-export interface Http3ClientOptions {
+export interface Http3ConnectOptions {
   readonly url: string
   readonly certificateHash: Uint8Array
 }
 
-export async function connectHttp3(opts: Http3ClientOptions): Promise<Connection> {
+export async function connectHttp3(opts: Http3ConnectOptions): Promise<Connection> {
   // The binding loads its native transport through a dynamic import and throws
   // `Lib quiche loading attempt did not end` if a client is constructed before it
   // settles. A process that also runs a server never sees this, because the server
@@ -254,4 +256,26 @@ export async function connectHttp3(opts: Http3ClientOptions): Promise<Connection
     )
   }
   return new FailsConnection(wt)
+}
+
+/** Everything `Client` needs except `connect`, which is what this module supplies. */
+export interface Http3ClientOptions
+  extends Omit<ClientOptions, 'connect'>,
+    Http3ConnectOptions {}
+
+/**
+ * A connected client over the native transport, in one call.
+ *
+ * The Node counterpart of `browserClient`. Every integration test in this repository opened
+ * with the same two statements and the same arrow, which is the argument for it.
+ *
+ * **Pass the map explicitly, or register it.** See `browserClient` for why the type argument
+ * is not inferred from `contract`, and D100 for the measurement behind it.
+ */
+export async function http3Client<M extends AnyMap = Registered>(
+  options: Http3ClientOptions,
+): Promise<Client<M>> {
+  const client = new Client<M>({ ...options, connect: () => connectHttp3(options) })
+  await client.connect()
+  return client
 }

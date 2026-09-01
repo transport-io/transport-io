@@ -76,6 +76,11 @@ export function Providers({ children }: { children: ReactNode }): ReactNode {
 }
 ```
 
+`new Client` here rather than `browserClient`, and that is not an oversight. The one-call
+form resolves once the session is up, and `TransportProvider` wants the client *before* it is
+connected: it does the connecting itself, in an effect, so the client has to exist
+synchronously inside the `useState` initialiser.
+
 `TransportProvider` connects while it is mounted. Pass `autoConnect={false}` to drive the
 connection yourself. `connect` and `disconnect` are refcounted in core, so two providers or a
 StrictMode double mount cannot tear down each other's session.

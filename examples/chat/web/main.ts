@@ -52,6 +52,14 @@ const { sha256, port } = (await (await fetch('/cert-hash')).json()) as {
   port: number
 }
 
+/**
+ * The seam form, `new Client({ connect })`, rather than `browserClient({ … })`.
+ *
+ * This page renders the connection status, so it needs the client *before* it is connected:
+ * `connecting` is a state you can only show if you are holding the thing that is doing the
+ * connecting. `browserClient` resolves once the session is up, which is one line shorter and
+ * cannot express this. Same reason the React provider takes an unconnected client.
+ */
 const client = new Client<ChatMap>({
   contract,
   connect: () =>

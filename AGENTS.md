@@ -61,7 +61,7 @@ a contract assembled programmatically.
 characters and `Client<MapOf<typeof contract>>` at 377, with the validator's internal types
 in it, because TypeScript preserves interface names and expands alias instantiations.
 
-**Passing it.** `AppMap` goes to each end once: `new Client<AppMap>({ contract })` and
+**Passing it.** `AppMap` goes to each end once: `browserClient<AppMap>({ contract, url })` and
 `createServer<AppMap>({ contract })`. The type follows the import, so two contracts in one
 process are two types.
 
@@ -123,17 +123,15 @@ It does not bundle browser code. Run your own bundler and pass `--static <dir>`.
 ## Client
 
 ```ts
-import { Client } from 'transport-io'
-import { connectBrowser } from 'transport-io/browser-transport'
+import { browserClient } from 'transport-io/browser-transport'
 
-const client = new Client<AppMap>({
+// Constructs and connects. Resolves to a connected client.
+const client = await browserClient<AppMap>({
   contract,
   // No `certificateHash`: ordinary CA validation, which is the production path. Pass one
   // only to pin a self-signed certificate locally.
-  connect: () => connectBrowser({ url: 'https://example.com:4433/' }),
+  url: 'https://example.com:4433/',
 })
-
-await client.connect()
 
 client.emit('chat', { from: 'me', body: 'hi' })          // lane comes from the contract
 const off = client.on('chat', (p) => console.log(p.body)) // returns an unsubscribe
@@ -148,7 +146,8 @@ client.disconnect()
 
 | member | notes |
 |---|---|
-| `new Client(opts)` | Does no I/O. Safe to import and construct on a server. |
+| `browserClient<M>(opts)` | Constructs and connects. `devClient` and `http3Client` are the same shape. `M` is never inferred from `contract`; omitting it falls to `Registered`. |
+| `new Client(opts)` | Does no I/O. Safe to import and construct on a server. Use it when you need the client *before* it is connected: a transport of your own, React, or rendering `connecting`. |
 | `connect()` / `disconnect()` | Idempotent and refcounted. Two components sharing a client cannot tear each other down. |
 | `emit(event, payload)` | Fire and forget, on whichever lane the contract declared. |
 | `call(event, payload, opts?)` | Only on events with `returns`. No default timeout. |
@@ -289,7 +288,7 @@ An event declaring `yields` instead of `returns` answers with a sequence. Server
 async generator, client consumes an async iterable:
 
 ```ts
-import type { Server } from 'transport-io'
+import type { Client, Server } from 'transport-io'
 
 export async function serveAsk(server: Server<AppMap>): Promise<void> {
   server.handle('ask', async function* ({ prompt }) {

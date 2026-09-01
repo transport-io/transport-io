@@ -19,8 +19,14 @@
  * whatever the bundler substituted, it is routinely wrong, and it is invisible at runtime.
  * A hostname cannot be got wrong.
  *
- * Nothing here is imported at module scope, so importing this file on a server is safe.
+ * This module evaluates nothing at import time. It reads `location`, `fetch` and
+ * `WebTransport` inside `connectDev`, never at module scope, so importing it on a server
+ * is safe. `Client` is imported here and that stays true: constructing one performs no
+ * I/O and touches no browser global. `dev-import.test.ts` holds it, because the property
+ * is the kind that a later import quietly breaks.
  */
+import { Client, type ClientOptions } from '../client.ts'
+import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
 import { connectBrowser } from './browser.ts'
 import type { Connection } from './types.ts'
@@ -127,4 +133,24 @@ export async function connectDev(opts: DevConnectOptions = {}): Promise<Connecti
     url: manifest.url,
     certificateHash: Uint8Array.from(manifest.sha256),
   })
+}
+
+/** Everything `Client` needs except `connect`, which is what this module supplies. */
+export interface DevClientOptions extends Omit<ClientOptions, 'connect'>, DevConnectOptions {}
+
+/**
+ * A connected client against the certificate `transport-io dev` minted, in one call.
+ *
+ * The same refusals apply as to `connectDev`, because it is `connectDev` doing the
+ * connecting: a bundle that reaches production cannot connect through this either.
+ *
+ * **Pass the map explicitly, or register it.** See `browserClient` for why the type argument
+ * is not inferred from `contract`, and D100 for the measurement behind it.
+ */
+export async function devClient<M extends AnyMap = Registered>(
+  options: DevClientOptions,
+): Promise<Client<M>> {
+  const client = new Client<M>({ ...options, connect: () => connectDev(options) })
+  await client.connect()
+  return client
 }

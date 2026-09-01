@@ -2670,3 +2670,41 @@ alone while the interface line costs one line and buys 107 against 377.
 
 **Reconsider when:** the surface is being reworked for another reason at 1.0, at which point
 this stops being a change of its own and becomes a property to design for. Not before.
+### D108. Each transport constructs and connects, and the seam stays for three cases
+`new Client({ contract, connect: () => connectDev() })` followed by `await client.connect()`
+is two statements and an arrow whose only job is to defer a call the next line makes anyway.
+Every transport module already knows it is building a client, so each one now exports a form
+that does both: `devClient`, `browserClient`, `http3Client`, all resolving to a connected
+client.
+
+Three decisions inside that.
+
+**New names rather than overloading the existing ones.** `connectDev` returns a `Connection`
+and is a value you hand to `connect`. Making its return type depend on whether `contract` was
+passed would mean the module stops having a one-sentence description, and the two layers stop
+being separable. An extra export is cheaper than that.
+
+**The map is a type argument and is never inferred from `contract`.** Inference is the
+obvious thing and the wrong one: it resolves to `Client<MapOf<typeof contract>>`, which is
+D100's 377-character row. The shorter spelling that compiles must not be the worse one, so
+the parameter defaults to `Registered` instead. Omitting it therefore either works, because
+the application registered a map, or fails with the sentinel naming the fix. There is no
+third outcome, and `transport-clients.test-d.ts` pins it: weaken the default to `AnyMap` and
+that file reports an unused `@ts-expect-error` rather than quietly accepting every event name.
+
+**`new Client({ connect })` is not deprecated and is not going anywhere.** The rule for
+choosing is that the one-call form hands back a client that is *already connected*, so
+anything needing the client before then constructs it itself. Three cases qualify: a
+transport of your own, React (`TransportProvider` takes an unconnected client and connects it
+in an effect, so it must exist synchronously in a `useState` initialiser), and any page that
+renders `connecting`, which is observable only while holding the thing doing the connecting.
+Both pages in `examples/chat` show a status indicator and use the seam form for that reason,
+which is why the examples do not match the README's canonical form and should not be
+"corrected" to.
+
+`Http3ClientOptions` was renamed to `Http3ConnectOptions` in the same change, so the three
+modules name their connection options the same way and the client options could take the
+obvious name.
+
+**Reconsider when:** the third case stops being real, which would need a way to observe a
+connection that does not yet exist. It is not obvious what that would look like.
