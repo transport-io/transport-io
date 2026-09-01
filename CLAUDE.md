@@ -161,6 +161,33 @@ to humans and agents equally: an agent committing is subject to the same gate as
   pattern by design.
 - Consumer floor is TypeScript 5.0, gated by `const` type parameters. CI checks it.
 
+## Reader-facing documents answer three questions
+
+What is this, how do I use it, what will bite me. Nothing else. This applies to `README.md`,
+`packages/core/README.md`, `AGENTS.md`, the prose of `API.md`, and every page under
+`site/src/content/docs/`. It does not apply to `DECISIONS.md`, `ADR/` or `KNOWN-ISSUES.md`,
+which are records and exist to hold exactly what the others must not.
+
+Rationale lives in the ADRs and in `DECISIONS.md`. A sentence that exists to justify a choice
+rather than to help someone use the library belongs there, and the reader-facing document
+links to it in one clause if the reader genuinely needs to know the choice was deliberate.
+
+Two tests, applied to every sentence:
+
+- **Does it change what the reader does or expects?** If it only explains why we did
+  something, cut it and link.
+- **Would it exist if nobody had ever questioned the design?** If it answers an objection
+  nobody in front of us has raised, cut it.
+
+And one on numbers: **every figure in a reader-facing document must change a decision the
+reader makes.** A version floor, a byte limit, a concurrency cap do. A measurement that
+proves a design point does not; it goes in the ledger with the decision it proves.
+
+This drifted three times before it became a rule, each time in the same shape: the README
+defending a decision to an imagined skeptic. `README.md` therefore has a prose-word ceiling
+in `scripts/check-prose-budget.ts`, enforced in CI, that may only go down. A budget is the
+mechanism because rationale is what gets cut when something has to go.
+
 ## The contract pattern is two lines, always
 
 ```ts
