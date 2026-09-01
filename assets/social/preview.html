@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>transport-io social preview</title>
+<style>
+  /* 1280 x 640, the size GitHub asks for. Palette and type from assets/brand/USAGE.txt. */
+  :root { --ground:#E4E0D6; --panel:#F3F1EA; --ink:#16130F; --accent:#C2551D; --dim:#6B655B; --line:#CFC9BB; }
+  html, body { margin:0; width:1280px; height:640px; background:var(--ground); color:var(--ink);
+    font-family:'IBM Plex Mono','SFMono-Regular',ui-monospace,Menlo,monospace; -webkit-font-smoothing:antialiased; }
+  .page { position:relative; width:1280px; height:640px; padding:56px 64px; box-sizing:border-box; }
+  .lockup { display:flex; align-items:center; gap:22px; }
+  .lockup svg { width:62px; height:52px; display:block; }
+  .lockup .word { font-size:38px; font-weight:600; letter-spacing:-0.4px; }
+  .pitch { margin-top:26px; font-size:26px; line-height:1.35; max-width:1100px; }
+  .pitch b { font-weight:600; }
+  .panels { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:34px; }
+  .panel { background:var(--panel); border:1px solid var(--line); padding:22px 26px; box-sizing:border-box; height:262px; }
+  .panel .label { font-size:15px; color:var(--dim); margin-bottom:14px; }
+  pre { margin:0; font:19px/1.55 inherit; white-space:pre; }
+  .k { color:var(--accent); font-weight:600; }
+  .c { color:var(--dim); }
+  .foot { position:absolute; left:64px; right:64px; bottom:44px; display:flex; justify-content:space-between; font-size:17px; color:var(--dim); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="lockup">
+    <svg viewBox="0 0 62 56" aria-hidden="true"><g fill="#16130F"><path d="M4 8 H42 V23 L27 32 L42 41 V56 H4 Z"/><path d="M45 46 L62 40 L62 57 H45 Z"/></g></svg>
+    <span class="word">transport-io</span>
+  </div>
+  <div class="pitch">Real-time apps over WebTransport. <b>Two lanes, one contract, no fallback.</b></div>
+  <div class="panels">
+    <div class="panel">
+      <div class="label">contract.ts</div>
+<pre>const contract = defineContract({
+  chat:   <span class="k">reliable</span>&lt;{ from: string; body: string }&gt;(),
+  cursor: <span class="k">unreliable</span>&lt;{ x: number; y: number }&gt;(),
+  ask:    <span class="k">streaming</span>&lt;{ prompt: string }, string&gt;(),
+})</pre>
+    </div>
+    <div class="panel">
+      <div class="label">client.ts</div>
+<pre>client.emit('chat', { from, body })  <span class="c">// arrives</span>
+client.emit('cursor', { x, y })      <span class="c">// may not</span>
+
+for await (const t of client.stream('ask', { prompt })) {
+  render(t)                          <span class="c">// break = reset</span>
+}</pre>
+    </div>
+  </div>
+  <div class="foot">
+    <span>QUIC streams for what must arrive. Datagrams for what may not.</span>
+    <span>Chrome, Firefox. Node 22.</span>
+  </div>
+</div>
+</body>
+</html>
