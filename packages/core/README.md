@@ -21,8 +21,7 @@ generator's `finally` runs.
 before you start.** It lists what this library will not do, and the one measured defect. Full documentation is in the
 [repository README](https://github.com/transport-io/transport-io#readme). The short version:
 
-- **WebTransport only.** No WebSocket fallback, deliberately - a fallback would silently
-  make the unreliable lane reliable and ordered, which is a lie about your data.
+- **WebTransport only.** No WebSocket fallback. An unsupported runtime gets `WT_NO_SUPPORT`.
 - **Chrome and Firefox.** Safari cannot talk to a quiche-backed server and is unsupported.
 - **The server needs a separate native install**, and its Linux prebuild needs glibc 2.38 -
   no default Node `-slim` image has it, and Alpine has no prebuild at all.
