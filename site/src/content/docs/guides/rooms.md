@@ -26,7 +26,6 @@ const contract = defineContract({
 })
 interface AppMap extends MapOf<typeof contract> {}
 
-
 declare const server: Server<AppMap>
 declare const client: Client<AppMap>
 declare function allowed(room: string): boolean
@@ -82,9 +81,7 @@ it wastes bandwidth that a fresher frame could use.
 
 Room membership does not survive a reconnect. Pending calls reject.
 
-Rejoining is your code, not the library's. Automatic rejoin would have to assume the
-authorisation still holds, and automatic retry would have to assume the original call did
-not execute before the connection dropped. The client cannot know either.
+Rejoining is your code, not the library's (D4).
 
 The hook you need:
 

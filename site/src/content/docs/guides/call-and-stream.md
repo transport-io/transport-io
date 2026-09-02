@@ -15,7 +15,6 @@ export const contract = defineContract({
 })
 export interface AppMap extends MapOf<typeof contract> {}
 
-
 declare const client: Client<AppMap>
 declare const server: Server<AppMap>
 declare function model(text: string): AsyncIterable<string>
@@ -30,10 +29,7 @@ declare const stopButton: { onclick: () => void }
 `call('ask', …)` does not compile, and neither does `stream('save', …)`. At runtime both are
 refused with an error naming the method that would have worked.
 
-The shape is fixed in the contract because an empty sequence and a broken response are the
-same bytes on the wire: zero response frames followed by stream close. A receiver decides
-which it is from the event's contract entry, exchanged during the handshake. See ADR 0012
-if you want the full argument.
+The shape is fixed in the contract and cannot be chosen per call (ADR 0012).
 
 ## call()
 
@@ -41,9 +37,7 @@ if you want the full argument.
 const { n } = await client.call('save', { text: 'hello' })
 ```
 
-Each call opens its own bidirectional stream. The stream is the correlation, so there are no
-request identifiers, no pending-callback map and no timer per request. A stalled call does
-not block other calls.
+Each call opens its own bidirectional stream, so a stalled call does not block other calls.
 
 There is no default timeout. A dead peer is detected by the QUIC idle timeout, which rejects
 every pending call. Pass a signal when you want a deadline:
@@ -70,7 +64,7 @@ server.handle('ask', async function* ({ prompt }) {
 ```
 
 Leaving the loop cancels the stream. `break` calls the iterator's `return()`, which resets
-the QUIC stream. The responder sees STOP_SENDING. Its `ctx.signal` fires and any `finally`
+the QUIC stream. The responder's `ctx.signal` fires and any `finally`
 in the generator runs. Passing an `AbortSignal` to `stream()` has the same effect from
 outside the loop, which is what a React effect cleanup would use.
 
@@ -115,10 +109,7 @@ await generation.forEach(render)
 Cancelling aborts the stream, so the consumer sees `WT_ABORTED`, exactly as it would from an
 `AbortSignal`.
 
-These four are named after the TC39 async iterator helpers proposal and behave sequentially.
-That proposal is being revised to let `map`, `take` and others run several pulls at once,
-which would defeat the credit window, so this library will not follow it there. `cancel()` is
-not in the proposal at all.
+These four behave sequentially, and `cancel()` is this library's own (D99).
 
 ## Errors partway through
 

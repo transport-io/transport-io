@@ -7,11 +7,7 @@ A reconnect is a new session. The peer gets a new id, a new origin, and no rooms
 the server knew about the old session carries over, because the old session is gone and the
 server cannot tell a returning client from a new one without asking.
 
-This is deliberate (D4). Silent re-join is a security decision wearing a convenience
-costume: it means the server re-grants access it granted once, to a peer it has not
-re-authorised, on the strength of a claim the client makes about itself.
-
-What the library does not decide is what re-joining should cost. That is your
+This is deliberate (D4). What the library does not decide is what re-joining should cost. That is your
 authorisation, your catch-up window and your idempotency. What follows is the recipe. Copy
 it.
 
@@ -171,5 +167,4 @@ returns `joined: false` and the client is left connected but out of the room, wh
 right shape, and what to do about it is a product decision.
 
 It does not retry. `client.connect()` is idempotent and refcounted, so a retry loop around
-it is safe to write, and the library does not write one for you: how long to back off and
-when to stop are the parts every application answers differently.
+it is safe to write, and the library does not write one for you.

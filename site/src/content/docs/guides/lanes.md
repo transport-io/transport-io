@@ -10,9 +10,6 @@ Every event declares a lane. The lane names a guarantee.
 | `reliable` | It arrives, in order, or the session fails. | QUIC streams |
 | `unreliable` | It may be dropped, duplicated or reordered. | QUIC datagrams |
 
-A lane names the guarantee your data gets, not the mechanism that carries it. That is the
-whole reason the values read the way they do.
-
 ## Choosing a lane
 
 If losing the message would be a bug, use `reliable`. Chat messages, state changes,
@@ -34,9 +31,7 @@ Two things are handled for you:
 
 - **Duplicates are discarded.** A datagram that arrives twice is delivered once.
 - **Stale arrivals are dropped rather than rendered.** A queued datagram older than 150 ms
-  is discarded on the way out. Without that, a peer that stalls for two seconds and resumes
-  receives a backlog of old positions and animates history, which is worse than receiving
-  nothing.
+  is discarded on the way out, so a peer that stalls and resumes does not animate a backlog.
 
 There is a size ceiling, and it is a property of the network path rather than a constant.
 Query it at send time; the library does, and an oversized payload is refused rather than
@@ -53,9 +48,5 @@ other and from emits. Emits are not isolated from each other.
 
 ## The lane is per event, not per call
 
-Reliability is declared once, in the contract. If it were an argument to `emit()`, two call
-sites sending the same event could disagree, and reading the contract would not tell you
-what the data promises.
-
-The types follow from it: `returns` and `yields` are valid only on `reliable`, since an
-unreliable event has no response path.
+Reliability is declared once, in the contract, and cannot be set at a call site. `returns`
+and `yields` are valid only on `reliable`, since an unreliable event has no response path.

@@ -17,18 +17,8 @@ stream, so none of this reaches the rest of the session.
 
 ## Where the bound comes from
 
-The credit accounting is this library's, not the transport's. On the reference QUIC binding
-`WritableStreamDefaultWriter.ready` resolves unconditionally, so awaiting it before a write
-applies no backpressure at all. Measured against a consumer taking one element every 20 ms:
-
-| consumer took | producer got ahead |
-|---|---|
-| 20 elements | 83,461 frames |
-| 40 elements | 136,523 frames, about 53 MB |
-
-There was no plateau at any element size from 16 bytes to 64 KiB, and the gap grew linearly
-with the length of the run. With the credit window the same measurement is 33 frames, flat,
-and unchanged when the run doubles.
+The credit accounting is this library's, not the transport's. The measurement behind that is
+D93.
 
 ## What it costs
 
@@ -39,11 +29,6 @@ per second, so the bounded path still carries about a hundred times what the wor
 exists for can produce. Both figures are measured over localhost, where the credit round
 trip is nearly free.
 </div>
-
-The window is 32. The bound is always window + 1, and the throughput curve is flat between 8
-and 32. A window of 4 costs about 29%. A window of 128 buys 28% more throughput for four
-times the memory ceiling, which at 64 KiB elements and 256 concurrent streams is 2 GiB
-against 512 MiB.
 
 ## A consumer that never comes back
 

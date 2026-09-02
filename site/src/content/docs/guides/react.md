@@ -15,9 +15,7 @@ React and react-dom are peer dependencies, and the floor is **React 19.2**, beca
 
 ## Bind the hooks to your map
 
-`createHooks<AppMap>()` returns the hooks typed for one contract. That is the whole setup, and
-it matches how the rest of this library is used: the map is passed explicitly, so the type
-follows the import and two contracts in one process are simply two objects.
+`createHooks<AppMap>()` returns the hooks typed for one contract. That is the whole setup.
 
 ```ts file=api.ts
 // api.ts
@@ -37,22 +35,16 @@ export const api = createHooks<AppMap>()
 Then `api.useEvent('chat', …)` anywhere, or destructure it:
 `export const { useEvent, useCall } = createHooks<AppMap>()`.
 
-Write the `MapOf` line. Passing `MapOf<typeof contract>` straight into `createHooks` takes
-`api.useEvent`'s hover from 129 characters to 411, with your validator's internals in it.
-Both figures are re-measured on every CI run, and the gap between them is what the project's
-hover gate asserts.
+Write the `MapOf` line. Without it, every hook's hover shows the whole contract with your
+validator's internals in it.
 
-The named exports (`useEvent`, `useCall`, …) still exist and read the globally registered map
-instead. They work, and they are the older path; see
-[Registering the map](/getting-started/#registering-the-map-optional) for why registration is
-opt-in.
+The named exports (`useEvent`, `useCall`, …) read the globally registered map instead; see
+[Registering the map](/getting-started/#registering-the-map-optional).
 
 ## The provider takes a client
 
-It does not make one. Building a client needs a `connect` function, which is
-transport-specific, and a provider that hid that choice would be re-exporting transport
-concerns. It also matters on the server: **a module-level client is a cross-request state
-leak** on anything rendering more than one user, so build it inside the component.
+It does not make one. **A module-level client is a cross-request state leak** on anything
+rendering more than one user, so build it inside the component.
 
 ```tsx
 'use client'
@@ -76,9 +68,8 @@ export function Providers({ children }: { children: ReactNode }): ReactNode {
 }
 ```
 
-`new Client` here rather than `browserClient`, and that is not an oversight. The one-call
-form resolves once the session is up, and `TransportProvider` wants the client *before* it is
-connected: it does the connecting itself, in an effect, so the client has to exist
+`new Client` here rather than `browserClient`: `TransportProvider` wants the client *before*
+it is connected, since it does the connecting itself in an effect, so the client has to exist
 synchronously inside the `useState` initialiser.
 
 `TransportProvider` connects while it is mounted. Pass `autoConnect={false}` to drive the
@@ -203,9 +194,8 @@ not leave a generator producing into nothing.
 ## Server components
 
 Every hook is a client-side thing and the entry carries `'use client'`. A server component
-that calls one gets React's own error saying hooks are not available there, which is the
-mechanism React provides and not something this package can improve on. What it does own is
-the adjacent mistake: a hook used outside the provider throws an error naming
+that calls one gets React's own error saying hooks are not available there. A hook used
+outside the provider throws an error naming
 `TransportProvider` rather than reading a property of `undefined`.
 
 ## StrictMode
@@ -214,5 +204,3 @@ Development mounts every component twice. Refcounting makes that safe, and it is
 knowing what it actually does: the refcount goes 1, 0, 1, and at zero the session genuinely
 tears down and is rebuilt. One wasted connection cycle, in development only.
 
-That is deliberate. Deferring the disconnect behind a timer so the remount reuses the session
-would trade a visible development reconnect for an invisible production race.
