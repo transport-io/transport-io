@@ -65,6 +65,8 @@ jobs:
         run: bun run scripts/check-docs.ts
       - name: README prose budget
         run: bun run scripts/check-prose-budget.ts
+      - name: retired claims stay retired
+        run: bun run scripts/check-retired-claims.ts
       - name: workflows
         run: bun run scripts/check-workflows.ts
       - name: import boundaries

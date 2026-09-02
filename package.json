@@ -21,6 +21,7 @@
     "check:node": "./scripts/check-node.sh",
     "check:norms": "bun run scripts/check-norms.ts",
     "check:prose": "bun run scripts/check-prose-budget.ts",
+    "check:retired": "bun run scripts/check-retired-claims.ts",
     "check:required": "bun run scripts/required-checks.ts",
     "check:site-links": "bun run scripts/check-site-links.ts",
     "check:ts-floor": "./scripts/check-ts-floor.sh",

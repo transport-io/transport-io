@@ -18,8 +18,8 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-FAST=(lint typecheck test:unit docs:check check:norms check:prose check:boundaries
-      check:workflows deadcode check:gate-inputs)
+FAST=(lint typecheck test:unit docs:check check:norms check:prose check:retired
+      check:boundaries check:workflows deadcode check:gate-inputs)
 FULL=(test:node check:hover verify:pack check:install check:tags)
 
 GATES=("${FAST[@]}")

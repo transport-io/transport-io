@@ -42,6 +42,17 @@ time by the same route: a paragraph justifying a decision, with a measurement at
 rule is in CLAUDE.md under "Reader-facing documents answer three questions"; this is the
 mechanism, because rationale is what gets cut when something has to go.
 
+## `check-retired-claims.ts` - a claim found false stays false
+
+One sentence about the React package survived three documentation sweeps: each sweep was a
+list of files and the sentence was in a file off the list, and when it was finally grepped
+for, it was hard-wrapped across a line break, which a line-based grep cannot see. So a claim
+found false is retired as a pattern, matched against every tracked markdown file with
+whitespace collapsed first. Each pattern is proven against the wording it retires before
+anything is scanned, so a pattern that drifts until it matches nothing fails rather than
+passing. The list only grows. Records that quote a retired claim to say it was wrong are the
+only files exempt.
+
 ## `check-workflows.ts` - no outsider-controlled text reaches a shell
 
 Fails on any `${{ ... }}` inside a `run:` block and on any workflow without a top-level

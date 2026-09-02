@@ -2756,3 +2756,31 @@ restarts the unit, the process drains on SIGTERM, and every live session drops o
 renewal. The trigger to revisit is the transport gaining a real `updateCert`, at which point
 the listener grows a matching method and the hook stops restarting.
 
+### D112. A claim found false is retired as a pattern, not removed as a sentence
+"`@transport-io/react` requires registration" was found stale three times and survived all
+three sweeps. Not through disagreement; the mechanics of a sweep let it through three
+different ways:
+
+- **Each sweep was a list of files.** The targeted React review covered the React guide, the
+  package README, getting-started's React section and API.md §7. AGENTS.md was on none of the
+  lists, and it held the sentence throughout.
+- **A grep is line-based, and the documents are hard-wrapped.** The sentence read "`is the
+  one thing that` / `currently requires it`" across a line break, so a grep for the phrase
+  found nothing even when AGENTS.md was finally searched.
+- **The phrasing varied.** "requires it", "currently requires it", "the one thing that
+  requires", and the correct sentence beside it, "does not need it either", share every
+  keyword.
+
+`scripts/check-retired-claims.ts` closes all three. A claim found false is retired as a
+regular expression, matched against every tracked markdown file with whitespace collapsed
+first, so a file off any list and a sentence that turns a corner are both seen. Each entry
+carries the wording it was last seen as, and the gate proves every pattern against its own
+wording before scanning, so a pattern that drifts until it matches nothing fails rather than
+passing; that check fired on the first run, against a pattern this entry's author had just
+written. The list only grows. Records that quote a retired claim to say it was wrong,
+`DECISIONS.md`, `ADR/`, `KNOWN-ISSUES.md` and the changelogs, are the only exempt files.
+
+On its first run the gate found two instances the sweep that prompted it had missed, in
+`packages/react/README.md` and in CLAUDE.md. That is the fourth way, and it is the reason
+this is a gate rather than a fourth sweep.
+
