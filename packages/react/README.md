@@ -25,12 +25,10 @@ export const api = createHooks<AppMap>()
 Then `api.useEvent('chat', …)`, or destructure it. Nothing is registered globally, so two
 contracts in one process are two objects, and the type follows the import.
 
-Write the `MapOf` line: passing `MapOf<typeof contract>` straight in takes `api.useEvent`'s
-hover from 129 characters to 411, with your validator's internals in it. Both are re-measured
-on every CI run.
+Write the `MapOf` line. Without it, every hook's hover shows the whole contract with your
+validator's internals in it.
 
-The named exports below also exist and read the globally registered map instead. They work,
-and they are the older path.
+The named exports below read the globally registered map instead.
 
 ## What it gives you
 
