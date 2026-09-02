@@ -14,7 +14,7 @@ payload and lane in the application without reading anything else.
 
 A lane is a guarantee. `reliable` means the message arrives, in order; it is carried on a
 QUIC stream. `unreliable` means it may be dropped, duplicated or reordered; it is carried on
-a QUIC datagram. The name says what your data gets, not how it travels.
+a QUIC datagram.
 
 ```ts
 import { defineContract, type MapOf, reliable, rpc, streaming, unreliable } from 'transport-io'
@@ -35,14 +35,8 @@ what comes back: `save` answers with one value, `ask` with a sequence.
 `AppMap` is passed at each construction site, which is what every example on this page does.
 Registering it globally makes that argument implicit and is opt-in; see §7.
 
-**Write both lines.** The second is what keeps every hover readable.
-With it, hovering `emit` shows 107 characters. Without it - passing the contract inline -
-it shows 377, and that is with TypeScript's own elision hiding part of the validator's
-internals. `call` is 169 against 439, and `stream` 157 against 427. Every figure is for the
-contract pinned in `scripts/check-hover.ts` and is re-measured on each run; a different
-contract gives different numbers. TypeScript preserves interface
-names in hover but expands type-alias instantiations, so no library-side trick removes the
-need for the line.
+**Write both lines.** Without the second, every hover shows the whole contract with your
+validator's internals in it. The measurement is in `DECISIONS.md`, D57 and D100.
 
 **The lane lives in the contract, never at the call site.** The guarantee belongs to the
 <!-- norm: lane-lives-in-the-contract -> packages/core/src/lane-integrity.test.ts -->
@@ -58,8 +52,7 @@ nothing at runtime. A peer that sends the wrong shape reaches your handler.
 
 A schema validates every inbound payload on arrival, at one check per message. `payload`
 accepts anything implementing the Standard Schema interface - zod, valibot and arktype all
-do - so core has no runtime dependency on a validator and your validator's types never
-appear in ours:
+do - and core has no runtime dependency on a validator:
 
 ```ts standalone
 import { defineContract, type MapOf, reliable, rpc } from 'transport-io'
@@ -81,8 +74,7 @@ are yours and the traffic is high.
 `type$<T>()` is the same types-only schema the helpers build for you, exported for the
 object form below.
 
-Inbound payloads are validated; outbound are not. The process that produced a payload does
-not need to check its own work, and validating twice doubles the cost on the hot path.
+Inbound payloads are validated; outbound are not.
 
 ### 1.2 Event identity
 
@@ -145,11 +137,9 @@ export async function open(url: string): Promise<void> {
 
 Each takes every `ClientOptions` field except `connect`, plus its transport's own options.
 
-**`M` is never inferred from `contract`.** Inferring it would resolve to
-`Client<MapOf<typeof contract>>`, whose `emit` hover is 377 characters against 107 for a
-named interface (D100), so the shorter spelling would be the worse one. Omitting the argument
-falls to `Registered` instead: either the application registered a map, or the first `emit`
-fails with the sentence naming the fix.
+**`M` is never inferred from `contract`** (D100). Omitting the argument falls to `Registered`:
+either the application registered a map, or the first `emit` fails with the sentence naming
+the fix.
 <!-- norm: client-map-never-inferred -> packages/core/src/transport-clients.test-d.ts -->
 
 Which module you import decides where the code runs. `transport-io/browser-transport` uses
@@ -159,9 +149,8 @@ enforces that, because the binding segfaults Bun on exit.
 
 ### 2.0 Assembling it yourself
 
-`new Client({ contract, connect })` takes the seam directly and is not going anywhere. The
-rule for choosing between them is one line: **the one-call form hands back a client that is
-already connected, so anything that needs the client before that has to construct it
+`new Client({ contract, connect })` takes the seam directly. **The one-call form hands back a
+client that is already connected, so anything that needs the client before that constructs it
 itself.**
 
 Three cases qualify:
@@ -210,9 +199,8 @@ development.
 
 ### 2.1 `call()`
 
-An event declaring `returns` is callable. Each call opens its own bidirectional stream, so
-the stream *is* the correlation: no identifiers, no pending map, and a stalled call blocks
-nothing else.
+An event declaring `returns` is callable. Each call opens its own bidirectional stream, so a
+stalled call blocks nothing else.
 
 ```ts
 export async function saveIt(): Promise<number> {
@@ -222,9 +210,7 @@ export async function saveIt(): Promise<number> {
 ```
 
 **There is no default timeout.** A dead peer is detected by the QUIC idle timeout, which
-closes the session and rejects every pending call - the case a timeout is usually reached
-for is already handled. Adding a default timer would reintroduce exactly the
-pending-callback bookkeeping this design removes. For a slow but live responder:
+closes the session and rejects every pending call. For a slow but live responder:
 
 ```ts
 export async function saveWithDeadline(): Promise<number> {
@@ -234,12 +220,11 @@ export async function saveWithDeadline(): Promise<number> {
 ```
 
 Aborting resets the QUIC stream. It is immediate, costs no application message, and the
-responder's `ctx.signal` fires without the client sending anything. On a WebSocket this
-would need an app-level protocol and the peer would keep working until it heard you.
+responder's `ctx.signal` fires without the client sending anything.
 
 A session is capped at 256 concurrent streams, shared by `call()` and `stream()`. The 257th
-open is refused with `WT_TOO_MANY_STREAMS` and **the session stays up** - a leaking handler
-must not take the other 256 down with it. A call holds its slot for a round trip; a
+open is refused with `WT_TOO_MANY_STREAMS` and **the session stays up**. A call holds its
+slot for a round trip; a
 `stream()` holds one for as long as it runs, which is the unit that matters once §2.3 is in
 use.
 
@@ -324,8 +309,7 @@ export async function withDeadline(): Promise<number> {
 }
 ```
 
-Four helpers cover the cases where a loop reads worse than the thing it is doing.
-`toArray()` takes the whole sequence, `take(n)` stops after `n` elements and closes the
+Four helpers. `toArray()` takes the whole sequence, `take(n)` stops after `n` elements and closes the
 stream exactly as `break` does, `forEach(fn)` awaits `fn` before pulling the next element so
 a slow callback slows the producer, and `cancel()` stops a stream from outside its loop:
 
@@ -345,28 +329,19 @@ export async function stoppable(stop: { onclick: () => void }): Promise<void> {
 }
 ```
 
-They are named after the TC39 async iterator helpers and behave sequentially. That proposal
-is being revised to let `take` and others run several pulls at once, which would defeat the
-credit window, so this library will not follow it there. `cancel()` is not in the proposal.
+They behave sequentially, and `cancel()` is this library's own (D99).
 
 An error partway through is delivered after the elements that preceded it: the loop yields
-what arrived, then throws. `toArray()` rejects and discards the partial, because a partial
-array returned as if it were the whole answer is worse than an error. A cancelled stream
+what arrived, then throws. `toArray()` rejects and discards the partial. A cancelled stream
 ends with `WT_ABORTED`, the same as an `AbortSignal`.
 
-**Backpressure is accounted for, not assumed.** The generator does not resume until its
-frame has been accepted, and the responder may be at most **32 frames** ahead of what the
-consumer has taken. That window is this library's own accounting, not the transport's: measured on the reference binding, a `WritableStreamDefaultWriter`'s `ready`
-resolves unconditionally, and without the window a producer ran 136,523 frames and roughly
-53 MB ahead of a consumer that had taken 40. See ADR 0012.
+**Backpressure is accounted for.** The generator does not resume until its frame has been
+accepted, and the responder may be at most **32 frames** ahead of what the consumer has
+taken (D93).
 
 `yields` and `returns` are mutually exclusive, and the choice is made in the contract.
 `call()` on a streaming event refuses and names `stream()`. `stream()` on a call event
 refuses and names `call()`.
-
-The shape has to be fixed in the contract because a handler that yields nothing closes the
-stream with zero response frames, which is the same on the wire as a broken `call()`
-responder. The contract is what distinguishes an empty sequence from a fault.
 
 A streaming call holds one of the session's 256 stream slots for as long as it runs, not for
 a round trip. Ten concurrent generations use ten slots for minutes at a time.
@@ -396,9 +371,8 @@ export const known: Status[] = ['idle', 'connecting', 'connected', 'closing', 'c
 void status
 ```
 
-**`getSnapshot()` returns the same reference until something changes.** Returning a freshly
-built object each call makes `useSyncExternalStore` re-render forever, which is the single
-most common way this shape is implemented incorrectly. There is an explicit test pinning it.
+**`getSnapshot()` returns the same reference until something changes**, so it is safe to hand
+to `useSyncExternalStore`.
 
 ---
 
@@ -423,9 +397,6 @@ export async function start(incoming: { sessions(): AsyncIterable<Conn> }): Prom
   await server.listen(incoming)
 }
 ```
-
-`listen()` is async because event ids are a SHA-256 of the event name, and the table is built
-once at start rather than per message.
 
 Passing a connection source hands `listen()` the accept loop. A rejected accept is counted in
 `server.acceptErrors` and passed to `onAcceptError` if one is given; it does not stop the
@@ -464,8 +435,7 @@ a presence feature: it cannot see peers connected to another node, and it says n
 who they are.
 
 `emit` on a room returns a promise because it crosses the adapter, but delivery to local
-members does not wait for it. Awaiting each peer inside a broadcast loop would let one slow
-client stall the whole room, which is the failure this design exists to prevent.
+members does not wait for it.
 
 A broadcast to a room with no local members is not an error. Membership lives in the
 adapter, and no node assumes it knows a room's full membership.
@@ -479,10 +449,9 @@ export function report(peer: ServerPeer): string {
 }
 ```
 
-`overflowDropped` and `staleDropped` are counted separately on purpose: the first means a
-burst outran a bounded queue, the second means a peer stalled and the frames aged out. One
-number covering both would be unactionable. Both are **our** drops - the transport reports
-neither loss nor congestion, so no count here claims to be the network's.
+`overflowDropped` means a burst outran a bounded queue; `staleDropped` means a peer stalled
+and the frames aged out. Both are **our** drops: the transport reports neither loss nor
+congestion, so no count here is the network's.
 
 ---
 
@@ -531,9 +500,8 @@ Two worth knowing:
 - **`WT_DATAGRAM_TOO_LARGE`** is raised by this library before the transport sees the
   write, because the transport accepts an oversized datagram, discards it, and reports
   success.
-- **`WT_RELIABILITY_REFUSED`** means the session negotiated reliable-only transport. The
-  unreliable lane would silently become reliable and ordered, so the session is refused
-  rather than allowed to lie about your data.
+- **`WT_RELIABILITY_REFUSED`** means the session negotiated reliable-only transport and was
+  refused, because the unreliable lane would otherwise become reliable and ordered.
 
 ---
 
@@ -556,9 +524,8 @@ needs no infrastructure and no configuration.
 **If you write an adapter, run the conformance suite against `HostileAdapter` too.** It is
 exported from `transport-io/testing` and behaves like a bus rather than a map: it
 serialises every frame through bytes, adds latency, delivers the publisher its own
-messages, reorders deliveries, and fails on command. `MemoryAdapter` is synchronous,
-infallible and omniscient about membership, so an adapter that only passes against it has
-not been tested against anything.
+messages, reorders deliveries, and fails on command. An adapter that only passes against
+`MemoryAdapter` has not been tested.
 
 ```ts
 import { HostileAdapter } from 'transport-io/testing'
@@ -595,9 +562,8 @@ discovered downstream.
 | `client.on(event, handler)` | Returns an unsubscribe function, making effect cleanup a one-liner. |
 | `TransportError.code` | Lets a binding branch on a stable code rather than a message. |
 
-Core imports no framework, ever - not React, not Next, not even as a type-only import - and
-holds no module-level singleton or global mutable state, because that breaks request
-isolation on the server and makes tests order-dependent.
+Core imports no framework, not even as a type-only import, and holds no module-level
+singleton or global mutable state.
 
 A binding built on this surface is a few lines:
 
@@ -620,7 +586,7 @@ the connection calls, a stable return and a server snapshot.
 
 ---
 
-## 7. `Register`, and why it is not the default
+## 7. `Register` (optional)
 
 A map can be registered once, globally, and then omitted everywhere:
 
@@ -646,15 +612,11 @@ a type alias fails every registration with "Duplicate identifier". Without a reg
 `Registered` resolves to a sentinel whose only key is the instruction, so the first `emit`
 fails with a message naming this block rather than with `never`.
 
-It is opt-in, and the reasons are worth stating rather than discovering.
-
-**It buys no readability.** Hovering `emit` is 107 characters with an explicit `Client<AppMap>`
-and 107 characters registered, measured. What registration removes is the type argument at
-construction, of which an application has about two.
+**It changes no hover** (D100). What it removes is the type argument at construction.
 
 **It is global.** One slot per process. Two contracts in the same process conflict, and the
 type a file sees depends on which module was loaded rather than on what that file imported.
 The explicit form has neither property: the type follows the import.
 
-Nothing requires it. `@transport-io/react` used to, and does not since `createHooks<AppMap>()`
-gave the hooks a map to bind to.
+Nothing requires it, including `@transport-io/react`, which binds hooks to a map with
+`createHooks<AppMap>()`.
