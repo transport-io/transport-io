@@ -26,9 +26,11 @@ Node ≥ 22. TypeScript ≥ 5.0 for consumers.
 | import | contains | runs where |
 |---|---|---|
 | `transport-io` | contract, `Client`, `createServer`, errors, `MemoryAdapter` | anywhere |
-| `transport-io/browser-transport` | `connectBrowser` | browser |
-| `transport-io/node-transport` | `listenHttp3`, `connectHttp3` | Node only |
+| `transport-io/browser-transport` | `browserClient`, `connectBrowser` | browser |
+| `transport-io/dev-transport` | `devClient`, `connectDev`, `DEV_ENDPOINT` | browser, loopback only |
+| `transport-io/node-transport` | `listenHttp3`, `listenDev`, `http3Client`, `connectHttp3`, `resetCodeFromError` | Node only |
 | `transport-io/testing` | `HostileAdapter`, `loopbackPair`, `UnreliableConnection` | tests |
+| `@transport-io/react` | `TransportProvider`, `createHooks`, `useClient`, `useConnection`, `useEvent`, `useCall`, `useStream` | React 19.2 or newer |
 
 `transport-io/node-transport` loads a native addon that segfaults Bun on exit. Only import
 it from a file named `*.node.ts`.
@@ -68,8 +70,8 @@ process are two types.
 A map can instead be registered globally with `declare module 'transport-io'`, which drops the
 type argument everywhere. It is opt-in: it buys no readability (hover is 107 characters either
 way, measured), it is one slot per process, two contracts conflict, and the resulting type
-depends on load order rather than on imports. `@transport-io/react` is the one thing that
-currently requires it. See API.md §7.
+depends on load order rather than on imports. Nothing requires it, including
+`@transport-io/react`, which binds hooks to a map with `createHooks<AppMap>()`. See API.md §7.
 
 ### A type, or a schema
 
@@ -202,6 +204,7 @@ identified. See PROTOCOL.md §3.
 
 `server.to(room).emit()` returns a promise because it crosses the adapter, but local
 delivery does not wait for it. Broadcasting to a room with no members is not an error.
+`server.memberCount(room)` counts members on this node only.
 
 ## Errors
 
@@ -228,6 +231,9 @@ is never thrown from this library.
 | `WT_PAYLOAD_TOO_LARGE` | frame over its cap | use a call or a `stream()`, or split |
 | `WT_PROTOCOL_ERROR` | malformed frame | check against `PROTOCOL.md` |
 | `WT_HANDSHAKE_INCOMPLETE` | traffic before the handshake | await `connect()` first |
+| `WT_HANDSHAKE_FAILED` | the browser's handshake failed: a wrong pinned hash, an expired certificate, or nothing listening | rule those out in that order; the browser reports all three identically |
+| `WT_CERT_EXPIRED` | the `transport-io dev` certificate has expired | run `transport-io dev` again; it mints a new one |
+| `WT_DEV_ONLY` | `connectDev` or `listenDev` outside loopback, or without the environment `transport-io dev` sets | use `connectBrowser` with your own certificate anywhere that is not local development |
 
 ## Behaviour worth knowing before you debug it
 
@@ -334,10 +340,17 @@ Rules:
 - A stream holds one of the session's 256 stream slots for its whole life, not for a round
   trip.
 
+## React
+
+`@transport-io/react` is the binding. `createHooks<AppMap>()` returns `useConnection`,
+`useEvent`, `useCall` and `useStream` typed for one map. `TransportProvider` takes an
+unconnected `Client` and connects it in an effect, so construct the client with `new Client`
+inside a `useState` initialiser, never at module level. React 19.2 or newer. The guide is at
+https://transport-io.github.io/transport-io/guides/react/.
+
 ## Not implemented
 
-Namespaces, presence, middleware chains, binary codecs, framework bindings, the Redis
-adapter.
+Namespaces, presence, middleware chains, binary codecs, the Redis adapter.
 
 ## Where to look next
 
