@@ -59,17 +59,16 @@ Two parts, both required.
 (`{ lane, payload, returns }`) still works and is documented in API.md §1.3; use it only for
 a contract assembled programmatically.
 
-**The `MapOf` line.** For the contract above, `Client<AppMap>` hovers `emit` at 107
-characters and `Client<MapOf<typeof contract>>` at 377, with the validator's internal types
-in it, because TypeScript preserves interface names and expands alias instantiations.
+**The `MapOf` line.** Without it, every hover shows the whole contract with the validator's
+internals in it (D57).
 
 **Passing it.** `AppMap` goes to each end once: `browserClient<AppMap>({ contract, url })` and
 `createServer<AppMap>({ contract })`. The type follows the import, so two contracts in one
 process are two types.
 
 A map can instead be registered globally with `declare module 'transport-io'`, which drops the
-type argument everywhere. It is opt-in: it buys no readability (hover is 107 characters either
-way, measured), it is one slot per process, two contracts conflict, and the resulting type
+type argument everywhere. It is opt-in: it changes no hover, it is one slot per process, two
+contracts conflict, and the resulting type
 depends on load order rather than on imports. Nothing requires it, including
 `@transport-io/react`, which binds hooks to a map with `createHooks<AppMap>()`. See API.md §7.
 
@@ -95,9 +94,7 @@ types-only schema the helpers build, exported for the object form.
 
 ### Rules the contract enforces
 
-- Lanes name guarantees. `reliable` is carried on QUIC streams, `unreliable` on QUIC
-  datagrams. The lane names the guarantee your data gets, never the mechanism that carries
-  it.
+- `reliable` is carried on QUIC streams, `unreliable` on QUIC datagrams.
 - `returns` is valid **only** on `lane: 'reliable'`. An unreliable event has no response
   path, and the type refuses it.
 - An event's wire id is the first four bytes of SHA-256 of its **name**, so adding or
@@ -238,7 +235,7 @@ is never thrown from this library.
 ## Behaviour worth knowing before you debug it
 
 **Datagrams may be dropped, duplicated or reordered.** Duplicates and stale arrivals are
-discarded for you. Loss is never reported, because loss is the contract. `stats()` returns
+discarded for you. Loss is never reported. `stats()` returns
 `overflowDropped` (a burst outran the 64-frame ring), `staleDropped` (a frame aged past its
 150 ms TTL while queued) and `staleReceived` (a duplicate or out-of-order arrival) - all of
 them **our** counters, never the network's.
@@ -257,8 +254,7 @@ surfaces as `WT_HANDSHAKE_TIMEOUT`.
 ## Writing an adapter
 
 ```ts
-// A skeleton that must satisfy the real interface, rather than a copy of it. If `Adapter`
-// changes, this block stops compiling - a retyped interface would just quietly go stale.
+// Must satisfy the real `Adapter` interface. This block is compiled in CI.
 import type {
   Adapter,
   AdapterFrame,
@@ -331,12 +327,10 @@ Rules:
 - Helpers: `.take(n)`, `.forEach(fn)`, `.toArray()`, `.cancel()`. `take` closes the stream at
   its limit, `forEach` awaits the callback before pulling the next element, `toArray` rejects
   on a mid-stream error and discards the partial, `cancel` stops from outside the loop and
-  makes the consumer see `WT_ABORTED`. Sequential by design; the TC39 proposal's concurrency
-  is deliberately not implemented (D99).
+  makes the consumer see `WT_ABORTED`. Sequential (D99).
 - An error partway through delivers the elements that preceded it, then throws. Elements are
   never retracted.
-- A yielding handler may run at most **32 frames** ahead of what the consumer has taken. That
-  window is this library's own accounting, not the transport's.
+- A yielding handler may run at most **32 frames** ahead of what the consumer has taken.
 - A stream holds one of the session's 256 stream slots for its whole life, not for a round
   trip.
 
