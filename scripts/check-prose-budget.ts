@@ -25,12 +25,11 @@ import { existsSync, readFileSync } from 'node:fs'
  *
  * The ceiling starts where the README is, not where it should be, because a ceiling below
  * the document fails on the commit that introduces it and teaches nothing. It was 2032 the
- * day this gate landed, after the hover paragraphs and the comparison were cut. Each approved
- * cut moves the ceiling down to the new measurement plus about three percent, and it never
- * moves up.
+ * day this gate landed; the sweep the same day took it to 1690. Each approved cut moves the
+ * ceiling down to the new measurement plus about three percent, and it never moves up.
  */
 const BUDGET: Readonly<Record<string, number>> = {
-  'README.md': 2100,
+  'README.md': 1740,
 }
 
 export function proseWords(md: string): number {

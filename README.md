@@ -36,9 +36,8 @@ npx transport-io dev --demo
 ```
 
 Framing, length prefixes, buffer accumulation and stream lifecycle are handled for you.
-Bounds are documented rather than hidden: a streaming responder runs at most 32 frames ahead
-of its consumer, and an application can reach that limit. Reliability is declared in the
-contract, so "this message may be dropped" is visible in the type system.
+Reliability is declared in the contract, so "this message may be dropped" is visible in the
+type system.
 
 ## Use
 
@@ -136,13 +135,10 @@ export async function run(url: string): Promise<number> {
 }
 ```
 
-`browserClient` constructs and connects, and resolves to a connected client. `devClient` and
-`http3Client` are the same shape for local development and for Node.
-
-`new Client({ contract, connect })` is still there, and the rule for choosing is that the
-one-call form hands back a client that is *already connected*. Anything needing it before
-then constructs it itself: a transport of your own, React, or a page that renders
-`connecting`.
+`browserClient` resolves to a connected client; `devClient` and `http3Client` are the same
+shape for local development and for Node. Use `new Client({ contract, connect })` when you
+need the client before it is connected: your own transport, React, or a page that renders
+`connecting`. There is no default call timeout; pass `AbortSignal.timeout(ms)` for one.
 
 An event can answer with a **sequence** instead of a value. Declare `yields` instead of
 `returns`, write an async generator, consume an async iterable:
@@ -160,24 +156,10 @@ export async function render(client: Client<AppMap>, prompt: string): Promise<st
 }
 ```
 
-`break` is the cancel: leaving the loop resets the QUIC stream, which fires the handler's
-`ctx.signal`. The generator does not resume until its frame is accepted, and the producer
-may be at most 32 frames ahead of what the consumer has taken.
-
-The loop above is `take(20).toArray()` written out. Four helpers exist for the cases where a
-loop reads worse than the thing it is doing, and `cancel()` stops a stream from outside its
-loop, which is what a stop button needs:
-
-```ts
-export async function withHelpers(client: Client<AppMap>, stop: { onclick: () => void }): Promise<void> {
-  const first20 = await client.stream('ask', { prompt: 'hello' }).take(20).toArray()
-  console.log(first20.length)
-
-  const generation = client.stream('ask', { prompt: 'hello' })
-  stop.onclick = () => generation.cancel()
-  await generation.forEach(async (token) => void console.log(token))
-}
-```
+`break` is the cancel: leaving the loop resets the QUIC stream and the handler's `finally`
+runs. The producer runs at most 32 frames ahead of what the consumer has taken. `take`,
+`forEach`, `toArray` and `cancel` are in the
+[guide](https://transport-io.github.io/transport-io/guides/call-and-stream/).
 
 A wrong event name or payload fails to compile. The error names the event instead of
 unrolling the contract type.
@@ -189,16 +171,14 @@ binding, published separately.
 
 For your own project, `transport-io dev ./server.ts` mints the certificate, publishes its
 hash for the browser to pin, and hands the certificate to your server. It does not bundle
-your browser code: that needs a bundler, and this package takes no runtime dependencies for
-its CLI, so keep running your own and point `--static` at the output.
+your browser code: keep running your own bundler and point `--static` at the output.
 
 ## Limitations
 
 None of these are going to change. [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) has the reasoning
 and the measurements behind each one, and is worth reading before you build on this.
 
-- **WebTransport only.** No WebSocket fallback, because a fallback would silently make the
-  unreliable lane reliable and ordered. An unsupported runtime gets `WT_NO_SUPPORT`.
+- **WebTransport only.** No WebSocket fallback. An unsupported runtime gets `WT_NO_SUPPORT`.
 - **Chrome and Firefox.** Safari ships WebTransport and cannot talk to a quiche-backed
   server. Unsupported until that is fixed upstream.
 - **UDP has to reach your process.** No proxy in front of it, no CDN, and no load balancer
@@ -207,8 +187,8 @@ and the measurements behind each one, and is worth reading before you build on t
   reject. Resubscribing is the application's job.
 - **Datagrams may be dropped, duplicated or reordered**, and loss is not reported.
 - **Each bidirectional stream leaks about 5.95 KB of server memory**, upstream in the QUIC
-  binding rather than in this library. `emit` and datagrams are flat. It is the one measured
-  defect, and it is what stands between this and a 1.0.
+  binding rather than in this library. `emit` and datagrams are flat, so for token workloads
+  streaming is the cheap shape.
 - **The protocol is v0.** Both sides must match exactly.
 - **One event name serves both directions**, which is a modelling tax when the two directions
   want different payloads.
@@ -267,29 +247,6 @@ socket classes for acknowledgements and `timeout()`, the
 [TypeScript guide](https://socket.io/docs/v4/typescript/), and the
 [delivery guarantees](https://socket.io/docs/v4/delivery-guarantees/) page.
 
-## What is different
-
-**Acknowledgements are streams.** Each `call` opens its own bidirectional stream: write the
-request, half-close to end it, read until the peer closes. The stream is the correlation, so
-there are no acknowledgement identifiers, no pending-callback map and no timeout tracking. A
-stalled call does not block other calls. Cancellation is a QUIC stream reset, which costs no
-application message and reaches the responder's signal without the client sending anything.
-
-**Responses can be sequences.** An event declaring `yields` answers with an async iterable
-instead of a value. Leaving the loop resets the QUIC stream, which fires the handler's
-`ctx.signal` and runs its `finally`. The producer runs at most 32 frames ahead of what the
-consumer has taken. That bound is this library's own accounting, not the transport's.
-
-**No default call timeout.** A dead peer is detected by the QUIC idle timeout, which rejects
-every pending call. Pass `AbortSignal.timeout(ms)` when you want a deadline.
-
-**A documented wire protocol.** [`PROTOCOL.md`](PROTOCOL.md) is written so someone can
-implement an interoperable server in another language without reading this source.
-
-**No infrastructure required.** `MemoryAdapter` is the default. If you write your own
-adapter, `transport-io/testing` exports `HostileAdapter`, which serialises frames through
-bytes, adds latency, reorders, duplicates and fails on command.
-
 ## Install
 
 ```bash
@@ -297,8 +254,7 @@ npm install transport-io
 ```
 
 Browsers need nothing extra. The server needs a native QUIC package, and the details below
-are what will surprise you in CI. They apply to any WebTransport server on Node, not only
-this one.
+are what will surprise you in CI.
 
 <details>
 <summary><strong>The native package, glibc, git installs, and what contributors need</strong></summary>
@@ -347,19 +303,17 @@ use WSL.
 
 - [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) - **read this before you start**: what this library
   refuses to do and will not change, plus the one measured defect
-- [`PROTOCOL.md`](PROTOCOL.md) - the wire format
+- [`PROTOCOL.md`](PROTOCOL.md) - the wire format, written to be implemented in another language
 - [`API.md`](API.md) - the TypeScript surface
 - [`DECISIONS.md`](DECISIONS.md) - every question this project raised, answered
 - [`ADR/`](ADR) - the records a future contributor would want to reverse
 - [`examples/chat`](examples/chat) - both lanes in one page, and two streaming calls
   running at once in another, where stopping one leaves the other untouched
+- `MemoryAdapter` is the default; `transport-io/testing` exports `HostileAdapter` for testing
+  an adapter of your own
 
 ## Licence
 
-MIT, for the source code.
-
-The name and the marks in [`assets/brand`](assets/brand) are **not** covered by it.
-Copyright and trademark are separate, and MIT speaks only to the first, so the carve out is
-stated in [`assets/brand/LICENSE`](assets/brand/LICENSE). Short version: use the marks to
-refer to this project, not as the mark of your own. Forking is welcome, under your own
-name.
+MIT, for the source code. The name and the marks in [`assets/brand`](assets/brand) are
+covered separately by [`assets/brand/LICENSE`](assets/brand/LICENSE): use them to refer to
+this project, not as the mark of your own.
