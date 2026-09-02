@@ -68,25 +68,6 @@ client.emit('cursor', { x: 12, y: 40 })         // may not
 sides infer from it: a wrong event name or payload does not compile.
 
 `AppMap` is passed once on each end, the way you would pass a router type to a typed client.
-Nothing is registered globally and nothing is augmented.
-
-## What that costs, compared
-
-The panels above are the whole typed setup: one contract, one `MapOf` line, and the map named
-once at each end.
-
-Socket.IO's own [TypeScript guide](https://socket.io/docs/v4/typescript/) asks for more. Its
-documented example declares **four**
-interfaces by hand - `ServerToClientEvents`, `ClientToServerEvents`, `InterServerEvents` and
-`SocketData` - then passes four generic arguments on the server and two on the client, and the
-two event interfaces are given in the **opposite order** at each end because the client's
-perspective is reversed. Four hand-written interfaces to keep in step, and an argument order
-that is wrong in a way the compiler cannot catch, because both slots take the same kind of
-thing.
-
-Here one contract is the source of both directions, `MapOf` derives the types from it, and
-each end names the same `AppMap`. There is no second interface to keep in step and no order
-to get backwards. Reliability is part of the contract rather than a comment beside it.
 
 ## Streaming responses
 
@@ -134,8 +115,8 @@ the others.
 
 <div class="tio-demo-slot">
   <p><strong>Run it locally in one command:</strong> <code>npx transport-io dev --demo</code>,
-  then open the printed URL in two tabs. There is no live demo on this page, and there will
-  not be a fake one: the server needs raw UDP ingress, which GitHub Pages does not have.</p>
+  then open the printed URL in two tabs. There is no live demo on this page: the server needs
+  raw UDP ingress, which GitHub Pages does not have.</p>
 </div>
 
 ## Before you start
@@ -143,8 +124,7 @@ the others.
 These are properties of the library, not things it will grow out of.
 
 - **Chrome and Firefox only.** Safari establishes a session and then never sends.
-- **No fallback, deliberately.** A WebSocket would make the unreliable lane reliable, which
-  is a lie about your data. An unsupported runtime gets `WT_NO_SUPPORT` and nothing else.
+- **No fallback.** An unsupported runtime gets `WT_NO_SUPPORT` and nothing else.
 - **It needs raw UDP ingress to your process.** Many managed platforms do not provide it.
   Check yours before building on this.
 - **`0.x`, so a minor bump may break you.** A minor release is allowed to change the wire, so
@@ -152,12 +132,5 @@ These are properties of the library, not things it will grow out of.
 - **Every bidirectional stream leaks about 5.95 KB of server memory**, upstream in the QUIC
   binding rather than here. Streaming amortises it: a thousand tokens down one stream cost
   what one call does.
-
-<div class="tio-figure">
-The credit window that bounds a streaming producer costs throughput: 27,470 elements per
-second rather than 67,616 on the reference binding. A language model emits on the order of
-200 tokens per second, so that is about a hundredfold headroom for the workload this exists
-for. Both numbers are measured over localhost.
-</div>
 
 [Read the full list](/limitations/).

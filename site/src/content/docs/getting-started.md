@@ -57,11 +57,8 @@ export interface AppMap extends MapOf<typeof contract> {}
 Write both lines. `AppMap` is what you pass to a client or a server, once at each end, the way
 you would pass a router type to a typed client.
 
-The second line is not decoration. With it, hovering `emit` shows 107 characters; passing
-`MapOf<typeof contract>` inline shows 377, including your validator's internal types.
-TypeScript preserves interface names and expands alias instantiations, so nothing on the
-library side removes the need for it. Those figures are for the contract pinned in the
-project's hover gate and are re-measured on every CI run.
+Without the second line, every hover shows the whole contract with your validator's internals
+in it.
 
 ### Types, or a schema
 
@@ -160,10 +157,8 @@ client.emit('cursor', { x: 12, y: 40 })              // may not
 `browserClient` constructs and connects. It resolves to a connected client, so there is no
 second `connect()` call and no arrow wrapping the transport.
 
-**Pass `<AppMap>`.** It is deliberately not inferred from `contract`. Inferring it would give
-you a working client whose every hover is 377 characters of your validator's internals
-instead of 107, so the shorter spelling is the worse one and the signature refuses to offer
-it. Leave it off and you get the sentinel telling you to register a map or pass one.
+**Pass `<AppMap>`.** It is not inferred from `contract`. Leave it off and you get the sentinel
+telling you to register a map or pass one.
 
 Open two browser windows and both receive the chat message. Move the pointer in one and the
 dot moves in the other, with some frames missing.
@@ -206,16 +201,12 @@ convention, so a bundle that reaches production cannot connect through it.
 
 ### What `dev` does not do
 
-**It does not bundle your browser code.** Bundling needs a bundler, and this package has no
-runtime dependencies for its CLI, so it will not grow one. Keep running your own `vite dev`
-or `bun build --watch` and point the command at the output:
+**It does not bundle your browser code.** Keep running your own `vite dev` or
+`bun build --watch` and point the command at the output:
 
 ```bash
 npx transport-io dev ./server.ts --static ./web/dist
 ```
-
-So "one command" is exactly true for `--demo`, and true apart from your own bundler for a
-real project.
 
 ### Doing it by hand
 
@@ -232,9 +223,6 @@ ECDSA P-256 and a maximum of 14 days are constraints imposed by
 `connectBrowser` as `certificateHash`.
 
 ## Registering the map (optional)
-
-Passing `AppMap` at each construction site is the default because it is explicit: the type
-follows the import, and two contracts in one process are simply two types.
 
 An application that builds clients or servers in many files can register the map once instead,
 and then drop the type argument everywhere:
@@ -256,11 +244,10 @@ declare const client: Client
 client.emit('chat', { body: 'hi' })
 ```
 
-**The tradeoff, which is why this is not the default.** It is a global augmentation, so there
-is one slot per process: two contracts in the same process conflict, and the type a file sees
-depends on which module was loaded rather than on what that file imported. It also buys
-nothing in readability. Hovering `emit` is 107 characters either way, measured; registration
-removes the type argument and nothing else.
+**The tradeoff.** It is a global augmentation, so there is one slot per process: two contracts
+in the same process conflict, and the type a file sees depends on which module was loaded
+rather than on what that file imported. It changes no hover; it removes the type argument and
+nothing else.
 
 `@transport-io/react` does not need it either: `createHooks<AppMap>()` binds the hooks to a
 map the same way everything else takes one.
