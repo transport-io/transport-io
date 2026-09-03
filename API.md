@@ -281,24 +281,43 @@ export async function serveTokens(server: Server<AppMap>): Promise<void> {
   })
 }
 
-export async function render(): Promise<string[]> {
-  const out: string[] = []
+export async function render(show: (token: string) => void): Promise<void> {
   for await (const token of client.stream('ask', { prompt: 'one two three' })) {
-    out.push(token)
-    if (out.length === 2) break // resets the stream; the handler's `finally` runs
+    show(token)
   }
-  return out
 }
 ```
 
-The handler above never consults `ctx.signal`. It does not need to: the responder checks
-before asking the generator for another value, so a cancelled stream stops without every
-loop repeating that check.
+The loop ends when the server stops. The handler above never consults `ctx.signal`; the
+responder checks before asking the generator for another value.
 
-**`break` is the cancel.** Leaving the loop calls the iterator's `return()`, which resets the
-QUIC stream, which fires the handler's `ctx.signal` and runs any `finally` inside the
-generator. An `AbortSignal` option does the same from outside the loop, which is what a
-React effect cleanup would use:
+**Three ways to stop early**, and a stopped stream is a QUIC stream reset either way: the
+handler's `ctx.signal` fires and any `finally` inside the generator runs.
+
+`break`, when something inside the loop decides:
+
+```ts
+export async function untilAnswered(): Promise<string> {
+  let text = ''
+  for await (const token of client.stream('ask', { prompt: 'yes or no?' })) {
+    text += token
+    if (/\b(yes|no)\b/i.test(text)) break
+  }
+  return text
+}
+```
+
+`cancel()`, when the decision is made outside the loop, which is what a stop button is:
+
+```ts
+export async function stoppable(stop: { onclick: () => void }): Promise<void> {
+  const gen = client.stream('ask', { prompt: 'a b c' })
+  stop.onclick = () => gen.cancel()
+  await gen.forEach(async (token) => void console.log(token))
+}
+```
+
+An `AbortSignal`, for a deadline:
 
 ```ts
 export async function withDeadline(): Promise<number> {
@@ -309,27 +328,21 @@ export async function withDeadline(): Promise<number> {
 }
 ```
 
-Four helpers. `toArray()` takes the whole sequence, `take(n)` stops after `n` elements and closes the
-stream exactly as `break` does, `forEach(fn)` awaits `fn` before pulling the next element so
-a slow callback slows the producer, and `cancel()` stops a stream from outside its loop:
+**Helpers.** `toArray()` takes the whole sequence. `forEach(fn)` awaits `fn` before pulling
+the next element, so a slow callback slows the producer. `take(n)` is for the first `n` of a
+feed that would otherwise not end, and closes the stream at `n`; it is not how a token stream
+ends, because a token stream ends when the server stops. They behave sequentially, and
+`cancel()` is this library's own (D99).
 
 ```ts
 export async function whole(): Promise<string[]> {
   return await client.stream('ask', { prompt: 'a b c' }).toArray()
 }
 
-export async function firstTwo(): Promise<string[]> {
-  return await client.stream('ask', { prompt: 'a b c' }).take(2).toArray()
-}
-
-export async function stoppable(stop: { onclick: () => void }): Promise<void> {
-  const gen = client.stream('ask', { prompt: 'a b c' })
-  stop.onclick = () => gen.cancel()
-  await gen.forEach(async (token) => void console.log(token))
+export async function sample(): Promise<string[]> {
+  return await client.stream('ask', { prompt: 'a b c' }).take(5).toArray()
 }
 ```
-
-They behave sequentially, and `cancel()` is this library's own (D99).
 
 An error partway through is delivered after the elements that preceded it: the loop yields
 what arrived, then throws. `toArray()` rejects and discards the partial. A cancelled stream
