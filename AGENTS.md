@@ -300,17 +300,10 @@ export async function serveAsk(server: Server<AppMap>): Promise<void> {
   })
 }
 
-export async function consume(client: Client<AppMap>): Promise<string[]> {
-  const out: string[] = []
+export async function consume(client: Client<AppMap>, show: (t: string) => void): Promise<void> {
   for await (const token of client.stream('ask', { prompt: 'a b c' })) {
-    out.push(token)
-    if (out.length === 2) break
+    show(token)
   }
-  return out
-}
-
-export async function consumeWithHelpers(client: Client<AppMap>): Promise<string[]> {
-  return await client.stream('ask', { prompt: 'a b c' }).take(2).toArray()
 }
 ```
 
@@ -318,16 +311,18 @@ Rules:
 
 - `yields` and `returns` are mutually exclusive. `call()` on a `yields` event throws and
   names `stream()`. `stream()` on a `returns` event throws and names `call()`.
-- Leaving the loop cancels. `break` resets the QUIC stream, fires the handler's `ctx.signal`
-  and runs any `finally` in the generator. Passing `{ signal }` or calling `.cancel()` does
-  the same from outside the loop.
+- The loop ends when the server stops. Three ways to stop early, all of them a QUIC stream
+  reset that fires the handler's `ctx.signal` and runs its `finally`: `break` when something
+  inside the loop decides; `.cancel()` from outside the loop, which is a stop button; an
+  `AbortSignal` in the options for a deadline. Do not stop a token stream with a counter.
 - A generator does not need `ctx.signal.throwIfAborted()` in its loop: the responder checks
   before asking for the next value. Use it only for long work *between* yields, where nothing
   else can interrupt.
-- Helpers: `.take(n)`, `.forEach(fn)`, `.toArray()`, `.cancel()`. `take` closes the stream at
-  its limit, `forEach` awaits the callback before pulling the next element, `toArray` rejects
-  on a mid-stream error and discards the partial, `cancel` stops from outside the loop and
-  makes the consumer see `WT_ABORTED`. Sequential (D99).
+- Helpers: `.take(n)`, `.forEach(fn)`, `.toArray()`, `.cancel()`. `take` is for the first `n`
+  of a feed that would otherwise not end and closes the stream there; it is not how a token
+  stream ends. `forEach` awaits the callback before pulling the next element, `toArray`
+  rejects on a mid-stream error and discards the partial, `cancel` makes the consumer see
+  `WT_ABORTED`. Sequential (D99).
 - An error partway through delivers the elements that preceded it, then throws. Elements are
   never retracted.
 - A yielding handler may run at most **32 frames** ahead of what the consumer has taken.

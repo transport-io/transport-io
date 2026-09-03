@@ -146,19 +146,16 @@ An event can answer with a **sequence** instead of a value. Declare `yields` ins
 ```ts
 import type { Client } from 'transport-io'
 
-export async function render(client: Client<AppMap>, prompt: string): Promise<string[]> {
-  const out: string[] = []
+export async function render(client: Client<AppMap>, prompt: string, show: (t: string) => void): Promise<void> {
   for await (const token of client.stream('ask', { prompt })) {
-    out.push(token)
-    if (out.length === 20) break // resets the stream, and the handler's `finally` runs
+    show(token)
   }
-  return out
 }
 ```
 
-`break` is the cancel: leaving the loop resets the QUIC stream and the handler's `finally`
-runs. The producer runs at most 32 frames ahead of what the consumer has taken. `take`,
-`forEach`, `toArray` and `cancel` are in the
+The loop ends when the server stops. Leaving it early resets the QUIC stream and the
+handler's `finally` runs. The producer runs at most 32 frames ahead of what the consumer has
+taken. Stopping from a button, deadlines and the helpers are in the
 [guide](https://transport-io.github.io/transport-io/guides/call-and-stream/).
 
 A wrong event name or payload fails to compile. The error names the event instead of
