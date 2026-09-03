@@ -79,6 +79,19 @@ const RETIRED: readonly Retired[] = [
     why: 'a measurement proving a design point; it lives in D57 and D100, and reader-facing documents link',
   },
   {
+    pattern: /=== \d+\) break\b/,
+    lastSeen: 'if (out.length === 20) break',
+    where: 'README.md, API.md, AGENTS.md, 2026-09-02',
+    why: 'a counter is not how a token stream ends; the loop ends when the server stops',
+  },
+  {
+    pattern: /\) break \/\/[^\n]{0,80}\b(resets?|finally)\b/,
+    lastSeen:
+      "if (out.length === 20) break // resets the stream, and the handler's `finally` runs",
+    where: 'README.md, API.md, 2026-09-02',
+    why: 'a comment explaining a side effect of break is the smell; the guide says it once, in prose',
+  },
+  {
     pattern: /not (implemented|in this version)[^.]{0,200}\bframework bindings\b/i,
     lastSeen:
       '## Not implemented Namespaces, presence, middleware chains, binary codecs, framework bindings, the Redis adapter.',
