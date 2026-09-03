@@ -21,7 +21,6 @@ declare function model(text: string): AsyncIterable<string>
 declare function enrich(chunk: string): Promise<string>
 // Shadows the DOM's `prompt()`, which is what a reader's own variable does too.
 declare const prompt: string
-declare const userStopped: boolean
 declare function render(token: string): Promise<void>
 declare const stopButton: { onclick: () => void }
 ```
@@ -51,7 +50,6 @@ await client.call('save', { text: 'hi' }, { signal: AbortSignal.timeout(5_000) }
 ```ts
 for await (const token of client.stream('ask', { prompt })) {
   render(token)
-  if (userStopped) break
 }
 ```
 
@@ -63,10 +61,7 @@ server.handle('ask', async function* ({ prompt }) {
 })
 ```
 
-Leaving the loop cancels the stream. `break` calls the iterator's `return()`, which resets
-the QUIC stream. The responder's `ctx.signal` fires and any `finally`
-in the generator runs. Passing an `AbortSignal` to `stream()` has the same effect from
-outside the loop, which is what a React effect cleanup would use.
+The loop ends when the server stops. That is what streaming is: no count, no `break`.
 
 The handler above never checks `ctx.signal`. It does not need to: the responder checks
 before asking the generator for another value, so a cancelled stream stops without the
@@ -83,22 +78,23 @@ server.handle('ask', async function* ({ prompt }, ctx) {
 })
 ```
 
-### Helpers
+## Stopping early
+
+Three ways, and each one is a QUIC stream reset: the responder's `ctx.signal` fires and any
+`finally` in the generator runs, so the server stops producing when you stop reading.
+
+**`break`**, when something inside the loop decides. Here the loop has what it came for:
 
 ```ts
-const tokens = await client.stream('ask', { prompt }).toArray()
-const first20 = await client.stream('ask', { prompt }).take(20).toArray()
-
-await client.stream('ask', { prompt }).forEach(async (token) => {
-  await render(token)
-})
+let text = ''
+for await (const token of client.stream('ask', { prompt: 'yes or no?' })) {
+  text += token
+  if (/\b(yes|no)\b/i.test(text)) break
+}
 ```
 
-`toArray()` collects the whole sequence. `take(n)` stops after `n` elements and closes the
-stream, the same as `break`. `forEach(fn)` awaits `fn` before pulling the next element, so a
-slow callback slows the producer instead of queueing behind it.
-
-`cancel()` stops from outside the loop, which is what a stop button needs:
+**`cancel()`**, when the decision comes from outside the loop. That is a stop button, and it
+is the case `break` cannot serve:
 
 ```ts
 const generation = client.stream('ask', { prompt })
@@ -106,10 +102,38 @@ stopButton.onclick = () => generation.cancel()
 await generation.forEach(render)
 ```
 
-Cancelling aborts the stream, so the consumer sees `WT_ABORTED`, exactly as it would from an
-`AbortSignal`.
+**An `AbortSignal`**, for a deadline:
 
-These four behave sequentially, and `cancel()` is this library's own (D99).
+```ts
+for await (const token of client.stream('ask', { prompt }, { signal: AbortSignal.timeout(5_000) })) {
+  render(token)
+}
+```
+
+A stream stopped by `cancel()` or by a signal ends with `WT_ABORTED` in the loop. One stopped
+by `break` just ends. `return` and `throw` out of the loop body do exactly what `break` does:
+the iterator is closed, the stream is reset, and the server stops. A function that bails out
+mid-stream does not leave a generator running behind it. Measured, not assumed:
+`stream.test.ts` holds one test for each of the three.
+
+### Helpers
+
+```ts
+const tokens = await client.stream('ask', { prompt }).toArray()
+
+await client.stream('ask', { prompt }).forEach(async (token) => {
+  await render(token)
+})
+
+const sample = await client.stream('ask', { prompt }).take(5).toArray()
+```
+
+`toArray()` collects the whole sequence. `forEach(fn)` awaits `fn` before pulling the next
+element, so a slow callback slows the producer instead of queueing behind it. `take(n)` is
+for the first `n` of a feed that would otherwise not end, and closes the stream there; it is
+not how a token stream ends, because a token stream ends when the server stops.
+
+These behave sequentially, and `cancel()` is this library's own (D99).
 
 ## Errors partway through
 

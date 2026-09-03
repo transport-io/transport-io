@@ -71,8 +71,8 @@ sides infer from it: a wrong event name or payload does not compile.
 
 ## Streaming responses
 
-The server yields, the client consumes. Leaving the loop resets the QUIC stream. The
-handler's `ctx.signal` fires and its `finally` runs.
+The server yields, the client consumes, and the loop ends when the server stops. Stopping
+early is a QUIC stream reset: the handler's `ctx.signal` fires and its `finally` runs.
 
 <CardGrid>
 <Card title="Client">
@@ -86,11 +86,9 @@ interface GenMap extends MapOf<typeof gen> {}
 
 declare const gpt: Client<GenMap>
 declare const prompt: string
-declare const stop: boolean
 
 for await (const token of gpt.stream('ask', { prompt })) {
   console.log(token)
-  if (stop) break
 }
 ```
 </Card>
