@@ -77,6 +77,55 @@ describe('cancellation reaches the producer', () => {
     // The whole point of the generator shape. A callback API has nowhere to put this.
     expect(cleanedUp).toBe(true)
   })
+
+  // `break` is one of three ways out of a `for await`. A reader who bails out of the
+  // enclosing function, or whose loop body throws, needs the server to have stopped too, and
+  // "the language closes the iterator on every abrupt completion" is a claim to measure
+  // against this library's iterator rather than to quote from the specification.
+  async function producing(): Promise<{
+    readonly client: Client<AppMap>
+    readonly cleanedUp: () => boolean
+  }> {
+    const server = createServer<AppMap>({ contract })
+    await server.listen()
+    const [serverSide, clientSide] = loopbackPair()
+    const client = new Client<AppMap>({ contract, connect: async () => clientSide })
+    let cleanedUp = false
+    server.handle('ask', async function* () {
+      try {
+        for (let i = 0; ; i++) yield `token-${i}`
+      } finally {
+        cleanedUp = true
+      }
+    })
+    await Promise.all([server.accept(serverSide), client.connect()])
+    return { client, cleanedUp: () => cleanedUp }
+  }
+
+  test('returning from inside the loop runs the handler generator finally block', async () => {
+    const { client, cleanedUp } = await producing()
+    const firstWithA = async (): Promise<string | undefined> => {
+      for await (const token of client.stream('ask', { prompt: 'x' })) {
+        if (token.endsWith('-2')) return token
+      }
+      return undefined
+    }
+    expect(await firstWithA()).toBe('token-2')
+    await until(cleanedUp)
+    expect(cleanedUp()).toBe(true)
+  })
+
+  test('throwing from inside the loop runs the handler generator finally block', async () => {
+    const { client, cleanedUp } = await producing()
+    const bail = async (): Promise<void> => {
+      for await (const token of client.stream('ask', { prompt: 'x' })) {
+        if (token.endsWith('-2')) throw new Error('bailing out')
+      }
+    }
+    await expect(bail()).rejects.toThrow('bailing out')
+    await until(cleanedUp)
+    expect(cleanedUp()).toBe(true)
+  })
 })
 
 describe('termination', () => {
