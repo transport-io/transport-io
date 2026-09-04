@@ -15,7 +15,7 @@
  * enforces that, so a future feature cannot quietly add a dependency.
  */
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { daysLeft, ensureCertificate } from './certificate.node.ts'
@@ -169,14 +169,22 @@ async function main(): Promise<void> {
  * Only when this file is the process entry.
  *
  * Without the guard, importing it to test `parseArgs` runs the whole command: the test
- * printed the usage text and exited. Compared by resolved path rather than `import.meta.main`
- * so it behaves the same under node and bun.
+ * printed the usage text and exited. Compared by path rather than `import.meta.main` so it
+ * behaves the same under node and bun, and by *real* path on both sides: npm's `bin` is a
+ * symlink, `process.argv[1]` keeps the link while `import.meta.url` is its target, and the
+ * plain comparison made `npx transport-io` exit 0 having done nothing (D115).
  */
-const isEntry =
-  process.argv[1] !== undefined &&
-  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+function isEntry(): boolean {
+  const argv1 = process.argv[1]
+  if (argv1 === undefined) return false
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
 
-if (isEntry) {
+if (isEntry()) {
   main().catch((e: unknown) => {
     console.error(e instanceof Error ? e.message : String(e))
     process.exit(1)

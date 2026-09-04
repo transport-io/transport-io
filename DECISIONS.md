@@ -2809,3 +2809,20 @@ docs-freshness hook, which now names `examples/` in its list when library source
 nothing else in the way; a framework in it would make every reader who does not use that
 framework translate.
 
+### D115. The CLI is tested through the symlink npm runs it by
+`npx transport-io dev --demo`, the first command in the README, exited 0 without printing a
+line in 0.6.1 and 0.7.0. The entry guard added in 5f06c43 compared `process.argv[1]` with
+`import.meta.url`. npm links a `bin` as a symlink, Node keeps the link in `argv[1]` and takes
+the main module to its real path, so through the bin the two never matched and `main()` never
+ran. Every test and every e2e invoked `node packages/core/dist/cli/main.node.js` on the real
+path, which is why fourteen green e2e runs said nothing about it. It was found by the React
+example's `npm run server` script, the first thing in this repository to run the bin as a bin.
+
+Two changes. The guard compares real paths, and `entry.node.test.ts` runs the CLI through an
+extensionless symlink, the shape npm creates, and requires the same output as the real path.
+The root build also sets the execute bit on the emitted bin, which tsc does not; npm sets it
+on a registry install, so only a clone lacked it, but a clone is where the examples'
+`transport-io dev` scripts run. The rule: a `bin` is exercised through `node_modules/.bin`,
+never only through `node` on the file, because the two differ in exactly the property an
+entry guard reads.
+

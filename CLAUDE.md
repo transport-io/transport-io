@@ -103,6 +103,9 @@ Part 2.
 - **Stream reads do not preserve write boundaries.** 50 small writes plus one large write
   arrived as 217 reads. Length-prefix everything.
 - **Bun segfaults on exit** when the native addon is loaded, 3/3 runs. Node, 0/3.
+- **npm's `bin` is a symlink, and `process.argv[1]` keeps it while `import.meta.url` is the
+  target.** An entry guard comparing the two is a no-op through `npx`. Compare real paths, and
+  test a CLI through `node_modules/.bin`, never only through `node` on the file. See D115.
 - **Safari cannot talk to a quiche-backed server** and is unsupported in v1. Chrome and
   Firefox only.
 - **The reference transport applies no write backpressure.** `writer.ready` resolves

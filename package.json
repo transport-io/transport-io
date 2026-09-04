@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "bench:stream-churn": "./scripts/check-node.sh && node --expose-gc packages/core/src/bench/stream-churn.node.ts",
-    "build": "tsc --build",
+    "build": "tsc --build && chmod +x packages/core/dist/cli/main.node.js",
     "check:boundaries": "bun run scripts/check-boundaries.ts",
     "check:gate-inputs": "bun run scripts/check-gate-inputs.ts",
     "check:hover": "bun run scripts/check-hover.ts",
