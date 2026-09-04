@@ -196,6 +196,13 @@ that is not obvious, and never why it was chosen over something else; an example
 and the defence travels with it. Where the reader needs the consequence, it is one line:
 `// new Client, so the page can show "connecting"`. See D113.
 
+And example *code* is app code, not library code. The test for every line: would a mid-level
+developer write this on a normal day? Library-author habits do not belong in a file people
+copy, because a reader concludes the library requires them: no `readonly` on props or fields,
+no return type annotations on components, no indexed-access types where a plain interface
+reads better, no `Readonly<>` wrappers, no clever identifier tricks. `examples/react` defines
+its contract with zod, because a schema is what an application has. See D116.
+
 ## The contract pattern is two lines, always
 
 ```ts

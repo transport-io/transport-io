@@ -2826,3 +2826,26 @@ on a registry install, so only a clone lacked it, but a clone is where the examp
 never only through `node` on the file, because the two differ in exactly the property an
 entry guard reads.
 
+### D116. Example code is app code, not library code
+The React example was written in this repository's own voice: `readonly` on every prop and
+field, `: ReactNode` on every component, `ChatMap['chat']['payload'] & { readonly id: number }`
+for a rendered line, `Readonly<Record<string, Point>>` for a lookup, and a guest name built
+from `performance.now().toString(36)`. Each is defensible in a library, where the type surface
+is the product. In an example they are worse than noise: a reader concludes the library
+requires them and copies them into an application that never needed any of it.
+
+The test for every line of an example is whether a mid-level developer would write it on a
+normal day. That ruled out `readonly` anywhere, return type annotations on components,
+indexed-access types where a plain interface reads better, `Readonly<>` wrappers, and
+identifier tricks. It ruled in a real validator: `examples/react` defines its contract with
+zod rather than type arguments, because a schema is what an application has, Standard Schema
+is the library's first-class path, and an example is the one place a real schema belongs. The
+discriminated unions stayed, `named.status === 'success'` included, because that is the API
+working as designed and it already reads as app code.
+
+`examples/chat` got the same pass in its own accent. For vanilla TypeScript that accent is a
+generic `$<T extends HTMLElement>` DOM helper, an explicit return type on every function, a
+`Panel` interface declared for one factory's return, and a `Map` whose values were never read.
+It keeps its type-argument contract: it is the core package's example, and a validator would
+be one more thing in the way (D114).
+
