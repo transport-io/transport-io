@@ -3,7 +3,8 @@
 The chat from [`../chat`](../chat) on `@transport-io/react`: the provider, `useConnection`,
 `useEvent`, `useCall` and `useStream`, under Vite. No state library.
 
-- [`contract.ts`](contract.ts) - the events, shared by the server and the page.
+- [`contract.ts`](contract.ts) - the events, shared by the server and the page. The payloads
+  are zod schemas, so every inbound message is validated on arrival.
 - [`server.node.ts`](server.node.ts) - the server. Runs under Node through `transport-io dev`,
   which mints the certificate.
 - [`src/api.ts`](src/api.ts) - the hooks, bound to the map with `createHooks<ChatMap>()`.

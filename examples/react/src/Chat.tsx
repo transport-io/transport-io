@@ -1,16 +1,21 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
-import type { ChatMap } from '../contract.ts'
+import { type FormEvent, useEffect, useState } from 'react'
 import { api } from './api.ts'
 
-const me = `guest-${Math.trunc(performance.now()).toString(36).slice(-4)}`
+const me = `guest-${Math.random().toString(36).slice(2, 6)}`
 
-type Line = ChatMap['chat']['payload'] & { readonly id: number }
-interface Point {
-  readonly x: number
-  readonly y: number
+interface Line {
+  id: number
+  from: string
+  body: string
+  at: number
 }
 
-export function Chat(): ReactNode {
+interface Point {
+  x: number
+  y: number
+}
+
+export function Chat() {
   const { status, lastError } = api.useConnection()
   const [setName, named] = api.useCall('setName')
 
@@ -59,8 +64,8 @@ export function Chat(): ReactNode {
   )
 }
 
-function Log(): ReactNode {
-  const [lines, setLines] = useState<readonly Line[]>([])
+function Log() {
+  const [lines, setLines] = useState<Line[]>([])
   api.useEvent('chat', (msg) => setLines((prev) => [...prev, { ...msg, id: prev.length }]))
 
   return (
@@ -74,12 +79,12 @@ function Log(): ReactNode {
   )
 }
 
-function Composer({ name }: { readonly name: string | null }): ReactNode {
+function Composer({ name }: { name: string | null }) {
   const client = api.useClient()
   const [say, stream, stop] = api.useStream('say')
   const [body, setBody] = useState('')
 
-  const submit = (e: FormEvent): void => {
+  const submit = (e: FormEvent) => {
     e.preventDefault()
     const text = body.trim()
     setBody('')
@@ -116,9 +121,9 @@ function Composer({ name }: { readonly name: string | null }): ReactNode {
   )
 }
 
-function Surface({ name }: { readonly name: string | null }): ReactNode {
+function Surface({ name }: { name: string | null }) {
   const client = api.useClient()
-  const [cursors, setCursors] = useState<Readonly<Record<string, Point>>>({})
+  const [cursors, setCursors] = useState<Record<string, Point>>({})
   api.useEvent('cursor', ({ from, x, y }) =>
     setCursors((prev) => ({ ...prev, [from]: { x, y } })),
   )
