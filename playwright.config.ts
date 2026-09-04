@@ -25,6 +25,11 @@ const REACT_PORT = process.env.E2E_REACT_PORT ?? '3220'
 const REACT_WT_PORT = process.env.E2E_REACT_WT_PORT ?? '4520'
 export const REACT_ORIGIN = `http://localhost:${REACT_PORT}`
 
+/** `examples/react`, built by Vite and served by the real `dev` command, on its own ports. */
+const REACT_EXAMPLE_PORT = process.env.E2E_REACT_EXAMPLE_PORT ?? '3230'
+const REACT_EXAMPLE_WT_PORT = process.env.E2E_REACT_EXAMPLE_WT_PORT ?? '4530'
+export const REACT_EXAMPLE_ORIGIN = `http://localhost:${REACT_EXAMPLE_PORT}`
+
 const DEMO_PORT = process.env.E2E_DEMO_PORT ?? '3210'
 const DEMO_WT_PORT = process.env.E2E_DEMO_WT_PORT ?? '4510'
 export const DEMO_ORIGIN = `http://localhost:${DEMO_PORT}`
@@ -48,6 +53,17 @@ export default defineConfig({
         `packages/react/e2e-app/server.node.ts ` +
         `--static packages/react/e2e-app/dist --port ${REACT_PORT} --wt-port ${REACT_WT_PORT}`,
       url: `${REACT_ORIGIN}/.well-known/transport-io-dev`,
+      reuseExistingServer: false,
+      timeout: 90_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      command:
+        `npm run build -w examples/react && node packages/core/dist/cli/main.node.js dev ` +
+        `examples/react/server.node.ts --static examples/react/dist ` +
+        `--port ${REACT_EXAMPLE_PORT} --wt-port ${REACT_EXAMPLE_WT_PORT}`,
+      url: `${REACT_EXAMPLE_ORIGIN}/.well-known/transport-io-dev`,
       reuseExistingServer: false,
       timeout: 90_000,
       stdout: 'pipe',

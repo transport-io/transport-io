@@ -1,0 +1,21 @@
+{
+  "name": "@transport-io/example-react",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "transport-io dev server.node.ts",
+    "build": "vite build",
+    "start": "transport-io dev server.node.ts --static dist"
+  },
+  "devDependencies": {
+    "vite": "^8.2.2"
+  },
+  "dependencies": {
+    "@transport-io/react": "^0.2.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "transport-io": "^0.7.0"
+  }
+}

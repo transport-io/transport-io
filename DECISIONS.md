@@ -2793,3 +2793,19 @@ to the reader it is one line stating the consequence: `// new Client, so the pag
 "connecting"`. The sweep took the nine TypeScript files of `examples/chat` from 1095 lines to
 926 without changing a statement. The rationale stays where it was already recorded: D108 for
 the seam form, D93 for the credit window, D111 for the restart on renewal.
+
+### D114. `examples/react` is the example people copy; `examples/chat` stays vanilla
+Most people who try this library will do so from React, and the example they copy did not
+exist: the React binding had a Playwright fixture under `packages/react/e2e-app`, built to be
+asserted on rather than read. `examples/react` is the chat with cursors from `examples/chat`
+on `@transport-io/react`: `TransportProvider`, `useConnection`, `useEvent`, `useCall`, and
+`useStream` for `/say`, under Vite with no state library, on `createHooks` because that is
+the documented default and with no `declare module`. It sits under the same gates as the
+vanilla example: `tsc -p examples/react` in the typecheck script and in CI, an e2e over real
+QUIC that builds it with Vite and serves it through the real `dev` command, and the
+docs-freshness hook, which now names `examples/` in its list when library source changes.
+
+`examples/chat` stays vanilla. It is the core package's example and it shows the library with
+nothing else in the way; a framework in it would make every reader who does not use that
+framework translate.
+

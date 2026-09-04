@@ -56,7 +56,7 @@ jobs:
       # repository, and nothing was checking them: `bun build` and `node --strip-types` both
       # erase types without reading them, so the example compiled in the sense that it ran.
       - name: typecheck (examples, against the built types)
-        run: npx tsc -p examples/chat
+        run: npx tsc -p examples/chat && npx tsc -p examples/react
       - name: biome
         run: npx biome ci .
       - name: dead code

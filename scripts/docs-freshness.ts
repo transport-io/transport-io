@@ -36,6 +36,7 @@ if (touchedSource.length > 0 && touchedDocs.length === 0) {
   console.error('    PROTOCOL.md   - if any wire format, constant or error code changed')
   console.error('    DECISIONS.md  - if this implements or revises a decision')
   console.error('    ADR/          - if this reverses something a record explains')
+  console.error('    examples/     - if an example uses what changed')
   console.error('')
   console.error(`  If none apply, re-run with ${ACK}=1 to record that judgement.`)
   console.error('')

@@ -55,6 +55,15 @@
         "**/*.ts"
       ]
     },
+    "examples/react": {
+      "entry": [
+        "server.node.ts"
+      ],
+      "project": [
+        "**/*.ts",
+        "**/*.tsx"
+      ]
+    },
     "site": {
       "entry": [
         "src/loaders/*.ts",

@@ -306,6 +306,7 @@ use WSL.
 - [`ADR/`](ADR) - the records a future contributor would want to reverse
 - [`examples/chat`](examples/chat) - both lanes in one page, and two streaming calls
   running at once in another, where stopping one leaves the other untouched
+- [`examples/react`](examples/react) - the same chat on `@transport-io/react`, under Vite
 - `MemoryAdapter` is the default; `transport-io/testing` exports `HostileAdapter` for testing
   an adapter of your own
 

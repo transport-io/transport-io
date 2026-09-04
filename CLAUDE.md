@@ -202,8 +202,8 @@ export interface AppMap extends MapOf<typeof contract> {}
 
 The second line is what keeps hover readable, with none of the validator's internals in it;
 the measurement is D57 and D100. It is opt-in by nature, so it is canonical by convention: it appears
-in the README, in every API.md example, in `examples/chat`, and in `AGENTS.md`. The inline
-form appears nowhere.
+in the README, in every API.md example, in `examples/chat`, in `examples/react`, and in
+`AGENTS.md`. The inline form appears nowhere.
 
 ## Platform support
 

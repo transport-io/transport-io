@@ -72,6 +72,7 @@ Publishing is a human running a command on their own machine. Nothing in
 | `transport-io` on npm | published |
 | root `package.json` | `private: true` (never publishes) |
 | `examples/chat` | `private: true` |
+| `examples/react` | `private: true` |
 | `packages/core` | not private - the one package that publishes |
 | tarball | `dist` (minus `bench`), `LICENSE`, `README.md` |
 | CI | publishes nothing |
