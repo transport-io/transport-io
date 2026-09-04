@@ -229,6 +229,9 @@ export class Session {
   #handshakeResolve!: (n: Negotiated) => void
   #handshakeReject!: (e: unknown) => void
   #sweepTimer: ReturnType<typeof setInterval> | undefined
+  #handshakeTimer: ReturnType<typeof setTimeout> | undefined
+  #deadlineReject: ((e: unknown) => void) | undefined
+  #handshakeSettled = false
   #disposed = false
 
   /** Resolves when both sides have exchanged a valid handshake. */
@@ -279,41 +282,51 @@ export class Session {
       onDeadline = reject
     })
     void deadline.catch(() => undefined) // observed, so it can never be an unhandled rejection
+    // Held on the session for the same reason the timer is: `start()` parks on the emit
+    // stream, then on the handshake write, then on `ready`, and disposal has to be able to
+    // answer whichever one it is parked on. Rejecting `ready` alone leaves the first two.
+    this.#deadlineReject = onDeadline
 
-    const timer = setTimeout(() => {
+    /**
+     * Owned by the session rather than by this function, so every teardown path can release
+     * it. As a local it was reachable only from the two `clearTimeout` calls below it, so a
+     * throw from either `await` that follows - or a `dispose()` from anywhere - left it armed
+     * for the rest of the deadline, to fire into a session that no longer existed. A test
+     * runner reports that as an unhandled error belonging to whatever was running five
+     * seconds later. Same shape as the sweep interval, and the same fix. See D117.
+     */
+    this.#handshakeTimer = setTimeout(() => {
       const e = new TransportError(
         'WT_HANDSHAKE_TIMEOUT',
         `no handshake within ${this.#deadlineMs}ms`,
         'The session opened but no application bytes arrived. Some browsers establish a WebTransport session and then never transmit; that combination is unsupported.',
       )
-      this.#handshakeReject(e)
+      this.#settleHandshake(e)
       this.close(CloseCode.WT_HANDSHAKE_TIMEOUT, 'handshake deadline')
-      onDeadline(e)
     }, this.#deadlineMs)
 
-    const writable = await Promise.race([this.#conn.openEmitStream(), deadline])
-    const writer = writable.getWriter()
-    this.#writer = writer
-
-    // Frame 0 of the emit stream. In-order delivery within a stream makes early traffic
-    // impossible by construction, so there is no race to guard.
-    await Promise.race([
-      writer.write(
-        encodeFrame({
-          type: FrameType.HANDSHAKE,
-          codec: Codec.JSON,
-          eventId: EVENT_ID_NOT_APPLICABLE,
-          payload: encodePayload(buildHandshake(this.#table)),
-        }),
-      ),
-      deadline,
-    ])
-    this.#handshakeSent = true
-    this.#flushEmits()
-
     try {
+      const writable = await Promise.race([this.#conn.openEmitStream(), deadline])
+      const writer = writable.getWriter()
+      this.#writer = writer
+
+      // Frame 0 of the emit stream. In-order delivery within a stream makes early traffic
+      // impossible by construction, so there is no race to guard.
+      await Promise.race([
+        writer.write(
+          encodeFrame({
+            type: FrameType.HANDSHAKE,
+            codec: Codec.JSON,
+            eventId: EVENT_ID_NOT_APPLICABLE,
+            payload: encodePayload(buildHandshake(this.#table)),
+          }),
+        ),
+        deadline,
+      ])
+      this.#handshakeSent = true
+      this.#flushEmits()
+
       const n = await this.ready
-      clearTimeout(timer)
       this.#sweepTimer = setInterval(() => {
         this.#gate.sweep(this.#now(), SEQUENCE_STATE_RETENTION_MS)
       }, SEQUENCE_STATE_RETENTION_MS)
@@ -321,10 +334,30 @@ export class Session {
       // available in both runtimes, so this is narrowed rather than assumed.
       ;(this.#sweepTimer as unknown as { unref?: () => void }).unref?.()
       return n
-    } catch (e) {
-      clearTimeout(timer)
-      throw e
+    } finally {
+      this.#clearHandshakeTimer()
+      this.#deadlineReject = undefined
     }
+  }
+
+  /**
+   * The handshake fails once, with the reason it first failed for.
+   *
+   * `start()` parks on the emit stream, then the handshake write, then `ready`, so both
+   * promises have to be answered to release it wherever it is. First failure wins: the
+   * deadline's own `close()` reaches `dispose()`, which would otherwise overwrite
+   * `WT_HANDSHAKE_TIMEOUT` with the closure it just caused.
+   */
+  #settleHandshake(e: unknown): void {
+    if (this.#handshakeSettled) return
+    this.#handshakeSettled = true
+    this.#handshakeReject(e)
+    this.#deadlineReject?.(e)
+  }
+
+  #clearHandshakeTimer(): void {
+    if (this.#handshakeTimer !== undefined) clearTimeout(this.#handshakeTimer)
+    this.#handshakeTimer = undefined
   }
 
   /** JOIN and LEAVE are server-to-client notifications, so a client can keep an accurate
@@ -667,6 +700,19 @@ export class Session {
     this.#sequences.clear()
     if (this.#sweepTimer !== undefined) clearInterval(this.#sweepTimer)
     this.#sweepTimer = undefined
+    // The handshake deadline, and the promise it would otherwise have been left to settle.
+    // Clearing it without settling `ready` would trade a leak for a hang: `start()` is
+    // parked on `ready`, and a disposed session can never receive the peer's handshake.
+    this.#clearHandshakeTimer()
+    if (!this.#handshakeSettled) {
+      this.#settleHandshake(
+        new TransportError(
+          'WT_SESSION_CLOSED',
+          'the session closed before the handshake completed',
+          'Connect again. A session torn down mid-handshake cannot be revived.',
+        ),
+      )
+    }
     this.#handlers.clear()
     this.#callHandlers.clear()
     this.#controlHandlers.clear()
@@ -1222,7 +1268,7 @@ export class Session {
     } catch (e) {
       // A protocol error on the emit stream is fatal to the lane: there is one stream per
       // direction and no way to reopen it, so resetting would end stream traffic silently.
-      this.#handshakeReject(e)
+      this.#settleHandshake(e)
       this.close(closeCodeFor(e), closeReason(e))
     }
   }
@@ -1232,6 +1278,7 @@ export class Session {
       const peer = parseHandshake(decodePayload(frame.payload))
       const n = negotiate(buildHandshake(this.#table), peer)
       this.#negotiated = n
+      this.#handshakeSettled = true
       this.#handshakeResolve(n)
       return
     }

@@ -38,7 +38,7 @@ describe('a connect superseded by a disconnect', () => {
     const connect = async (): Promise<Connection> => {
       const [serverSide, clientSide] = loopbackPair()
       await new Promise((r) => setTimeout(r, 40))
-      void server.accept(serverSide)
+      void server.accept(serverSide).catch(() => undefined)
       return clientSide
     }
     const client = new Client<AppMap>({ contract, connect })
@@ -73,7 +73,7 @@ describe('a connect superseded by a disconnect', () => {
     const connect = async (): Promise<Connection> => {
       const [serverSide, clientSide] = loopbackPair()
       await new Promise((r) => setTimeout(r, 40))
-      void server.accept(serverSide)
+      void server.accept(serverSide).catch(() => undefined)
       return clientSide
     }
     const client = new Client<AppMap>({ contract, connect })

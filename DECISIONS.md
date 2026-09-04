@@ -2849,3 +2849,37 @@ generic `$<T extends HTMLElement>` DOM helper, an explicit return type on every 
 It keeps its type-argument contract: it is the core package's example, and a validator would
 be one more thing in the way (D114).
 
+### D117. A session owns its handshake deadline, and CI pins its toolchain
+Two defects, found together because `main` went red with no commit behind it.
+
+The first: the handshake deadline in `Session#start` was a `const` inside that function,
+cleared only by the two `clearTimeout` calls at its end. Nothing else could reach it, so a
+session that threw or was disposed before its handshake completed left a five-second timer
+armed, to fire into a session that no longer existed and reject promises nobody was waiting on
+any more. This is the defect the `dispose()` comment already records for the sweep interval,
+one timer over, and the disposal test that describes itself as "the list" did not have it on
+the list. The timer and the deadline's rejector now live on the session, `start()` clears both
+in a `finally`, and `dispose()` releases the timer and settles the handshake with
+`WT_SESSION_CLOSED`. Settling matters: `start()` parks on the emit stream, then on the
+handshake write, then on `ready`, so clearing the timer without answering whichever await it
+is parked on would trade the leak for a hang, which the first attempt at this fix did.
+
+The second: nothing pinned Bun in CI. `oven-sh/setup-bun@v2` with no version installed 1.4.1
+the morning it was published, and 1.4.1 makes an unhandled error between tests fatal to the
+run where earlier versions only warned. The leaked timer had been firing all along; the new
+Bun turned it into an aborted run that stopped before the last two test files registered,
+reported as one failing test with no failing test named. It reproduces in a Linux container
+about 1 run in 12 and not at all on macOS, which is why reading the CI log was not enough.
+CI now pins `BUN_VERSION` in one place. A toolchain may not change what CI runs without a
+commit that says so.
+
+The third fell out of fixing the first. Once a disposed session settled its handshake at once
+instead of five seconds later, eight `void server.accept(conn)` call sites in tests and
+benches started reporting unhandled rejections in the test that caused them. They had been
+producing the same rejection all along, five seconds late and attributed to whatever file was
+running by then, which is the CI symptom itself. `server.accept()` rejects when a peer goes
+away mid-handshake, and `server.ts` already carries a comment saying exactly this about its
+own teardown continuation. Every one of those call sites now has a `.catch`. The lesson is
+that a delayed rejection is not a milder bug than a prompt one, it is the same bug with the
+evidence removed.
+

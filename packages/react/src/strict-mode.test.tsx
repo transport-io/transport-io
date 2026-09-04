@@ -29,7 +29,7 @@ describe('double mounting', () => {
     // factory returning one fixed connection would hand back a closed one and hang.
     const connect = async (): Promise<never> => {
       const [serverSide, clientSide] = loopbackPair()
-      void server.accept(serverSide)
+      void server.accept(serverSide).catch(() => undefined)
       return clientSide as never
     }
     const client = new Client({ contract, connect })
@@ -77,7 +77,7 @@ describe('double mounting', () => {
     await server.listen()
     const connect = async (): Promise<never> => {
       const [serverSide, clientSide] = loopbackPair()
-      void server.accept(serverSide)
+      void server.accept(serverSide).catch(() => undefined)
       return clientSide as never
     }
     const client = new Client({ contract, connect })

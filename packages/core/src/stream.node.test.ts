@@ -104,7 +104,8 @@ before(async () => {
 
   listener = await listenHttp3({ port: PORT, host: '127.0.0.1', cert, privKey, path: '/' })
   const accepting = (async () => {
-    for await (const conn of listener.sessions()) void server.accept(conn)
+    for await (const conn of listener.sessions())
+      void server.accept(conn).catch(() => undefined)
   })()
   void accepting.catch(() => undefined)
 })

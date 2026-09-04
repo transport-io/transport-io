@@ -88,7 +88,8 @@ test('two clients in one room exchange a message on each lane over real QUIC', a
 
   // Accept sessions as they arrive; each accept awaits its own handshake.
   const accepting = (async () => {
-    for await (const conn of listener.sessions()) void server.accept(conn)
+    for await (const conn of listener.sessions())
+      void server.accept(conn).catch(() => undefined)
   })()
   void accepting.catch(() => undefined)
 

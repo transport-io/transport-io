@@ -16,6 +16,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Client } from './client.ts'
 import { buildEventTable, defineContract, type MapOf, type$ } from './contract.ts'
+import type { TransportError } from './errors.ts'
 import { createServer } from './server.ts'
 import { Session } from './session.ts'
 import { HostileAdapter } from './testing/hostile-adapter.ts'
@@ -303,6 +304,64 @@ describe('disposal releases everything a session owns', () => {
     } finally {
       globalThis.setInterval = realSet
       globalThis.clearInterval = realClear
+    }
+  })
+
+  /**
+   * Item 9, and the one that was missing from the list above: the handshake deadline.
+   *
+   * It was a `const` inside `start()`, reachable only from the two `clearTimeout` calls at
+   * the end of that function, so no teardown path could release it. A session disposed
+   * before its handshake completed left a timer armed for the rest of the deadline, five
+   * seconds by default, which then fired into a session that no longer existed. A test
+   * runner reports that as an unhandled error belonging to whichever file happened to be
+   * running five seconds later; on the Linux CI runner it aborted the run before the last
+   * two test files had registered, and main went red with no commit behind it. See D117.
+   */
+  test('the handshake deadline, when disposal comes before the handshake completes', async () => {
+    const table = await buildEventTable(contract)
+    // Only our half is started, so the peer's handshake never arrives and `ready` stays
+    // pending: the state a superseded connect or a peer that goes away leaves behind.
+    const [, clientSide] = loopbackPair()
+
+    const DEADLINE_MS = 313
+    const realSet = globalThis.setTimeout
+    const realClear = globalThis.clearTimeout
+    const armed = new Set<unknown>()
+    // Matched on its delay, so an unrelated timer cannot make this pass or fail for the
+    // wrong reason. 313 is arbitrary and nothing else in the path uses it.
+    globalThis.setTimeout = ((fn: () => void, ms: number) => {
+      const h = realSet(fn, ms)
+      if (ms === DEADLINE_MS) armed.add(h)
+      return h
+    }) as typeof globalThis.setTimeout
+    globalThis.clearTimeout = ((h: never) => {
+      armed.delete(h)
+      realClear(h)
+    }) as typeof globalThis.clearTimeout
+
+    try {
+      const session = new Session(clientSide, {
+        table,
+        origin: 1,
+        handshakeDeadlineMs: DEADLINE_MS,
+      })
+      const started = session.start().then(
+        () => 'resolved',
+        (e: unknown) => (e as TransportError).code,
+      )
+      await new Promise((r) => realSet(r, 20))
+      expect(armed.size).toBe(1)
+
+      session.dispose()
+
+      expect(armed.size).toBe(0)
+      // Settled, not merely cleared. `start()` is parked on `ready`, so releasing the timer
+      // without answering it would trade the leak for a hang.
+      expect(await started).toBe('WT_SESSION_CLOSED')
+    } finally {
+      globalThis.setTimeout = realSet
+      globalThis.clearTimeout = realClear
     }
   })
 })

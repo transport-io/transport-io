@@ -88,7 +88,7 @@ const listener: Http3Listener = await listenHttp3({
   path: '/',
 })
 const accepting = (async () => {
-  for await (const conn of listener.sessions()) void server.accept(conn)
+  for await (const conn of listener.sessions()) void server.accept(conn).catch(() => undefined)
 })()
 void accepting.catch(() => undefined)
 
