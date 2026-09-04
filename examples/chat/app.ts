@@ -5,20 +5,21 @@ import type { ChatMap } from './contract.ts'
 
 export interface AttachOptions {
   /** Concurrent `generate` streams one session may hold. Unlimited when absent. */
-  readonly maxGenerationsPerPeer?: number
-  readonly room?: string
-  readonly log?: (line: string) => void
+  maxGenerationsPerPeer?: number
+  room?: string
+  log?: (line: string) => void
 }
 
-const clampPercent = (n: number): number =>
-  Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0
+function clampPercent(n: number) {
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0
+}
 
-export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void {
+export function attach(server: Server<ChatMap>, opts: AttachOptions = {}) {
   const room = opts.room ?? 'lobby'
   const log = opts.log ?? console.log
   const maxGenerations = opts.maxGenerationsPerPeer ?? Number.POSITIVE_INFINITY
 
-  const names = new Map<string, string>()
+  const online = new Set<string>()
   // Keyed by the peer, so the entry goes when the session does.
   const loss = new WeakMap<ServerPeer<ChatMap>, number>()
   const generating = new WeakMap<ServerPeer<ChatMap>, number>()
@@ -67,8 +68,8 @@ export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void 
 
   server.onSession((peer) => {
     void peer.join(room)
-    names.set(peer.id, `guest-${peer.origin.toString(16).slice(-4)}`)
-    log(`+ ${peer.id} joined (${names.size} online)`)
+    online.add(peer.id)
+    log(`+ ${peer.id} joined (${online.size} online)`)
 
     peer.on('chat', (msg) => {
       // To everyone, the sender included.

@@ -21,12 +21,12 @@ const STATE = process.env.DEMO_HEALTH_STATE ?? '/var/lib/transport-io-demo/healt
 const MIN_DAYS_LEFT = 7
 
 interface Step {
-  readonly name: string
-  readonly ok: boolean
-  readonly detail: string
+  name: string
+  ok: boolean
+  detail: string
 }
 const steps: Step[] = []
-const step = (name: string, ok: boolean, detail: string): void => {
+function step(name: string, ok: boolean, detail: string) {
   steps.push({ name, ok, detail })
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${detail}`)
 }

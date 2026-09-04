@@ -2,29 +2,29 @@ import { Client, type TransportError } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 import { type ChatMap, contract } from '../contract.ts'
 
-const $ = <T extends HTMLElement>(id: string): T => {
+function byId(id: string) {
   const el = document.getElementById(id)
   if (el === null) throw new Error(`missing #${id}`)
-  return el as T
+  return el
 }
 
-const log = $<HTMLDivElement>('log')
-const form = $<HTMLFormElement>('composer')
-const input = $<HTMLInputElement>('body')
-const statusEl = $<HTMLSpanElement>('status')
-const roomsEl = $<HTMLSpanElement>('rooms')
-const dropsEl = $<HTMLSpanElement>('drops')
-const rxChatEl = $<HTMLSpanElement>('rx-chat')
-const rxCursorEl = $<HTMLSpanElement>('rx-cursor')
-const lossEl = $<HTMLInputElement>('loss')
-const lossValueEl = $<HTMLElement>('loss-value')
-const surface = $<HTMLDivElement>('surface')
+const log = byId('log')
+const form = byId('composer')
+const input = byId('body') as HTMLInputElement
+const statusEl = byId('status')
+const roomsEl = byId('rooms')
+const dropsEl = byId('drops')
+const rxChatEl = byId('rx-chat')
+const rxCursorEl = byId('rx-cursor')
+const lossEl = byId('loss') as HTMLInputElement
+const lossValueEl = byId('loss-value')
+const surface = byId('surface')
 
-const me = `guest-${Math.trunc(performance.now()).toString(36).slice(-4)}`
+const me = `guest-${Math.random().toString(36).slice(2, 6)}`
 const cursors = new Map<string, HTMLDivElement>()
 
 /** Returns the line, so a streaming response can keep writing into it. */
-function append(from: string, body: string, at: number): HTMLDivElement {
+function append(from: string, body: string, at: number) {
   const line = document.createElement('div')
   line.className = 'line'
   const time = new Date(at).toLocaleTimeString()
@@ -34,7 +34,7 @@ function append(from: string, body: string, at: number): HTMLDivElement {
   return line
 }
 
-function moveCursor(from: string, x: number, y: number): void {
+function moveCursor(from: string, x: number, y: number) {
   let dot = cursors.get(from)
   if (dot === undefined) {
     dot = document.createElement('div')

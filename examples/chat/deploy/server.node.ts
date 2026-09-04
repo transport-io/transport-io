@@ -15,7 +15,7 @@ import { listenHttp3 } from 'transport-io/node-transport'
 import { attach } from '../app.ts'
 import { type ChatMap, contract } from '../contract.ts'
 
-const env = (name: string, fallback?: string): string => {
+function env(name: string, fallback?: string) {
   const v = process.env[name] ?? fallback
   if (v === undefined) {
     console.error(`${name} is not set`)
@@ -73,7 +73,7 @@ console.log(
 
 // ------------------------------------------------------------------ the pages, over https
 
-const MIME: Readonly<Record<string, string>> = {
+const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -81,17 +81,13 @@ const MIME: Readonly<Record<string, string>> = {
 }
 
 interface Health {
-  readonly ok: boolean
-  readonly at: string
-  readonly steps: readonly {
-    readonly name: string
-    readonly ok: boolean
-    readonly detail: string
-  }[]
+  ok: boolean
+  at: string
+  steps: { name: string; ok: boolean; detail: string }[]
 }
 
 /** The last health run, or the reason there is not a usable one. */
-function health(): { ok: boolean; reason: string; body: string } {
+function health() {
   let raw: string
   try {
     raw = readFileSync(STATE, 'utf8')

@@ -2,17 +2,17 @@
 
 export interface Agent {
   /** Shown above the panel. */
-  readonly question: string
+  question: string
   /** Milliseconds between tokens, before jitter. */
-  readonly pace: number
-  readonly tokens: readonly string[]
+  pace: number
+  tokens: string[]
 }
 
 /**
  * Tokens keep their trailing whitespace. Newlines inside a paragraph collapse to a space;
  * blank lines survive.
  */
-function tokenize(script: string): readonly string[] {
+function tokenize(script: string) {
   const text = script
     .trim()
     .split(/\n\s*\n/)
@@ -82,7 +82,7 @@ What is real is everything underneath them: real QUIC over real UDP, a real cert
 two real streams that do not know about each other.
 `
 
-export const AGENTS: Readonly<Record<string, Agent>> = {
+export const AGENTS: Record<string, Agent> = {
   'agent-a': {
     question: 'Why does stopping this panel not affect the other one?',
     pace: 55,
@@ -96,7 +96,7 @@ export const AGENTS: Readonly<Record<string, Agent>> = {
 }
 
 /** Jitter derived from the index, so every run paces identically. */
-export function paceOf(agent: Agent, index: number): number {
+export function paceOf(agent: Agent, index: number) {
   const noise = ((Math.imul(index + 1, 2654435761) >>> 0) % 1000) / 1000
   return Math.round(agent.pace * (0.55 + 0.9 * noise))
 }
