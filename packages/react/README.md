@@ -40,7 +40,7 @@ The named exports below read the globally registered map instead.
 | `useConnection()` | Status, session id, rooms, last error, and the connect and disconnect calls. |
 | `useEvent(name, handler)` | Subscribe for as long as the component is mounted. No memoising required. |
 | `useCall(name)` | Request and response, as a discriminated union. |
-| `useStream(name)` | A streaming response, accumulated, cancelled on unmount. |
+| `useStream(name)` | A streaming response, accumulated. `stop` ends it as `done`; unmount cancels. |
 
 There is deliberately no `useEmit` and no `useRooms`. `emit` is one synchronous method with
 no state and no cleanup, so `useClient().emit(…)` is already the right call. `useRooms` would

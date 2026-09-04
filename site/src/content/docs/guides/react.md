@@ -13,6 +13,10 @@ npm install @transport-io/react
 React and react-dom are peer dependencies, and the floor is **React 19.2**, because
 `useEvent` is built on `useEffectEvent`. There is no runtime dependency beyond that.
 
+The complete app is
+[`examples/react`](https://github.com/transport-io/transport-io/tree/main/examples/react):
+chat with live cursors on these hooks, under Vite, with nothing else in the way.
+
 ## Bind the hooks to your map
 
 `createHooks<AppMap>()` returns the hooks typed for one contract. That is the whole setup.
@@ -187,9 +191,10 @@ export function Ask(): ReactNode {
 appended, so memoising on it works. It also grows for the life of the stream: pass
 `{ onElement }` to render without accumulating.
 
-**Unmounting cancels.** That resets the QUIC stream, the responder sees STOP_SENDING, its
-`ctx.signal` fires and any `finally` in its generator runs, so a component going away does
-not leave a generator producing into nothing.
+**Unmounting cancels, and so does `stop`.** Either resets the QUIC stream, the responder sees
+STOP_SENDING, its `ctx.signal` fires and any `finally` in its generator runs, so a component
+going away does not leave a generator producing into nothing. After `stop` the state is
+`done`, holding what had arrived.
 
 ## Server components
 

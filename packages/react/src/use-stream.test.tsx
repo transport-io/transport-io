@@ -135,6 +135,53 @@ describe('unmounting mid-generation', () => {
     client.disconnect()
   })
 
+  test('stop() reports done with what arrived, and the responder`s finally runs', async () => {
+    const { client, server, wrapper } = await wire()
+    let finallyRan = false
+    server.handle('ask', async function* () {
+      try {
+        for (let i = 0; i < 1000; i++) {
+          yield `token-${i}`
+          await new Promise((r) => setTimeout(r, 5))
+        }
+      } finally {
+        finallyRan = true
+      }
+    })
+
+    let start: ((p: { prompt: string }) => void) | undefined
+    let stop: (() => void) | undefined
+    let last: { status: string; elements?: readonly string[] } = { status: 'idle' }
+    function Component(): null {
+      const [begin, state, end] = useStream('ask')
+      start = begin
+      stop = end
+      last = state
+      return null
+    }
+
+    render(<Component />, { wrapper })
+    await act(async () => {
+      start?.({ prompt: 'x' })
+      await settle(20)
+    })
+    expect(last.status).toBe('streaming')
+    const arrived = last.elements?.length ?? 0
+    expect(arrived).toBeGreaterThan(0)
+
+    await act(async () => {
+      stop?.()
+      await settle(40)
+    })
+
+    // A stop button is the whole reason the third element exists, and a state that stays
+    // `streaming` after it keeps the button on screen and the consumer waiting.
+    expect(last.status).toBe('done')
+    expect(last.elements?.length).toBe(arrived)
+    expect(finallyRan).toBe(true)
+    client.disconnect()
+  })
+
   test('a completed stream reports done, not error', async () => {
     const { client, server, wrapper } = await wire()
     server.handle('ask', async function* () {

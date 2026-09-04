@@ -66,8 +66,13 @@ export function useStream<K extends StreamableOf<Registered> & string>(
   }, [])
 
   const stop = useCallback(() => {
-    active.current?.cancel()
+    const running = active.current
+    if (running === null) return
+    running.cancel()
     active.current = null
+    // The loop below returns without writing once `active` moves on, so the terminal state
+    // is written here: done, with what arrived, the same as a cancellation on the wire.
+    setState((s) => (s.status === 'streaming' ? { status: 'done', elements: s.elements } : s))
   }, [])
 
   const start = useCallback(
