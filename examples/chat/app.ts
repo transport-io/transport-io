@@ -1,21 +1,10 @@
-/**
- * The application, registered on a server.
- *
- * Shared by the local server in `server.node.ts` and the public one in `deploy/server.node.ts`,
- * so the two cannot drift: the handlers, the room, the generation cap and the loss toggle are
- * one module, and the e2e suite that drives the local server is exercising the public one's
- * behaviour too.
- */
+/** The handlers, shared by server.node.ts and deploy/server.node.ts. */
 import type { Server, ServerPeer } from 'transport-io'
 import { AGENTS, paceOf } from './agents.ts'
 import type { ChatMap } from './contract.ts'
 
 export interface AttachOptions {
-  /**
-   * Concurrent `generate` streams one session may hold. A public URL must not be able to
-   * spawn unbounded producers, and the library's own per-session stream cap of 256 is far
-   * above what a demo should let one visitor run. Unlimited when absent.
-   */
+  /** Concurrent `generate` streams one session may hold. Unlimited when absent. */
   readonly maxGenerationsPerPeer?: number
   readonly room?: string
   readonly log?: (line: string) => void
@@ -30,28 +19,23 @@ export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void 
   const maxGenerations = opts.maxGenerationsPerPeer ?? Number.POSITIVE_INFINITY
 
   const names = new Map<string, string>()
-  // Keyed by the peer object rather than its id, so nothing has to be cleaned up when a
-  // session ends: there is no close hook on a peer, and a map keyed by id would grow for the
-  // life of the process.
+  // Keyed by the peer, so the entry goes when the session does.
   const loss = new WeakMap<ServerPeer<ChatMap>, number>()
   const generating = new WeakMap<ServerPeer<ChatMap>, number>()
 
-  // Callable: the client asks for a name and gets an answer back on the same stream.
   server.handle('setName', async ({ name }) => {
     const trimmed = name.trim().slice(0, 24)
     if (trimmed.length === 0) return { accepted: false, name: '' }
     return { accepted: true, name: trimmed }
   })
 
-  // The packet-loss toggle. It answers with what it actually set, and the page shows that.
+  // Answers with the clamped value, which is what the page shows.
   server.handle('setLoss', async ({ percent }, ctx) => {
     const p = clampPercent(percent)
     loss.set(ctx.peer, p / 100)
     return { percent: p }
   })
 
-  // Streaming: one word at a time, on the same kind of stream a call uses. `break` on the
-  // client resets it, which fires `ctx.signal` here, which ends the loop below.
   server.handle('say', async function* ({ text }) {
     for (const word of text.split(/\s+/).filter(Boolean)) {
       await new Promise((r) => setTimeout(r, 80))
@@ -59,12 +43,6 @@ export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void 
     }
   })
 
-  // Two of these run at once on `/agents.html`, each on its own bidirectional stream.
-  //
-  // The `finally` is the half worth reading. Stopping a panel resets that stream, which
-  // fires `ctx.signal` and returns this generator, so the server stops producing rather than
-  // producing into a reader that has gone away. Watch this log line while you click stop: it
-  // is the server-side half of what the page's counters show.
   server.handle('generate', async function* ({ agent }, ctx) {
     const script = AGENTS[agent]
     if (script === undefined) throw new Error(`unknown agent '${agent}'`)
@@ -93,19 +71,14 @@ export function attach(server: Server<ChatMap>, opts: AttachOptions = {}): void 
     log(`+ ${peer.id} joined (${names.size} online)`)
 
     peer.on('chat', (msg) => {
-      // Reliable lane: everyone gets it, including the sender, so their own message appears
-      // in the same order everyone else sees it.
+      // To everyone, the sender included.
       void server.to(room).emit('chat', { ...msg, at: Date.now() })
     })
 
     peer.on('cursor', (pos) => {
-      // The toggle: drop this share of the sender's frames before they go anywhere. A frame
-      // the network would have lost and a frame dropped here are the same frame to every
-      // other window, which is what makes a server-side simulation an honest one.
+      // Drops the caller's chosen share before broadcasting.
       const p = loss.get(peer) ?? 0
       if (p > 0 && Math.random() < p) return
-      // Unreliable lane: excluded from the sender, because you already know where your own
-      // pointer is, and a dropped one is simply the next frame's problem.
       void server.to(room).except(peer.id).emit('cursor', pos)
     })
   })

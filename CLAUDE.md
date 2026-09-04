@@ -188,6 +188,11 @@ defending a decision to an imagined skeptic. `README.md` therefore has a prose-w
 in `scripts/check-prose-budget.ts`, enforced in CI, that may only go down. A budget is the
 mechanism because rationale is what gets cut when something has to go.
 
+The same rule covers comments in `examples/`. A comment says what the next line does when
+that is not obvious, and never why it was chosen over something else; an example is copied,
+and the defence travels with it. Where the reader needs the consequence, it is one line:
+`// new Client, so the page can show "connecting"`. See D113.
+
 ## The contract pattern is two lines, always
 
 ```ts

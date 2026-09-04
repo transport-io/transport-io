@@ -1,38 +1,16 @@
-/**
- * The two token sources behind the `generate` event.
- *
- * No model is called and nothing leaves the machine. Each agent is a fixed script, split
- * into tokens, paced by a function of the token index. That is deliberate on three counts:
- * a demo that calls an API is a demo of that API, it needs a key nobody cloning this
- * repository has, and it produces a different take on every run. The take is the point,
- * because this page exists to be recorded as well as read.
- *
- * The text each agent produces describes what is carrying it, so the thing on screen and
- * the thing being demonstrated are the same thing.
- */
+/** The scripts behind `generate`. No model is called. */
 
 export interface Agent {
-  /** Shown above the panel, so a reader knows what the text is answering. */
+  /** Shown above the panel. */
   readonly question: string
-  /**
-   * Milliseconds between tokens, before jitter.
-   *
-   * Slower than a model would answer, and chosen against the clock rather than for realism.
-   * At the rate a real one streams, both panels finish in about thirteen seconds, which is
-   * less time than it takes a first-time visitor to find the stop button. The whole page is
-   * one interaction, so it has to still be running when they get there.
-   */
+  /** Milliseconds between tokens, before jitter. */
   readonly pace: number
   readonly tokens: readonly string[]
 }
 
 /**
- * Tokens carry their own trailing whitespace, so the page appends and never has to decide
- * where a space goes.
- *
- * Line breaks inside a paragraph are an artefact of how the scripts below are typed and
- * would otherwise reach the panel, which renders whitespace verbatim and so wrapped every
- * line twice. Blank lines are meaningful and survive; everything else collapses.
+ * Tokens keep their trailing whitespace. Newlines inside a paragraph collapse to a space;
+ * blank lines survive.
  */
 function tokenize(script: string): readonly string[] {
   const text = script
@@ -117,11 +95,7 @@ export const AGENTS: Readonly<Record<string, Agent>> = {
   },
 }
 
-/**
- * Jitter, so the output reads like something being generated rather than a metronome, and
- * derived from the index rather than from a random source, so two recordings of the same
- * take are identical. A demo whose pacing changes between runs cannot be recorded twice.
- */
+/** Jitter derived from the index, so every run paces identically. */
 export function paceOf(agent: Agent, index: number): number {
   const noise = ((Math.imul(index + 1, 2654435761) >>> 0) % 1000) / 1000
   return Math.round(agent.pace * (0.55 + 0.9 * noise))

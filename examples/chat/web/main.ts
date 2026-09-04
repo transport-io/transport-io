@@ -1,8 +1,3 @@
-/**
- * The browser half. Both lanes in one page, so the difference is visible rather than
- * described: chat messages are never lost, cursor positions frequently are, and the
- * contract is the only place that says which is which.
- */
 import { Client, type TransportError } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 import { type ChatMap, contract } from '../contract.ts'
@@ -56,14 +51,7 @@ const { sha256, port } = (await (await fetch('/cert-hash')).json()) as {
   port: number
 }
 
-/**
- * The seam form, `new Client({ connect })`, rather than `browserClient({ … })`.
- *
- * This page renders the connection status, so it needs the client *before* it is connected:
- * `connecting` is a state you can only show if you are holding the thing that is doing the
- * connecting. `browserClient` resolves once the session is up, which is one line shorter and
- * cannot express this. Same reason the React provider takes an unconnected client.
- */
+// new Client, so the page can show "connecting"
 const client = new Client<ChatMap>({
   contract,
   connect: () =>
@@ -73,8 +61,6 @@ const client = new Client<ChatMap>({
     }),
 })
 
-// The observable snapshot, rather than a pile of events. A React binding would pass these
-// two methods straight to useSyncExternalStore.
 client.subscribe(() => {
   const s = client.getSnapshot()
   statusEl.textContent = s.status
@@ -84,8 +70,6 @@ client.subscribe(() => {
     append('system', `${s.lastError.code}: ${s.lastError.remedy}`, Date.now())
 })
 
-// Counted per lane, so the two windows can be compared: with loss dialled up in one window,
-// the other's cursor count falls behind that window's moves while its chat count does not.
 let rxChat = 0
 let rxCursor = 0
 client.on('chat', ({ from, body, at }) => {
@@ -105,8 +89,6 @@ try {
   throw e
 }
 
-// A call: request and response on their own stream, with a deadline supplied by the
-// caller because the library does not invent one.
 const named = await client.call('setName', { name: me }, { signal: AbortSignal.timeout(5_000) })
 append('system', named.accepted ? `you are ${named.name}` : 'name rejected', Date.now())
 
@@ -116,8 +98,6 @@ form.addEventListener('submit', (e) => {
   if (body.length === 0) return
   input.value = ''
 
-  // A streaming call: the response arrives a word at a time and the line grows as it
-  // does. Nothing here manages a buffer or a subscription; the loop is the whole API.
   if (body.startsWith('/say ')) {
     void (async () => {
       const line = append('stream', '', Date.now())
@@ -128,20 +108,16 @@ form.addEventListener('submit', (e) => {
     return
   }
 
-  // Reliable lane. This will arrive.
   client.emit('chat', { from: named.name, body, at: Date.now() })
 })
 
-// The loss toggle is a call: one value out, one value back, on its own stream. The server
-// answers with what it actually set, and that is what the label shows.
+// The label shows what the server set, not what the slider asked for.
 lossEl.addEventListener('input', () => {
   void client.call('setLoss', { percent: Number(lossEl.value) }).then(({ percent }) => {
     lossValueEl.textContent = `${percent}%`
   })
 })
 
-// Unreliable lane, at pointer rate. Most of these are redundant the moment they are sent,
-// which is exactly why losing one costs nothing.
 surface.addEventListener('pointermove', (e) => {
   const r = surface.getBoundingClientRect()
   client.emit('cursor', {
@@ -154,6 +130,6 @@ surface.addEventListener('pointermove', (e) => {
 setInterval(() => {
   const s = client.stats()
   if (s === undefined) return
-  // Our drops, not the network's - the transport reports neither loss nor congestion.
+  // Our own queue drops. The transport reports no network loss.
   dropsEl.textContent = `overflow ${s.overflowDropped} · stale ${s.staleDropped} · dedup ${s.staleReceived}`
 }, 500)

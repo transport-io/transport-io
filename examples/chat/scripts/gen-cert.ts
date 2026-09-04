@@ -1,10 +1,4 @@
-/**
- * Mints the short-lived certificate the browser needs.
- *
- * WebTransport will not accept an arbitrary self-signed certificate. It accepts one
- * pinned by hash, and only under three constraints that are easy to get wrong:
- * ECDSA P-256, SHA-256, and a total validity of at most 14 days.
- */
+/** Mints the certificate the browser pins: ECDSA P-256, SHA-256, at most 14 days. */
 import { execFileSync } from 'node:child_process'
 import { createHash, X509Certificate } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

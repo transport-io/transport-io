@@ -1,16 +1,9 @@
 /**
- * The public demo server. The production path: a certificate from a real CA, no hash pinned
- * anywhere, UDP 443 straight into this process.
- *
- * Nothing here is provisioned by this repository. `README.md` beside this file is the runbook.
- *
- * Three listeners from one process:
- *   TCP 80   redirects to https. Nothing else; certbot's standalone authenticator takes the
- *            port over during a renewal, which is why renewal is a restart.
- *   TCP 443  the pages, over HTTPS, plus /healthz. Refuses to serve a page while the health
- *            check says the transport is broken, because a page that loads and a demo that
- *            does not is the failure mode a visitor cannot distinguish from their own setup.
- *   UDP 443  WebTransport, the thing being demonstrated.
+ * The public demo server: a CA certificate, no pinned hash, three listeners in one process.
+ *   TCP 80   redirects to https
+ *   TCP 443  the pages and /healthz; 503 while the health check says the transport is down
+ *   UDP 443  WebTransport
+ * The runbook is README.md beside this file.
  */
 import { readFileSync } from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
@@ -40,7 +33,7 @@ const MAX_SESSIONS = Number(env('DEMO_MAX_SESSIONS', '32'))
 const MAX_GENERATIONS = Number(env('DEMO_MAX_GENERATIONS', '4'))
 /** How long a SIGTERM waits for live streams before the process exits regardless. */
 const DRAIN_MS = Number(env('DEMO_DRAIN_MS', '15000'))
-/** A health result older than this is treated as a failure: a dead timer must not pass. */
+/** A health result older than this counts as a failure. */
 const HEALTH_STALE_MS = 3 * 60_000
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -50,7 +43,7 @@ const privKey = readFileSync(join(CERT_DIR, 'privkey.pem'), 'utf8')
 
 const server = createServer<ChatMap>({ contract })
 attach(server, { maxGenerationsPerPeer: MAX_GENERATIONS })
-// No source: the accept loop below is ours, because a cap has to refuse before accepting.
+// No listener here: the accept loop below refuses over the cap before accepting.
 await server.listen()
 
 const listener = await listenHttp3({ port: 443, host: '0.0.0.0', cert, privKey, path: '/' })
@@ -74,10 +67,6 @@ const accepting = (async () => {
 })()
 void accepting.catch((e: unknown) => console.error('accept loop ended:', (e as Error).message))
 console.log(`webtransport  https://${HOST}:443/  (udp)  cap ${MAX_SESSIONS} sessions`)
-// Printed on every start, because a start is when someone is reading this log wondering why
-// the demo went away: a certificate renewal restarts this process and drops every session,
-// since the QUIC binding cannot reload a certificate (D111). If the previous line in the
-// journal is the certbot pre-hook, that is what happened, and nothing is wrong.
 console.log(
   'note          renewal restarts this process and drops every session; see deploy/README.md',
 )
@@ -140,7 +129,6 @@ const https = createHttpsServer({ cert, key: privKey }, (req, res) => {
   }
   const rel = path === '/' ? '/index.html' : path
   if (rel.endsWith('.html')) {
-    // Loudly, in text, with the reason. Not a broken page that looks like the visitor's fault.
     const h = health()
     if (!h.ok) {
       res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'retry-after': '60' })
@@ -169,9 +157,8 @@ createHttpServer((req, res) => {
 
 // ------------------------------------------------------------------ drain on SIGTERM
 
-// A renewal, a deploy, or the daily restart all arrive here. Stop taking sessions, give the
-// ones in flight time to finish their current generation, then go. systemd's TimeoutStopSec
-// is set above DRAIN_MS so this is the thing that decides, not the supervisor.
+// Stop accepting, wait up to DRAIN_MS for live sessions, then exit. TimeoutStopSec in the
+// unit is longer, so this is what decides.
 process.on('SIGTERM', () => {
   draining = true
   console.log(`SIGTERM: draining ${live} session(s) for up to ${DRAIN_MS}ms`)

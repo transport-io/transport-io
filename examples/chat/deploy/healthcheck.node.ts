@@ -1,22 +1,11 @@
 /**
- * The health check. Run by a systemd timer every minute; its exit status restarts the service
- * on failure and its JSON result is what `server.node.ts` reads before serving a page.
+ * The health check, run by a systemd timer. Its exit status restarts the service and its
+ * JSON result is what server.node.ts reads before serving a page.
  *
- * Five steps. Each one either proves something specific or says what it could not prove, and
- * the result file carries every step, so `/healthz` shows which one failed rather than "down".
- *
- *   page     GET https://HOST/agents.html is 200 and is the demo page.
- *   cert     the certificate the TCP listener presents is the one on disk, and has more than
- *            seven days left. This is what proves a renewal was picked up: both listeners read
- *            the same files at startup, so the TCP side answering with the new certificate
- *            means the process restarted with it.
- *   udp      something is bound on UDP 443.
- *   wt       a real WebTransport handshake and one call, from this machine to itself.
- *
- * The `wt` step pins the on-disk certificate's hash, because `connectHttp3` requires a hash;
- * the Node client has no CA-store path (see good-first-issue 7). Whether the binding accepts
- * a ninety-day certificate for pinning is unverified, and the runbook says what to do if it
- * does not. The step reports which of the two it hit.
+ *   page   GET /agents.html is 200 and is the demo page
+ *   cert   the certificate TCP 443 presents is the one on disk, with more than seven days left
+ *   udp    something is bound on UDP 443
+ *   wt     a WebTransport handshake and one call, pinned to the on-disk certificate
  */
 import { execFileSync } from 'node:child_process'
 import { createHash, X509Certificate } from 'node:crypto'

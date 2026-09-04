@@ -1,11 +1,4 @@
-/**
- * The chat server. Runs under Node because it loads the QUIC transport.
- *
- * Two servers, deliberately: a plain HTTP one on 8080 serving the page, and the
- * WebTransport one on 4433 carrying the session. `http://localhost` is a trustworthy
- * origin, so the page gets a secure context without a certificate of its own - only the
- * WebTransport endpoint needs one.
- */
+/** The local server: the page on 8080 over plain HTTP, WebTransport on 4433. Node only. */
 
 import { readFileSync } from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
@@ -18,10 +11,6 @@ import { type ChatMap, contract } from './contract.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const certDir = join(here, '.cert')
-// Overridable, because 8080 is the most contended port on any developer's machine and the
-// e2e config offers the same override. Both halves have to read it or the override is a
-// knob that moves what Playwright waits for without moving what this binds - which is
-// exactly what it did until a fresh-clone run caught it.
 const WT_PORT = Number(process.env.E2E_WT_PORT ?? 4433)
 const WEB_PORT = Number(process.env.E2E_PORT ?? 8080)
 
@@ -50,8 +39,6 @@ const listener = await listenHttp3({
 })
 console.log(`webtransport  https://127.0.0.1:${WT_PORT}/`)
 
-// `listen(listener)` owns the accept loop. Drive `accept()` yourself only when you need
-// something the loop does not do, such as inspecting a connection before accepting it.
 await server.listen(listener, {
   onAcceptError: (e) => console.error('session refused:', (e as Error).message),
 })

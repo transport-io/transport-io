@@ -1,12 +1,3 @@
-/**
- * Two streams running at once, one of them stopped, and the other not noticing.
- *
- * This is the one claim in this library that is hard to believe from prose, so the page
- * exists to make it a thing you watch rather than a thing you are told. Everything on
- * screen comes from two `stream()` calls against one session. There is no framing code
- * here, no correlation identifier, and no pending map: each call is its own bidirectional
- * QUIC stream, which is what makes stopping one of them a local event.
- */
 import { Client, type TransportError } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 import { AGENTS } from '../agents.ts'
@@ -21,11 +12,6 @@ const $ = <T extends HTMLElement>(id: string): T => {
 const statusEl = $('status')
 const openEl = $('open')
 
-/**
- * Derived from which panels are streaming, rather than kept as a counter with paired
- * increments. A restart cancels a stream whose loop settles a turn later, so the pairing is
- * not what it looks like in the source, and a counter briefly reads three.
- */
 const live = new Set<string>()
 function setLive(id: string, streaming: boolean): void {
   if (streaming) live.add(id)
@@ -38,14 +24,7 @@ const { sha256, port } = (await (await fetch('/cert-hash')).json()) as {
   port: number
 }
 
-/**
- * The seam form, `new Client({ connect })`, rather than `browserClient({ … })`.
- *
- * This page renders the connection status, so it needs the client *before* it is connected:
- * `connecting` is a state you can only show if you are holding the thing that is doing the
- * connecting. `browserClient` resolves once the session is up, which is one line shorter and
- * cannot express this. Same reason the React provider takes an unconnected client.
- */
+// new Client, so the page can show "connecting"
 const client = new Client<ChatMap>({
   contract,
   connect: () =>
@@ -63,7 +42,7 @@ client.subscribe(() => {
 
 interface Panel {
   start(): void
-  /** True if there was a running stream to stop, so a finished panel does not claim one. */
+  /** True if a running stream was stopped. */
   stop(): boolean
   /** Count from here, labelled with whichever panel just stopped. */
   countFrom(label: string): void
@@ -98,8 +77,6 @@ function makePanel(id: 'a' | 'b', name: string): Panel {
   function render(): void {
     tokensEl.textContent = String(tokens)
     const seconds = (performance.now() - startedAt) / 1000
-    // Over the whole run rather than a sliding window: a stall drags the average down and
-    // keeps it down, so the number stays a stall detector after the stall is over.
     rateEl.textContent = seconds > 0.25 ? (tokens / seconds).toFixed(1) : '0.0'
     sinceEl.textContent =
       sinceBase === null ? '' : `+${tokens - sinceBase} since ${sinceLabel} stopped`
@@ -116,7 +93,6 @@ function makePanel(id: 'a' | 'b', name: string): Panel {
     setState('streaming')
     render()
 
-    // One call, one stream. Nothing below this line knows the other panel exists.
     const result = client.stream('generate', { agent: name })
     handle = result
     try {
@@ -131,12 +107,10 @@ function makePanel(id: 'a' | 'b', name: string): Panel {
     } catch (e) {
       if (mine !== generation) return
       const err = e as TransportError
-      // `cancel()` is this page's own doing, so it ends the stream rather than failing it.
+      // WT_ABORTED is this page's own cancel(), so it reads as stopped rather than failed.
       setState(err.code === 'WT_ABORTED' ? 'stopped' : `failed: ${err.code}`)
     } finally {
-      // However this stream ended, there is nothing left to stop. A panel that has finished
-      // on its own would otherwise report a stop that never happened, and the other panel
-      // would start counting from a moment nothing occurred at.
+      // Nothing left to stop, however it ended.
       if (mine === generation) handle = null
     }
   }
@@ -144,8 +118,7 @@ function makePanel(id: 'a' | 'b', name: string): Panel {
   return {
     start: () => void begin(),
     stop: () => {
-      // From outside the loop, where `break` cannot reach. It resets the QUIC stream, the
-      // loop above sees WT_ABORTED, and the server's generator is cancelled where it stands.
+      // Resets the stream; the loop above sees WT_ABORTED.
       if (handle === null) return false
       handle.cancel()
       handle = null
@@ -166,8 +139,6 @@ function makePanel(id: 'a' | 'b', name: string): Panel {
 const a = makePanel('a', 'agent-a')
 const b = makePanel('b', 'agent-b')
 
-// Stopping one panel is also what tells the other to start counting. That number is the
-// whole demonstration: it climbs while the panel beside it is frozen.
 $('a-stop').addEventListener('click', () => {
   if (a.stop()) b.countFrom('agent-a')
 })

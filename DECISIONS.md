@@ -2784,3 +2784,12 @@ On its first run the gate found two instances the sweep that prompted it had mis
 `packages/react/README.md` and in CLAUDE.md. That is the fourth way, and it is the reason
 this is a gate rather than a fourth sweep.
 
+### D113. Example comments say what the next line does, never why it was chosen
+The rule for reader-facing documents extends to the source under `examples/`: a comment says
+what the next line does when that is not obvious, and never why it was chosen over something
+else. An example is copied, and a six-line paragraph defending `new Client` over
+`browserClient` travels with it into a codebase where nobody asked. Where the reason matters
+to the reader it is one line stating the consequence: `// new Client, so the page can show
+"connecting"`. The sweep took the nine TypeScript files of `examples/chat` from 1095 lines to
+926 without changing a statement. The rationale stays where it was already recorded: D108 for
+the seam form, D93 for the credit window, D111 for the restart on renewal.

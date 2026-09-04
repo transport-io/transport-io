@@ -1,35 +1,15 @@
 import { defineContract, type MapOf, reliable, rpc, streaming, unreliable } from 'transport-io'
 
-/**
- * The whole application surface, in one file. Reading this tells you every event, its
- * payload and - critically - whether it can be dropped.
- */
 export const contract = defineContract({
-  /** Reliable and ordered. A chat message that vanishes is a bug. */
   chat: reliable<{ from: string; body: string; at: number }>(),
-  /** Unreliable. A cursor position that vanishes is last week's news. */
   cursor: unreliable<{ from: string; x: number; y: number }>(),
-  /**
-   * Streaming: the answer is a sequence rather than a value. The client gets an async
-   * iterable and the server writes an async generator.
-   */
+  /** Echoes the text one word at a time. */
   say: streaming<{ text: string }, string>(),
-  /** Callable: one value comes back. */
   setName: rpc<{ name: string }, { accepted: boolean; name: string }>(),
-  /**
-   * The packet-loss toggle. The server drops this share of the caller's cursor frames before
-   * broadcasting them, so the other window watches the unreliable lane lose frames while chat
-   * keeps arriving one for one. Simulated at the server and labelled as such on the page:
-   * real loss looks the same to the application, which is the point of having two lanes.
-   */
+  /** The server drops this share of the caller's cursor frames before broadcasting. */
   setLoss: rpc<{ percent: number }, { percent: number }>(),
-  /**
-   * The second page runs two of these at once. Each `stream()` opens its own bidirectional
-   * stream, so the two are independent all the way down to QUIC, and stopping one is a
-   * reset on that stream and nothing else.
-   */
+  /** Streams a fixed script one token at a time. */
   generate: streaming<{ agent: string }, string>(),
 })
 
-// The second line is not optional decoration. It is what keeps hover readable.
 export interface ChatMap extends MapOf<typeof contract> {}
