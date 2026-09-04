@@ -1,5 +1,17 @@
 # transport-io
 
+## 0.7.1
+
+### Patch Changes
+
+- 873f123: `npx transport-io dev` did nothing in 0.6.1 and 0.7.0. It exited 0 without printing a line, so
+  anyone who ran the onboarding command in the last week got silence. The cause: npm links the
+  `bin` as a symlink, and the entry guard compared `process.argv[1]`, which keeps the link, with
+  `import.meta.url`, which is the target, so through `npx` the two never matched and the command
+  never ran. It printed its usage only as `node node_modules/transport-io/dist/cli/main.node.js`,
+  which is how every test ran it. The guard now compares real paths, and a test runs the CLI
+  through a symlink, the way npm does.
+
 ## 0.7.0
 
 ### Minor Changes
