@@ -17,6 +17,13 @@ on:
 permissions:
   contents: read
 
+# Pinned, never "latest". An unpinned `setup-bun` installed 1.4.1 the morning it was published
+# and turned main red with no commit behind it: 1.4.1 makes an unhandled error between tests
+# fatal to the run, and a leaked handshake deadline had been producing one all along (D117).
+# The leak is fixed; this is so a toolchain cannot change what CI runs on its own.
+env:
+  BUN_VERSION: '1.4.1'
+
 # Fast checks first. All are required to merge.
 jobs:
   pr-title:
@@ -26,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '${{ env.BUN_VERSION }}' }
       - uses: actions/setup-node@v5
         with: { node-version: '24' }
       - run: npm ci
@@ -45,6 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '${{ env.BUN_VERSION }}' }
       - uses: actions/setup-node@v5
         with: { node-version: '24' }
       - run: npm ci
@@ -87,6 +96,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '${{ env.BUN_VERSION }}' }
       - run: npm ci
       - run: npm run test:unit
 
@@ -115,6 +125,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '${{ env.BUN_VERSION }}' }
       - uses: actions/setup-node@v5
         with: { node-version: '24' }
       - run: npm ci
@@ -181,6 +192,7 @@ jobs:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '${{ env.BUN_VERSION }}' }
       - run: git fetch origin "$BASE_REF" --depth=1
         env:
           BASE_REF: ${{ github.base_ref }}
