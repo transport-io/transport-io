@@ -178,6 +178,7 @@ const UNREACHABLE = {
   "hub.d.ts": "internal room fan-out, reachable only through Server",
   "origin.d.ts": "internal origin allocator, reachable only through Server",
   "transport/moq.node.d.ts": "the alternative transport behind the ADR 0007 seam, unexported",
+  "timers.d.ts": "the timer registry a teardown owns, reachable only through private fields",
   "transport/parity-suite.d.ts": "test infrastructure for transport implementers",
 }
 const missing = shipped
