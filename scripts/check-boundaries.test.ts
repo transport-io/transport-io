@@ -6,7 +6,13 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { findBoundaryViolations, isNodeOnly, scan } from './check-boundaries.ts'
+import {
+  findBoundaryViolations,
+  findTimerViolations,
+  isNodeOnly,
+  scan,
+  scanTimers,
+} from './check-boundaries.ts'
 
 describe('a module Bun may load must not reach the transport', () => {
   test('the package specifier is caught, as it always was', () => {
@@ -64,5 +70,65 @@ describe('a module Bun may load must not reach the transport', () => {
     const real = readFileSync(path, 'utf8')
     const broken = `import { connectHttp3 } from './transport/fails.node.ts'\n${real}`
     expect(findBoundaryViolations(path, broken).length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * The timer rule, which exists because `dispose()` was a list and a list was missed twice.
+ * The fixtures are the two halves of the property: a teardown makes the rule apply, and its
+ * absence makes it not apply.
+ */
+describe('a module with a teardown may not create its own timers', () => {
+  const withTeardown = (body: string): string =>
+    `class Thing {\n  dispose(): void {\n    this.stop()\n  }\n${body}\n}\n`
+
+  test('a retained setInterval in a class that disposes is caught', () => {
+    const v = findTimerViolations(
+      'packages/core/src/thing.ts',
+      withTeardown('  start(): void {\n    this.t = setInterval(this.sweep, 100)\n  }'),
+    )
+    expect(v.map((x) => x.specifier)).toEqual(['setInterval'])
+  })
+
+  test('a setTimeout is caught too, retained or not', () => {
+    const v = findTimerViolations(
+      'packages/core/src/thing.ts',
+      withTeardown('  arm(): void {\n    setTimeout(() => this.fail(), 5000)\n  }'),
+    )
+    expect(v.map((x) => x.specifier)).toEqual(['setTimeout'])
+  })
+
+  test('the registry itself is allowed, because it defines no teardown', () => {
+    const v = findTimerViolations(
+      'packages/core/src/timers.ts',
+      'export class OwnedTimers {\n  after(ms: number) {\n    return setTimeout(() => {}, ms)\n  }\n}\n',
+    )
+    expect(v).toEqual([])
+  })
+
+  test('a module with no teardown is not the subject of this rule', () => {
+    const v = findTimerViolations(
+      'packages/core/src/other.ts',
+      'export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))\n',
+    )
+    expect(v).toEqual([])
+  })
+
+  test('a comment naming a timer is documentation, not a call', () => {
+    const v = findTimerViolations(
+      'packages/core/src/thing.ts',
+      withTeardown('  // setTimeout is not allowed here; use OwnedTimers.\n  arm(): void {}'),
+    )
+    expect(v).toEqual([])
+  })
+
+  test('tests and benches own nothing past their own run', () => {
+    const body = withTeardown('  arm(): void {\n    setTimeout(() => {}, 1)\n  }')
+    expect(findTimerViolations('packages/core/src/thing.test.ts', body)).toEqual([])
+    expect(findTimerViolations('packages/core/src/bench/thing.ts', body)).toEqual([])
+  })
+
+  test('the repository is clean, and the sweep looked at something', () => {
+    expect(scanTimers()).toEqual([])
   })
 })

@@ -22,6 +22,7 @@ import {
   STREAM_INITIAL_CREDIT,
 } from './protocol.ts'
 import { DatagramQueue, EmitQueue, PeerTooSlowError, type QueueStats } from './queue.ts'
+import { type OwnedTimer, OwnedTimers } from './timers.ts'
 import type { BidiStream, Connection } from './transport/types.ts'
 
 export interface SessionStats extends QueueStats {
@@ -228,8 +229,10 @@ export class Session {
   #negotiated: Negotiated | undefined
   #handshakeResolve!: (n: Negotiated) => void
   #handshakeReject!: (e: unknown) => void
-  #sweepTimer: ReturnType<typeof setInterval> | undefined
-  #handshakeTimer: ReturnType<typeof setTimeout> | undefined
+  /** Every timer this session owns. `dispose()` clears it whole; see timers.ts and D118. */
+  readonly #timers = new OwnedTimers()
+  #sweepTimer: OwnedTimer | undefined
+  #handshakeTimer: OwnedTimer | undefined
   #deadlineReject: ((e: unknown) => void) | undefined
   #handshakeSettled = false
   #disposed = false
@@ -295,7 +298,7 @@ export class Session {
      * runner reports that as an unhandled error belonging to whatever was running five
      * seconds later. Same shape as the sweep interval, and the same fix. See D117.
      */
-    this.#handshakeTimer = setTimeout(() => {
+    this.#handshakeTimer = this.#timers.after(this.#deadlineMs, () => {
       const e = new TransportError(
         'WT_HANDSHAKE_TIMEOUT',
         `no handshake within ${this.#deadlineMs}ms`,
@@ -303,7 +306,7 @@ export class Session {
       )
       this.#settleHandshake(e)
       this.close(CloseCode.WT_HANDSHAKE_TIMEOUT, 'handshake deadline')
-    }, this.#deadlineMs)
+    })
 
     try {
       const writable = await Promise.race([this.#conn.openEmitStream(), deadline])
@@ -327,12 +330,10 @@ export class Session {
       this.#flushEmits()
 
       const n = await this.ready
-      this.#sweepTimer = setInterval(() => {
+      this.#sweepTimer = this.#timers.every(SEQUENCE_STATE_RETENTION_MS, () => {
         this.#gate.sweep(this.#now(), SEQUENCE_STATE_RETENTION_MS)
-      }, SEQUENCE_STATE_RETENTION_MS)
-      // Node returns a Timeout with unref; browsers return a number. Neither type is
-      // available in both runtimes, so this is narrowed rather than assumed.
-      ;(this.#sweepTimer as unknown as { unref?: () => void }).unref?.()
+      })
+      this.#sweepTimer.unref()
       return n
     } finally {
       this.#clearHandshakeTimer()
@@ -356,7 +357,7 @@ export class Session {
   }
 
   #clearHandshakeTimer(): void {
-    if (this.#handshakeTimer !== undefined) clearTimeout(this.#handshakeTimer)
+    this.#handshakeTimer?.cancel()
     this.#handshakeTimer = undefined
   }
 
@@ -698,12 +699,13 @@ export class Session {
     // sequence counter for everyone sent to. Both grow with peer count.
     this.#gate.clear()
     this.#sequences.clear()
-    if (this.#sweepTimer !== undefined) clearInterval(this.#sweepTimer)
+    // Every timer at once, so a timer added later is released without this line changing.
+    // The promises are the half a registry cannot cover: clearing the deadline without
+    // settling what it would have settled trades a leak for a hang, because `start()` is
+    // parked on an await only a timer or a peer can answer.
+    this.#timers.clearAll()
     this.#sweepTimer = undefined
-    // The handshake deadline, and the promise it would otherwise have been left to settle.
-    // Clearing it without settling `ready` would trade a leak for a hang: `start()` is
-    // parked on `ready`, and a disposed session can never receive the peer's handshake.
-    this.#clearHandshakeTimer()
+    this.#handshakeTimer = undefined
     if (!this.#handshakeSettled) {
       this.#settleHandshake(
         new TransportError(

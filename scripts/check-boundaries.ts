@@ -97,6 +97,43 @@ export function findCliViolations(file: string, source: string): Violation[] {
   return out
 }
 
+/**
+ * A module that defines a teardown may not create timers directly.
+ *
+ * `Session#dispose()` released timers one named field at a time, so adding a timer meant
+ * remembering to extend a method three hundred lines away. Twice nobody did, and the second
+ * time a five-second timer fired into a disposed session and took CI down with no commit
+ * behind it (D117). `OwnedTimers` makes disposal one unconditional call; this rule is what
+ * makes it the only way in rather than the polite way in.
+ *
+ * The rule is a property rather than a list of files: it applies to whatever defines a
+ * `dispose()`, so a class that grows one tomorrow is covered without anybody adding it here.
+ * What it does not cover is a teardown whose timer is created inside a helper module with no
+ * teardown of its own. That is a hole, and a narrower rule with an allowlist would be worse.
+ */
+const TEARDOWN_METHOD = /^\s{2}dispose\(/m
+
+/** Production source only: a test or a bench owns nothing past its own run. */
+function ownsATeardown(file: string, source: string): boolean {
+  if (!/[\\/]src[\\/]/.test(file)) return false
+  if (/\.test\.tsx?$/.test(file) || /[\\/]bench[\\/]/.test(file)) return false
+  return TEARDOWN_METHOD.test(source)
+}
+
+export function findTimerViolations(file: string, source: string): Violation[] {
+  if (!ownsATeardown(file, source)) return []
+  const out: Violation[] = []
+  for (const [i, line] of source.split('\n').entries()) {
+    // A comment naming one is documentation, not a call. This rule and the module it points
+    // at both have to be able to say `setTimeout` in prose.
+    if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue
+    const m = /\b(setTimeout|setInterval)\s*\(/.exec(line)
+    if (m?.[1] === undefined) continue
+    out.push({ file, line: i + 1, specifier: m[1] })
+  }
+  return out
+}
+
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const p = join(dir, e.name)
@@ -135,6 +172,25 @@ export function scan(
   return files.flatMap((f) => findBoundaryViolations(f, readFileSync(f, 'utf8')))
 }
 
+/**
+ * A floor, for the same reason `scan` has one: if the teardown detector stops matching, this
+ * gate reports a clean sweep over nothing. It fails instead.
+ */
+export function scanTimers(roots: readonly string[] = ['packages']): Violation[] {
+  const files = roots
+    .flatMap((r) => sourceFiles(r))
+    .filter((f) => !f.endsWith(SELF_TEST))
+    .map((f) => ({ file: f, source: readFileSync(f, 'utf8') }))
+  const teardowns = files.filter(({ file, source }) => ownsATeardown(file, source))
+  if (teardowns.length < 1) {
+    throw new Error(
+      'found no module defining dispose(), so this gate scanned nothing. ' +
+        'Zero violations across nothing is not the same as zero violations.',
+    )
+  }
+  return teardowns.flatMap(({ file, source }) => findTimerViolations(file, source))
+}
+
 export function scanCli(roots: readonly string[] = ['packages']): Violation[] {
   return roots
     .flatMap((r) => sourceFiles(r))
@@ -158,12 +214,22 @@ if (import.meta.main) {
         'segfaults on exit.\n  Rename it to *.node.ts, or move the import behind one. See D14.',
     )
   }
-  const total = violations.length + cliViolations.length
+  const timerViolations = scanTimers()
+  for (const v of timerViolations) {
+    console.error(
+      `${v.file}:${v.line}  calls ${v.specifier}() directly\n` +
+        '  This module defines dispose(), so every timer it owns goes through OwnedTimers ' +
+        '(packages/core/src/timers.ts).\n  dispose() clears that registry whole; a field it ' +
+        'does not know about is the D117 leak again. See D118.',
+    )
+  }
+  const total = violations.length + cliViolations.length + timerViolations.length
   if (total > 0) {
     console.error(`\n${total} import-boundary violation(s).`)
     process.exit(1)
   }
   console.log(
-    'boundaries: no non-Node module reaches the transport, and the CLI takes no dependencies',
+    'boundaries: no non-Node module reaches the transport, the CLI takes no dependencies, ' +
+      'and no teardown owns a raw timer',
   )
 }

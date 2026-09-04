@@ -141,6 +141,11 @@ it:
   limit, a browser version: if it cannot be produced by a command in the transcript, it does
   not go in the document.
 
+**A timer belongs to whatever disposes of it.** A class with a `dispose()` creates timers
+through `OwnedTimers`, never `setTimeout` or `setInterval` directly, and `dispose()` clears
+that registry whole. Enforced by `scripts/check-boundaries.ts`, because a named field per
+timer is a list and the list was missed twice. See D118.
+
 **A threshold is an absolute quantity, or a proportion of something this library counts.**
 Never a proportion of a baseline established at measurement time. The memory-soak criterion
 was originally "5% growth" and would have certified the exact leak it was written to catch.

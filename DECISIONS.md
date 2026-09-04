@@ -2883,3 +2883,33 @@ own teardown continuation. Every one of those call sites now has a `.catch`. The
 that a delayed rejection is not a milder bug than a prompt one, it is the same bug with the
 evidence removed.
 
+### D118. Every timer a teardown owns goes through one registry, and a gate enforces it
+D117 fixed two leaked timers. Both were missed the same way: `dispose()` released timers one
+named field at a time, and the test guarding it was itself written as a list, with the same
+weakness. A list somebody must remember to extend while adding a timer three hundred lines
+away is the shape this repository has twice replaced with a property check.
+
+Three parts, because they cover different halves of the failure.
+
+`session-teardown.test.ts` asserts the invariant rather than the inventory. After a session is
+disposed, in every lifecycle it can be disposed from, no timer it created is still live and
+`start()` has settled inside a fixed budget. It names no timer and no promise. The settle half
+is the one a registry cannot give: `start()` parks on the emit stream, then on the handshake
+write, then on `ready`, and only a timer or a peer can answer any of them, so releasing the
+timer without settling what it would have settled trades a leak for a hang, which is what the
+first attempt at D117's fix did. When a fourth await is added, nobody has to know it exists;
+disposing a session parked on it fails here on the budget. Three of its five cases fail
+against the pre-D117 session, all with "still parked after disposal".
+
+`OwnedTimers`, in `packages/core/src/timers.ts`, holds every timer an object owns, so disposal
+is one unconditional `clearAll()` that does not change when a timer is added.
+
+`scripts/check-boundaries.ts` refuses a direct `setTimeout` or `setInterval` in any module
+defining a `dispose()`. This is the part that matters: without it the registry is a nicer list,
+since nothing would stop the next timer from being a field again. The rule is a property
+rather than a list of files, so a class that grows a teardown tomorrow is covered without
+anyone adding it here, and the gate has a floor so a detector that stops matching fails rather
+than reporting a clean sweep over nothing. The hole it leaves is a teardown whose timer is
+created inside a helper module with no teardown of its own; a narrower rule carrying an
+allowlist would be the worse trade.
+
