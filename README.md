@@ -183,9 +183,6 @@ and the measurements behind each one, and is worth reading before you build on t
 - **Reconnect is a new session.** Room membership does not survive it and pending calls
   reject. Resubscribing is the application's job.
 - **Datagrams may be dropped, duplicated or reordered**, and loss is not reported.
-- **Each bidirectional stream leaks about 5.95 KB of server memory**, upstream in the QUIC
-  binding rather than in this library. `emit` and datagrams are flat, so for token workloads
-  streaming is the cheap shape.
 - **The protocol is v0.** Both sides must match exactly.
 - **One event name serves both directions**, which is a modelling tax when the two directions
   want different payloads.

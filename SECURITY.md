@@ -51,11 +51,3 @@ handshake. It does not assume good faith. Report anything that gets past those.
 unreliable lane reliable and ordered, which is a lie about your data that nobody would catch.
 If WebTransport is unavailable, the connection fails rather than degrading quietly.
 
-**Each bidirectional stream leaks about 5.95 KB of server memory.** This is upstream, in the QUIC
-binding, not in this library: the same code over an in memory transport costs 0.045 KB per
-call, and the binding leaks the same amount with none of this library's code present. It is
-**not** tracked upstream: an issue was opened against the binding and withdrawn before any
-maintainer replied. [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) carries the measurement and its
-provenance. Treat it as a capacity planning fact for now. `emit` and datagrams are flat, and
-because the cost is per stream rather than per message, one `stream()` of a thousand elements
-costs what one `call()` does.

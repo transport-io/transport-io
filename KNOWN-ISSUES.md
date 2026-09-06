@@ -3,9 +3,6 @@
 Most of what follows is deliberate. It describes what this library will not do, and why,
 so you can decide before you build on it. None of it is going to change.
 
-One entry is different: [each call leaks memory](#each-call-leaks-memory) is a real bug,
-in a dependency, with a measured cost.
-
 ## Chrome and Firefox only
 
 Safari ships WebTransport and still cannot talk to a server built on this stack. It waits
@@ -82,38 +79,9 @@ streams and separate packets - but emits to one peer are serialised across every
 peer belongs to. Per-room lanes are reserved as a negotiated feature and are not in this
 version. So "independent streams" is not a promise about emits.
 
-## Each call leaks memory
-
-Unlike the rest of this page, this one is a bug.
-
-Every `call()` opens its own bidirectional stream, and the QUIC binding this library ships
-against leaks roughly **5.95 KB of server memory per stream**, unbounded. At ten calls per
-second that is about 209 MB an hour. It is not this library's leak - the same code over an
-in-memory transport costs 0.045 KB per call, and the binding leaks the same amount with
-none of this library's code present - but it is what you get if you deploy this today.
-
-**It is not tracked upstream.** An issue describing it was opened against the binding and
-then withdrawn before any maintainer replied, so nobody upstream has seen this. Do not plan
-around a fix arriving. The measurement is ours and is reproducible from
-`packages/core/src/bench/stream-churn.node.ts`; that is the whole of its provenance.
-
-An alternative transport measures flat on the same benchmark and is wired up behind an
-internal seam, but it cannot shut a server down gracefully and does not deliver call
-cancellation to the responder, so it is not the default yet.
-
-If your workload is mostly `emit` and datagrams, this does not affect you: both are flat,
-and you can check for yourself: `npm run soak:lanes` runs the memory soak over those two
-lanes and passes.
-
-**`stream()` is the cheaper shape for the same work.** The leak is per bidirectional stream,
-not per message, so one generation that streams a thousand tokens down one stream costs 5.95
-KB in total. The same thousand tokens fetched as a thousand `call()`s cost 5.95 KB each. If
-you are building an agent, streaming is both the better interface and the smaller leak.
-
 ## The reference transport applies no write backpressure
 
-Also upstream, also in the QUIC binding, and unlike the leak above it is invisible until you
-look for it: `WritableStreamDefaultWriter.ready` resolves unconditionally. Awaiting it, which
+Upstream, in the QUIC binding, and invisible until you look for it: `WritableStreamDefaultWriter.ready` resolves unconditionally. Awaiting it, which
 is what the streams contract says to do before writing, holds nothing back at all.
 
 Measured with a producer writing as fast as it can against a consumer taking one element
@@ -177,9 +145,9 @@ changelog before you move it.
 
 
 Every breaking change still gets a version bump and a changelog entry. What `0.x` withholds
-is the promise that a minor bump is safe, and that is deliberate: `call()` ships with a
-documented upstream leak, and an audit shortly before this release turned up thirty-one
-things worth fixing. The API is not settled yet. See D83.
+is the promise that a minor bump is safe, and that is deliberate: an audit shortly before
+the first release turned up thirty-one things worth fixing. The API is not settled yet. See
+D83.
 
 ## One event name for both directions is a modelling tax
 
@@ -201,3 +169,8 @@ is made deliberately rather than discovered halfway through an application.
 Security-relevant limits, including the fact that this library authenticates nothing, are
 in [`SECURITY.md`](SECURITY.md). The reasoning behind every position on this page is in
 [`DECISIONS.md`](DECISIONS.md).
+
+## Resolved upstream
+
+- Per-stream memory retention in the reference binding, found during development, reported
+  in fails-components/webtransport#510, fixed in 1.6.8 by #511.

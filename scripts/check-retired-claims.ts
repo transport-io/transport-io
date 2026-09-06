@@ -79,6 +79,14 @@ const RETIRED: readonly Retired[] = [
     why: 'a measurement proving a design point; it lives in D57 and D100, and reader-facing documents link',
   },
   {
+    pattern:
+      /\b(each|every|per|any) (bidirectional )?(stream|call)\b[^.]{0,60}\bleaks?\b|\bleaks?\b[^.]{0,80}\bper (bidirectional )?(stream|call)\b/i,
+    lastSeen: 'Each bidirectional stream leaks about 5.95 KB of server memory',
+    where:
+      'README.md, packages/core/README.md, SECURITY.md, CLAUDE.md, site index, deploy README, 2026-09-06',
+    why: 'fixed upstream in @fails-components/webtransport 1.6.8 by #511; the same bench measures flat (D119)',
+  },
+  {
     pattern: /=== \d+\) break\b/,
     lastSeen: 'if (out.length === 20) break',
     where: 'README.md, API.md, AGENTS.md, 2026-09-02',

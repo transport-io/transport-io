@@ -122,11 +122,8 @@ Nothing happens, and nothing needs to. The process is event-driven, the generato
 on their own after about twenty seconds, and the QUIC idle timeout closes abandoned sessions.
 The periodic work is certbot's timer, the health timer, and the daily restart.
 
-The daily restart exists because of the one measured defect: each bidirectional stream leaks
-about 5.95 KB in the binding. The health check opens one call stream per minute, which alone
-is 1440 streams a day, under 9 MB at that figure, and visitors add to it with use rather than
-with time. A restart at 04:00 bounds it to one day's worth regardless of traffic. It drains the
-same way a renewal does.
+The daily restart at 04:00 bounds whatever a day of traffic accumulates to one day's worth,
+regardless of traffic. It drains the same way a renewal does.
 
 ## Caps
 

@@ -18,7 +18,7 @@ returns an async iterable, and leaving the loop resets the QUIC stream so the se
 generator's `finally` runs.
 
 **Read [KNOWN-ISSUES.md](https://github.com/transport-io/transport-io/blob/main/KNOWN-ISSUES.md)
-before you start.** It lists what this library will not do, and the one measured defect. Full documentation is in the
+before you start.** It lists what this library will not do. Full documentation is in the
 [repository README](https://github.com/transport-io/transport-io#readme). The short version:
 
 - **WebTransport only.** No WebSocket fallback. An unsupported runtime gets `WT_NO_SUPPORT`.
@@ -28,10 +28,6 @@ before you start.** It lists what this library will not do, and the one measured
   That package, the fourteen-day ECDSA rule for a pinned development certificate, and the
   Safari gap are the same for Socket.IO's WebTransport transport: properties of the stack,
   not of this library.
-- **Each bidirectional stream leaks ~5.95 KB of server memory**, upstream in the QUIC
-  binding, not in this library. `emit` and datagrams are flat. The leak is per stream rather
-  than per message, so a `stream()` of a thousand tokens costs 5.95 KB in total where a
-  thousand `call()`s cost 5.95 KB each: for token workloads, streaming is the cheap shape.
 - **The protocol is v0 and unstable.** Both sides currently require an exact match.
 
 ```bash

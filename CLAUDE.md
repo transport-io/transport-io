@@ -111,12 +111,6 @@ Part 2.
 - **The reference transport applies no write backpressure.** `writer.ready` resolves
   unconditionally, measured: a producer ran 136,523 frames ahead of a consumer that had taken
   40, growing with the run. `stream()` carries its own credit window because of it.
-- **The reference transport leaks per bidirectional stream**, unbounded, upstream: 5.95 KB
-  on the server half and 5.88 KB on the client half. Not ours - our own path over a
-  loopback costs 0.045 KB. The soak fails on it, and that is what stands between this and a
-  1.0. See D65.
-- **`@moq/web-transport` is flat** on the identical probe: 0.01 KB per stream over 16,000,
-  with a real plateau. The transport seam in ADR 0007 is the way out. See D66.
 
 ## Rules that exist because something nearly shipped
 
