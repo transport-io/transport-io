@@ -89,10 +89,14 @@ if (code !== 'success' && code !== 'blocked' && code !== 'tooBig') { throw ... }
 `tooBig` and `blocked` are both ignored. transport-io therefore owns **both** size
 checking and backpressure accounting; the transport will never report either.
 
+*2026-09-06. Unchanged at 1.6.8. The condition still ignores `blocked` and `tooBig`, and writes of 1212 B and 4844 B against a 1211 B `maxDatagramSize` resolve without error; the 1212 B datagram is delivered, the 4844 B one is dropped. Holds. D119.*
+
 ### F5. `WebTransportError` lacks the spec fields
 On abort, the peer's read throws `WebTransportError: "Resetstream with code:0"` with
 `err.streamErrorCode === undefined`. The reset code is recoverable only by parsing the
 message string.
+
+*2026-09-06. `streamErrorCode` does not appear anywhere in 1.6.8's sources, and `fails.node.test.ts` still asserts it undefined. Holds. D119.*
 
 ### F6. Stream reads do not preserve write boundaries
 50 x 10B writes plus one 200,000B write arrived as **217 reads, largest chunk 1220 bytes**.
@@ -255,6 +259,8 @@ why rather than being quietly ignored at publish time.
 
 An exemption with a named cause, a pinned number and a mechanical trigger is a decision.
 Deleting the criterion would not be.
+
+*2026-09-06. The trigger fired. At `@fails-components/webtransport` 1.6.8, `npm run bench:stream-churn` reports -0.21 KB per stream over 16,000 streams with the heap flat, under the 1 KB line above. The `call()` exemption lifts and all three lanes are bound by the slope criterion. The run and the soak that follows from it are in D119.*
 
 ### D14. Runtime split: Node for the transport, Bun for everything else
 Settled by F7, not by preference.
@@ -1207,6 +1213,8 @@ rather than a hypothetical.
 `scratch/binding-only.node.ts` reproduces it in isolation and should move into the
 repository as a pinned regression measurement.
 
+*2026-09-06. Fixed upstream in 1.6.8 by fails-components/webtransport#511, prompted by #510. Re-measured on the same bench: -0.21 KB per stream over 16,000, heap 10.1 to 6.7 MB after collection, RSS plateaued at 136 MB from stream 2,000. D119.*
+
 ### D66. The leak is on both halves, and the alternative transport is flat
 Measured after D65, because "which side leaks" decides whether this blocks v1: in
 production the client is a browser using its own WebTransport and never touches this
@@ -1257,6 +1265,8 @@ implementation behind an interface does.
 - Install is *better*: per-platform npm optional dependencies rather than a
   `prebuild-install` fetch from GitHub Releases, so F1's supply-chain caveat goes away.
 
+*2026-09-06. At 1.6.8 the split bench reads 0.13 KB per stream on the server half and 0.11 on the client at 8,000 streams, both still falling as a fixed base amortises, with heap and RSS plateaued on both sides. D119.*
+
 ### D67. What happens to v1 if both transports leak
 Decided in advance rather than discovered, per the rule that a decision made while standing
 in the problem is not a decision.
@@ -1283,6 +1293,8 @@ the guarantee, including when the guarantee is bad.
 
 **This condition is currently NOT met** - `@moq/web-transport` is flat - so this decision
 is on the shelf rather than in force.
+
+*2026-09-06. The condition is unmet on the reference binding itself, so this entry leaves force. D73 had put it there. D119.*
 
 ### D68. moq is not adoptable yet, and the reason is not memory
 The byte count in D66 established one property. Running the existing suite against it
@@ -1449,6 +1461,8 @@ paid for itself by making this a comparison rather than a guess.
 
 **Reconsider when:** `NapiServer.close()` returns with an accept pending, and a peer reset
 reaches the responder. Both are checkable by running the committed benches.
+
+*2026-09-06. The leak this entry weighed against moq's two blockers is fixed at 1.6.8 (D119). The blockers stand, so the transport decision is unchanged and the reason for it is now correctness alone.*
 
 ### D74. Nothing outsider-controlled is ever interpolated into a `run:` block
 `${{ ... }}` in a workflow is not a shell variable. GitHub substitutes it into the script
@@ -1877,6 +1891,8 @@ and the README says so rather than leaving a reader to infer it from the leading
 nothing of that severity, and the upstream stream leak is fixed or routed around. Both are
 observable, neither is a date.
 
+*2026-09-06. Of the two reconsider conditions, the upstream stream leak is fixed (D119). The sweep condition has not been tested.*
+
 ### D84. `close()` is idempotent in both halves, not just the one that was
 Found by running the full lane soak after D76 rather than by reading the diff.
 
@@ -2097,6 +2113,8 @@ README, or an entry is added that is neither a position nor a measurement. Both 
 in review rather than by tooling, which is a weaker guarantee than this repository usually
 accepts, and is recorded as such.
 
+*2026-09-06. The leak was later reported as fails-components/webtransport#510 and fixed in 1.6.8 by #511. `KNOWN-ISSUES.md` carries it under Resolved upstream and nowhere else; the retired-claims gate holds the wording out of every other reader-facing document. D119.*
+
 ### D91. The consumer floor gate was wrong in both directions, and nobody was watching CI
 The gate that checks the published `.d.ts` against TypeScript 5.0 has now failed twice, in
 opposite directions, and the second failure was introduced by the commit that fixed the
@@ -2203,6 +2221,8 @@ the session dies.
 **Reconsider when:** a transport with honest flow control becomes the default. The window
 stays regardless - a responder is entitled to stop at zero and cannot know which transport it
 is talking to - but its size becomes a tuning question rather than the only defence.
+
+*2026-09-06. Re-measured at 1.6.8: a raw writer awaiting `ready` before every write ran 90,262 chunks ahead of a reader that had taken 75 in 1.5 s. Holds. D119.*
 
 ### D94. A decision claimed a test pinned something the test did not assert
 D57 established the two-line contract pattern and recorded the evidence: `emit` hover is 126
@@ -2756,6 +2776,8 @@ restarts the unit, the process drains on SIGTERM, and every live session drops o
 renewal. The trigger to revisit is the transport gaining a real `updateCert`, at which point
 the listener grows a matching method and the hook stops restarting.
 
+*2026-09-06. Re-checked at 1.6.8: no `updateCert` in the quiche package's JavaScript or in the native binary's strings; the umbrella still guards the call. Holds. D119.*
+
 ### D112. A claim found false is retired as a pattern, not removed as a sentence
 "`@transport-io/react` requires registration" was found stale three times and survived all
 three sweeps. Not through disagreement; the mechanics of a sweep let it through three
@@ -2912,4 +2934,55 @@ anyone adding it here, and the gate has a floor so a detector that stops matchin
 than reporting a clean sweep over nothing. The hole it leaves is a teardown whose timer is
 created inside a helper module with no teardown of its own; a narrower rule carrying an
 allowlist would be the worse trade.
+
+### D119. The reference binding at 1.6.8: per-stream retention is fixed, the other findings hold
+`@fails-components/webtransport` and its quiche transport moved from 1.6.7 to 1.6.8 on
+2026-09-06, the day 1.6.8 was published. Two commits in it matter here. "Fixes a memory leak
+in stream handling", fails-components/webtransport#511, prompted by #510 from this project,
+touches `lib/session.js` and `lib/stream.js`. "Security fixes" bumps mocha from 11.7.6 to
+11.8.0 in the upstream lockfile and touches no shipped code.
+
+**D13's trigger fired.** Every measurement re-run on darwin-arm64, Node 22.23.2:
+
+| measurement | at 1.6.7 | at 1.6.8 |
+|---|---|---|
+| `bench:stream-churn`, 16,000 streams, one process | 11.6 KB per stream, linear | -0.21 KB per stream; heap 10.1 to 6.7 MB; RSS plateaued at 136 MB from stream 2,000 |
+| split bench, 8,000 streams, server half | 5.95 KB per stream | 0.13 KB per stream and falling; plateaued |
+| split bench, client half | 5.88 KB per stream | 0.11 KB per stream and falling; plateaued |
+| `soak`, 500 sessions, 60 min, all three lanes | heap OOM at 2.8 min (D65) | slope -123.30 MB/h against a bound of 4; peak RSS 403.8 MB against 600; 12,904,000 call streams; 0 errors; PASS |
+| `soak:churn`, loopback, 90,042 cycles | | +16 B retained per session against 2048; PASS |
+
+The negative slope is RSS settling after warmup, not a gain; the bound is one-sided and the
+point is that nothing climbs. The soak passed the criterion with the `call()` lane included
+for the first time. The exemption in D13 lifts, D67 leaves force, and the first of D83's two
+reconsider conditions is met.
+
+**The four other findings hold**, each re-measured rather than re-read:
+
+- F4: `writeDatagram`'s condition still ignores `blocked` and `tooBig`. Writes of 1211, 1212
+  and 4844 bytes against a 1211-byte `maxDatagramSize` all resolve. The server receives the
+  first two and never sees the third, so the reported maximum is conservative by at least a
+  byte and an oversized write is still dropped without a word.
+- F5: `streamErrorCode` appears nowhere in 1.6.8's sources, and `fails.node.test.ts` still
+  asserts it undefined and passes.
+- D93: a raw writer awaiting `ready` before every write ran 90,262 chunks ahead of a reader
+  that had taken 75 in 1.5 s.
+- D111: no `updateCert` in the quiche package's JavaScript or in the native binary's strings.
+  The umbrella still guards the call, and it is still a no-op.
+
+Seen and not acted on: `datagrams.writable` prints a deprecation in favour of
+`createWritable()`. It was already there at 1.6.7, `fails.node.ts` has used
+`createWritable()` throughout, and neither the node tests nor the e2e print it. Only a raw
+probe did.
+
+**What moved because of it.** The leak statement left `README.md`, `packages/core/README.md`,
+`SECURITY.md`, `CLAUDE.md`, the site's front page, the deploy runbook, and the bench and soak
+headers. `KNOWN-ISSUES.md` lost its section and gained a "Resolved upstream" list of one line.
+The wording is retired in `scripts/check-retired-claims.ts`, so it cannot come back to a
+reader-facing document. `bench:stream-churn` no longer announces D13's trigger; it asserts the
+1 KB bound and exits non-zero above it, so a regression in a later binding fails a command
+rather than surfacing in a soak. The README ceiling ratcheted from 1740 to 1670.
+
+**Reconsider when:** the churn bench reports 1 KB per stream or more on a later binding, at
+which point the exemption returns with its cause, its number and its expiry, as D13 had it.
 
