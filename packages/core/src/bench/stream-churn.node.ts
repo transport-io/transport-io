@@ -1,18 +1,18 @@
 /**
- * Pinned reproduction of the upstream per-stream leak (D65).
+ * Regression measurement for per-stream retention in the reference binding.
  *
  * There is deliberately NO transport-io in this file. It opens a bidirectional stream on
- * the binding, writes, half-closes, reads to end, and repeats. That is enough to leak
- * ~11.6 KB per stream, unbounded and linear over 16,000 streams, which is why the leak is
- * attributed upstream rather than to us: our own path over an in-memory transport costs
- * 0.045 KB per call.
+ * the binding, writes, half-closes, reads to end, and repeats. Through 1.6.7 that retained
+ * ~11.6 KB per stream, unbounded and linear over 16,000 streams (D65). 1.6.8 fixed it
+ * upstream, fails-components/webtransport#511, and the same run measures flat (D119). Our
+ * own path over an in-memory transport costs 0.045 KB per call.
  *
- * Run it when evaluating a transport, or when checking whether upstream has fixed it:
+ * Run it on every binding upgrade, and when evaluating a transport:
  *
  *   node --expose-gc packages/core/src/bench/stream-churn.node.ts
  *
- * A result meaningfully below 11.6 KB per stream means the situation has changed and D65
- * should be revisited.
+ * D13 bounds the call() lane at under 1 KB per stream on this measurement. Above it, the
+ * retention is back and the exemption that lifted in D119 would have to return with it.
  */
 import { execFileSync } from 'node:child_process'
 import { createHash, X509Certificate } from 'node:crypto'
@@ -21,15 +21,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Http3Server, WebTransport } from '@fails-components/webtransport'
 
-/** Measured 2026-08-26 on darwin-arm64, Node 22.23.2, over 16,000 streams. */
-const OBSERVED_KB_PER_STREAM = 11.6
+/** Measured 2026-09-06 on darwin-arm64, Node 22.23.2, binding 1.6.8, over 16,000 streams. */
+const OBSERVED_KB_PER_STREAM = -0.21
 
-/**
- * D13 exempts the `call()` lane from the memory-soak slope bound because of this leak, and
- * says the exemption lifts automatically when this bench comes back under 1 KB per stream.
- * That trigger is only mechanical if something checks it, so this bench does.
- */
-const EXEMPTION_LIFTS_BELOW_KB = 1
+/** D13's bound for the call() lane. A bound is only a bound if something checks it. */
+const BOUND_KB_PER_STREAM = 1
 
 const dir = mkdtempSync(join(tmpdir(), 'bind-'))
 execFileSync('openssl', [
@@ -143,18 +139,12 @@ const end = process.memoryUsage()
 console.log(`delta heap ${mb(end.heapUsed - base.heapUsed)} MB over ${ROUNDS} streams`)
 const perStream = (end.heapUsed - base.heapUsed) / ROUNDS / 1024
 console.log(
-  `  = ${perStream.toFixed(2)} KB per stream  (pinned observation: ${OBSERVED_KB_PER_STREAM})`,
+  `  = ${perStream.toFixed(2)} KB per stream  (last observation ${OBSERVED_KB_PER_STREAM}, bound < ${BOUND_KB_PER_STREAM})`,
 )
-if (perStream < EXEMPTION_LIFTS_BELOW_KB) {
-  console.log('')
-  console.log(`  Below ${EXEMPTION_LIFTS_BELOW_KB} KB per stream. This is D13's trigger:`)
-  console.log("  the call() lane's soak exemption lifts, and the full soak now has to pass.")
-  console.log('  Run: npm run soak     (not just npm run soak:lanes)')
-} else if (perStream < OBSERVED_KB_PER_STREAM / 2) {
-  console.log('')
-  console.log("  Well below the pinned observation, but not yet under D13's")
-  console.log(`  ${EXEMPTION_LIFTS_BELOW_KB} KB trigger. Update the pin in D65 and re-measure.`)
-}
+const ok = perStream < BOUND_KB_PER_STREAM
+console.log(
+  ok ? '  PASS' : "  FAIL: per-stream retention is back above D13's bound. See D65 and D119.",
+)
 server.stopServer()
 rmSync(dir, { recursive: true, force: true })
-process.exit(0)
+process.exit(ok ? 0 : 1)

@@ -1,5 +1,6 @@
 /**
- * The per-stream leak (D65), measured on each side separately.
+ * Per-stream retention in the reference binding (D65, fixed upstream in 1.6.8), measured on
+ * each side separately.
  *
  * The single-process bench conflates two populations. In production the client is a
  * browser using its own native WebTransport and never touches this binding - the binding

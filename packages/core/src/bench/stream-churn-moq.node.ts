@@ -2,9 +2,10 @@
  * The same per-stream churn probe (D65), against the alternative transport.
  *
  * Identical counts and identical measurement to `stream-churn.node.ts`, so the numbers
- * are comparable. That file measures the reference binding at ~11.76 KB per bidirectional
- * stream; this one measures `@moq/web-transport`, a NAPI-RS binding over a Rust QUIC
- * stack, so the seam in ADR 0007 has a number rather than a hope.
+ * are comparable. That file measured the reference binding at ~11.76 KB per bidirectional
+ * stream through 1.6.7 and flat from 1.6.8 (D65, D119); this one measures
+ * `@moq/web-transport`, a NAPI-RS binding over a Rust QUIC stack, so the seam in ADR 0007
+ * has a number rather than a hope.
  *
  *   node --expose-gc packages/core/src/bench/stream-churn-moq.node.ts [--rounds 16000]
  */
@@ -142,7 +143,9 @@ global.gc?.()
 const end = process.memoryUsage()
 const perStream = (end.heapUsed - base.heapUsed) / ROUNDS / 1024
 console.log(`delta heap ${mb(end.heapUsed - base.heapUsed)} MB over ${ROUNDS} streams`)
-console.log(`  = ${perStream.toFixed(2)} KB per stream   (reference binding: 11.60)`)
+console.log(
+  `  = ${perStream.toFixed(2)} KB per stream   (reference binding: 11.60 at 1.6.7, flat at 1.6.8)`,
+)
 
 session.close(0, 'done')
 server.close()

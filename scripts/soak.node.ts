@@ -1,9 +1,9 @@
 /**
  * The memory soak. Stage 1 graduation criterion D13.
  *
- * D2 opens a bidirectional stream per call, which maximally exercises the upstream path
- * with a known leak (#425: RSS 500M -> 700M+ over 12h at 500 concurrent). This is the one
- * criterion that can still fail, so the number matters more than the run.
+ * D2 opens a bidirectional stream per call, the path on which the reference binding retained
+ * memory per stream until 1.6.8 (D65, fixed upstream; D119). The call lane's exemption
+ * lifted with that release, so all three lanes are bound here.
  *
  * The threshold is an ABSOLUTE SLOPE BY LINEAR FIT, not two point samples. The original
  * criterion was "5% growth between T+10 and T+60", and against #425's own 16.7 MB/h that
@@ -34,9 +34,8 @@ const arg = (name: string, fallback: number): number => {
 
 /**
  * `--lanes emit,unreliable` measures only the lanes bound by D13's slope criterion.
- * `--lanes call` measures the exempted lane, whose number is recorded rather than gated.
- * Default is all three, which will fail until the upstream leak is fixed - that is the
- * exemption being visible rather than silent.
+ * `--lanes call` measures the lane that was exempted until D13's trigger fired (D119).
+ * Default is all three, and all three are bound.
  */
 const LANES = argStr('lanes', 'emit,unreliable,call').split(',')
 const MINUTES = arg('minutes', 60)

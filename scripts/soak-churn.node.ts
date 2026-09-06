@@ -8,11 +8,9 @@
  *
  * This one connects and disconnects, and measures what a *dead* session leaves behind.
  *
- * It runs over the in-memory loopback transport, deliberately. D65 established that the
- * reference binding leaks ~5.95 KB per bidirectional stream upstream; measuring session
- * churn across it would report that leak plus ours, indistinguishably, and the question
- * here is only ever "do WE leak". Loopback costs 0.045 KB per call, so anything this finds
- * is ours.
+ * It runs over the in-memory loopback transport, deliberately. The question here is only
+ * ever "do WE leak", and a real transport would add whatever it retains to the figure,
+ * indistinguishably. Loopback costs 0.045 KB per call, so anything this finds is ours.
  *
  * The bound is retained bytes per session churned - an absolute quantity, and a quantity
  * this library counts. Not a percentage of a baseline measured at run time: that is the

@@ -1,9 +1,9 @@
 /**
  * The alternative transport, behind the same seam.
  *
- * `@moq/web-transport` is a NAPI-RS binding over a Rust QUIC stack. It is measured flat
- * on the per-stream churn that costs the reference binding 11.6 KB (D66), but a byte
- * count establishes exactly one property. This adapter exists so the existing suite can
+ * `@moq/web-transport` is a NAPI-RS binding over a Rust QUIC stack. It measured flat on
+ * the per-stream churn that cost the reference binding 11.6 KB through 1.6.7 (D66), but a
+ * byte count establishes exactly one property. This adapter exists so the existing suite can
  * run against it unchanged and establish the rest.
  *
  * Its surface is promise-and-method based rather than WHATWG streams, so the wrapping
