@@ -100,6 +100,24 @@ const RETIRED: readonly Retired[] = [
     why: 'a comment explaining a side effect of break is the smell; the guide says it once, in prose',
   },
   {
+    pattern: /\bthere is no (websocket )?fallback\b/i,
+    lastSeen: 'There is no fallback to WebSocket or any other transport, under any condition.',
+    where: 'PROTOCOL.md §2, KNOWN-ISSUES.md, SECURITY.md, AGENTS.md, 2026-09-07',
+    why: 'the emit lane over a WebSocket is a mapping since D122, refused in the contract rather than absent',
+  },
+  {
+    pattern: /\bno websocket fallback\b/i,
+    lastSeen: 'No WebSocket fallback. An unsupported runtime gets `WT_NO_SUPPORT`.',
+    where: 'README.md, packages/core/README.md, 2026-09-07',
+    why: 'as above: one fallback exists, carrying emits only, by declaration in the contract (D121, D122)',
+  },
+  {
+    pattern: /one contract, no fallback\b/i,
+    lastSeen: 'Two lanes, one contract, no fallback.',
+    where: 'README.md, packages/core/README.md, CLAUDE.md, 2026-09-07',
+    why: 'as above',
+  },
+  {
     pattern: /not (implemented|in this version)[^.]{0,200}\bframework bindings\b/i,
     lastSeen:
       '## Not implemented Namespaces, presence, middleware chains, binary codecs, framework bindings, the Redis adapter.',

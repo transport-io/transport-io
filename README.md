@@ -6,7 +6,7 @@
 </p>
 
 Real-time apps over WebTransport. Socket.IO's shape, on a transport with multiple streams
-and datagrams. Two lanes, one contract, no fallback.
+and datagrams. Two lanes, one contract, one fallback.
 
 ```ts
 import { defineContract, reliable, unreliable } from 'transport-io'
@@ -175,7 +175,8 @@ your browser code: keep running your own bundler and point `--static` at the out
 None of these are going to change. [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) has the reasoning
 and the measurements behind each one, and is worth reading before you build on this.
 
-- **WebTransport only.** No WebSocket fallback. An unsupported runtime gets `WT_NO_SUPPORT`.
+- **WebTransport first.** The WebSocket fallback carries emits only, where the contract
+  declares it; calls and streams need WebTransport.
 - **Chrome and Firefox.** Safari ships WebTransport and cannot talk to a quiche-backed
   server. Unsupported until that is fixed upstream.
 - **UDP has to reach your process.** No proxy in front of it, no CDN, and no load balancer
@@ -201,9 +202,9 @@ section comes from Socket.IO's own documentation and source, linked at the end, 
 can be checked.
 
 **Where Socket.IO is the better choice.** Socket.IO falls back to WebSocket, and then to HTTP
-long-polling. Safari works, and so do networks that block UDP. transport-io has no fallback:
-an unsupported browser gets `WT_NO_SUPPORT` and a UDP-blocked path gets `WT_UDP_UNREACHABLE`. If you
-have to support Safari, or cannot rely on UDP reaching your server, use Socket.IO. Socket.IO
+long-polling. Safari works, and so do networks that block UDP. transport-io's fallback carries
+emits only, so calls and streams need WebTransport. For those on Safari, or where UDP cannot
+reach your server, use Socket.IO. Socket.IO
 also guarantees ordering across a transport upgrade, buffers client events across a
 reconnection, offers at-least-once client-to-server delivery with `retries`, and has
 namespaces, middleware, a Redis adapter and years of production use. transport-io starts a new

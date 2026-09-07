@@ -27,6 +27,7 @@ import {
   DATAGRAM_HEADER_BYTES,
   DATAGRAM_QUEUE_MAX,
   EMIT_QUEUE_MAX,
+  FALLBACK_UNRELIABLE_LOW_WATER,
   FrameType,
   HANDSHAKE_DEADLINE_MS,
   HOST_ORDINAL_QUARANTINE_MS,
@@ -36,6 +37,7 @@ import {
   SEQUENCE_STATE_RETENTION_MS,
   STREAM_FRAME_OVERHEAD_BYTES,
   STREAM_INITIAL_CREDIT,
+  WS_CLOSE_REASON_MAX_BYTES,
 } from '../packages/core/src/protocol.ts'
 import { PROBE_BUDGET_MS } from '../packages/core/src/transport/probe.ts'
 
@@ -395,6 +397,16 @@ const TABLE_CONSTANTS: readonly TableConstant[] = [
   { row: /WT_HANDSHAKE_TIMEOUT/, expect: HANDSHAKE_DEADLINE_MS, name: 'HANDSHAKE_DEADLINE_MS' },
   { row: /WT_PEER_TOO_SLOW/, expect: EMIT_QUEUE_MAX, name: 'EMIT_QUEUE_MAX' },
   { row: /WT_UDP_UNREACHABLE/, expect: PROBE_BUDGET_MS, name: 'PROBE_BUDGET_MS' },
+  {
+    row: /holds fewer than/,
+    expect: FALLBACK_UNRELIABLE_LOW_WATER,
+    name: 'FALLBACK_UNRELIABLE_LOW_WATER',
+  },
+  {
+    row: /reason cut to/,
+    expect: WS_CLOSE_REASON_MAX_BYTES,
+    name: 'WS_CLOSE_REASON_MAX_BYTES',
+  },
 ]
 
 const withoutFences = proto.replace(/```[\s\S]*?```/g, '')

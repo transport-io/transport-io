@@ -13,6 +13,7 @@ test('fails-components: both lanes, a call, an abort and an oversized datagram',
     name: 'fails-components',
     port: randomPort(),
     listen: (o) => listenHttp3({ ...o, path: '/' }),
+    lanes: 'all',
     propagatesAbortToHandler: true,
     connect: connectHttp3,
   })

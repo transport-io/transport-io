@@ -17,7 +17,7 @@ migration guide gets written deliberately.
 # transport-io
 
 A TypeScript library for real-time apps over WebTransport. Socket.IO's shape, on a
-transport with multiple streams and datagrams. Two lanes, one contract, no fallback.
+transport with multiple streams and datagrams. Two lanes, one contract, one fallback.
 
 **Read this file at the start of every session.** If you are about to write a deprecation
 path, a compatibility shim, a migration guide, or a version check against an older release
@@ -58,8 +58,10 @@ Full text in `DECISIONS.md`; this is the summary a fresh session needs so it can
   time. The lane is a property of the message type, never of the call site.
 - **D2 streams-as-acks.** Each `call` opens its own bidirectional stream. No correlation
   IDs, no pending map. A stalled call cannot block another call.
-- **D3 no-fallback.** WebTransport only. A WebSocket fallback would silently make the
-  unreliable lane reliable and ordered - a lie about the user's data.
+- **D3, as amended by D121 and D122.** WebTransport first. The one fallback carries the emit
+  lane over a WebSocket, and exists only for a contract whose unreliable events declare what
+  they accept there; the declaration is gated by a type, and a session is refused otherwise.
+  Nothing degrades quietly.
 - **D4 new-session-on-reconnect.** Reconnect is a new session. Room membership does not
   survive it.
 - **D5 adapter-boundary.** Frames cross as bytes. Every method async. `MemoryAdapter` is
@@ -111,6 +113,10 @@ Part 2.
 - **The reference transport applies no write backpressure.** `writer.ready` resolves
   unconditionally, measured: a producer ran 136,523 frames ahead of a consumer that had taken
   40, growing with the run. `stream()` carries its own credit window because of it.
+- **A browser WebSocket has no drain event either**, only `bufferedAmount`, so the fallback's
+  sink polls it before a write resolves. A browser pins no hash for a WebSocket, so the dev
+  fallback is plain `ws://` on loopback. `ws` is an optional peer loaded by dynamic import,
+  like the quiche transport.
 
 ## Rules that exist because something nearly shipped
 

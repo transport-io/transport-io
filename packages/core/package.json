@@ -28,6 +28,14 @@
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
+    },
+    "./websocket-transport": {
+      "types": "./dist/transport/websocket.d.ts",
+      "default": "./dist/transport/websocket.js"
+    },
+    "./websocket-node-transport": {
+      "types": "./dist/transport/websocket.node.d.ts",
+      "default": "./dist/transport/websocket.node.js"
     }
   },
   "files": [
@@ -71,5 +79,13 @@
     "streaming",
     "typescript",
     "websocket-alternative"
-  ]
+  ],
+  "peerDependencies": {
+    "ws": "^8.21.3"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
+  }
 }

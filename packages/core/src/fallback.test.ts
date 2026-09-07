@@ -55,6 +55,7 @@ const failed = (p: Promise<unknown>): Promise<TransportError> =>
     (e: unknown) => e as TransportError,
   )
 
+// norm: fallback-refused-unless-declared
 describe('the runtime half of the gate: a session refuses before frame 0', () => {
   test('a websocket pair with an undeclared unreliable event is refused on both sides', async () => {
     const table = await buildEventTable(undeclared)

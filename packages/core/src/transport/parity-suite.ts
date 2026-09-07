@@ -23,7 +23,8 @@ import type { Connection } from './types.ts'
 
 const contract = defineContract({
   chat: { lane: 'reliable', payload: type$<{ body: string }>() },
-  cursor: { lane: 'unreliable', payload: type$<{ n: number }>() },
+  // Declared, so the suite runs on a transport that carries the reliable lane only.
+  cursor: { lane: 'unreliable', payload: type$<{ n: number }>(), fallback: 'newest' },
   echo: { lane: 'reliable', payload: type$<{ n: number }>(), returns: type$<{ n: number }>() },
   slow: { lane: 'reliable', payload: type$<null>(), returns: type$<null>() },
 })
@@ -35,6 +36,11 @@ interface Listener {
   stop: () => void
 }
 export interface UnderTest {
+  /**
+   * Which lanes the transport carries. `'reliable-only'` skips the two call assertions by
+   * capability rather than by comment, and asserts the refusal a call meets instead.
+   */
+  readonly lanes: 'all' | 'reliable-only'
   /**
    * Whether a peer's stream reset reaches the responder's `ctx.signal`.
    *
@@ -156,23 +162,34 @@ export async function runParity(t: UnderTest): Promise<void> {
   await settle()
   assert.deepEqual(cursor, [7], `${t.name}: unreliable lane`)
 
-  // Half-close for the request, response read to stream close.
-  assert.deepEqual(await client.call('echo', { n: 21 }), { n: 42 }, `${t.name}: call`)
+  if (t.lanes === 'all') {
+    // Half-close for the request, response read to stream close.
+    assert.deepEqual(await client.call('echo', { n: 21 }), { n: 42 }, `${t.name}: call`)
 
-  // AbortSignal maps to a stream reset. The caller always rejects; whether the reset
-  // reaches the responder is a property of the transport, asserted either way so a
-  // regression in the supported direction is caught.
-  const ac = new AbortController()
-  const pending = client.call('slow', null, { signal: ac.signal })
-  await settle(150)
-  ac.abort()
-  await assert.rejects(pending, `${t.name}: abort rejects the caller`)
-  await settle(900)
-  assert.equal(
-    handlerSawAbort,
-    t.propagatesAbortToHandler,
-    `${t.name}: expected ctx.signal to ${t.propagatesAbortToHandler ? '' : 'NOT '}fire`,
-  )
+    // AbortSignal maps to a stream reset. The caller always rejects; whether the reset
+    // reaches the responder is a property of the transport, asserted either way so a
+    // regression in the supported direction is caught.
+    const ac = new AbortController()
+    const pending = client.call('slow', null, { signal: ac.signal })
+    await settle(150)
+    ac.abort()
+    await assert.rejects(pending, `${t.name}: abort rejects the caller`)
+    await settle(900)
+    assert.equal(
+      handlerSawAbort,
+      t.propagatesAbortToHandler,
+      `${t.name}: expected ctx.signal to ${t.propagatesAbortToHandler ? '' : 'NOT '}fire`,
+    )
+  } else {
+    // No bidirectional streams: a call is refused with the code that says where it went,
+    // and the session it was refused on is still up.
+    await assert.rejects(
+      client.call('echo', { n: 21 }),
+      (e: unknown) => (e as TransportError).code === 'WT_LANE_UNAVAILABLE',
+      `${t.name}: call refused on a reliable-only transport`,
+    )
+    assert.equal(client.getSnapshot().status, 'connected', `${t.name}: still connected`)
+  }
 
   // Our layer refuses oversize before the transport can silently discard it.
   assert.throws(

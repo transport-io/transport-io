@@ -29,6 +29,8 @@ Node ≥ 22. TypeScript ≥ 5.0 for consumers.
 | `transport-io/browser-transport` | `browserClient`, `connectBrowser` | browser |
 | `transport-io/dev-transport` | `devClient`, `connectDev`, `DEV_ENDPOINT` | browser, loopback only |
 | `transport-io/node-transport` | `listenHttp3`, `listenDev`, `http3Client`, `connectHttp3`, `resetCodeFromError` | Node only |
+| `transport-io/websocket-transport` | `connectWebSocket` | anywhere with a `WebSocket` global |
+| `transport-io/websocket-node-transport` | `listenWebSocket` | Node only, needs the optional peer `ws` |
 | `transport-io/testing` | `HostileAdapter`, `loopbackPair`, `UnreliableConnection` | tests |
 | `@transport-io/react` | `TransportProvider`, `createHooks`, `useClient`, `useConnection`, `useEvent`, `useCall`, `useStream` | React 19.2 or newer |
 
@@ -158,7 +160,7 @@ client.disconnect()
 | `on(event, handler)` | Returns an unsubscribe function. There is no `off()`. |
 | `subscribe(cb)` / `getSnapshot()` | For `useSyncExternalStore`. `getSnapshot` is referentially stable. |
 | `stats()` | Per-peer drop counters. |
-| `withFallback<M>(opts)` | `ClientOptions` plus `fallback`, a connector for a reliable-only transport. Native first on every connect; the fallback only on `WT_NO_SUPPORT` or `WT_UDP_UNREACHABLE`. Returns `FallbackClient<M>`: no `call()` or `stream()`; they live on `native`, which is `null` on a fallback session. Compiles only when every unreliable event declares a fallback, and the error names the event. |
+| `withFallback<M>(opts)` | `ClientOptions` plus `fallback`, a connector for a reliable-only transport: `() => connectWebSocket({ url })`. Native first on every connect; the fallback only on `WT_NO_SUPPORT` or `WT_UDP_UNREACHABLE`. Returns `FallbackClient<M>`: no `call()` or `stream()`; they live on `native`, which is `null` on a fallback session. Compiles only when every unreliable event declares a fallback, and the error names the event. |
 
 `ClientState` is `{ status, sessionId, rooms, lastError, transport, fallbackReason }` where
 `status` is `'idle' | 'connecting' | 'connected' | 'closing' | 'closed'`, `transport` is
@@ -194,10 +196,12 @@ await server.listen(listener, { onAcceptError: (e) => console.error(e) })
 with no argument leaves `accept(conn)` to you, which is for the case where a connection must
 be inspected before it is accepted.
 
-`server.withFallback(source)` accepts from a reliable-only transport after `listen()`, under
-the same compile-time gate as the client; a session whose contract has an undeclared
-unreliable event is refused at accept with `WT_RELIABILITY_REFUSED` and counted.
-`peer.transport` names what carries each peer.
+`server.withFallback(await listenWebSocket({ port, cert, privKey }))` accepts from the
+WebSocket listener after `listen()`, under the same compile-time gate as the client; a session
+whose contract has an undeclared unreliable event is refused at accept with
+`WT_RELIABILITY_REFUSED` and counted. The listener is `wss://` with a certificate and `ws://`
+without one, and it answers the probe from `WT_UDP_UNREACHABLE` over TCP. `ws` is an optional
+peer, installed only where a listener runs. `peer.transport` names what carries each peer.
 
 A handler receives `ctx.signal`, which fires when the caller aborts; one that returns
 promptly can ignore it. It also receives `ctx.peer`, the `ServerPeer` that made the call,
@@ -223,7 +227,8 @@ is never thrown from this library.
 
 | code | means | do |
 |---|---|---|
-| `WT_NO_SUPPORT` | runtime has no WebTransport | nothing - there is no fallback |
+| `WT_NO_SUPPORT` | runtime has no WebTransport, or no WebSocket where a fallback was configured | give the client a fallback with `withFallback`, or use Chrome or Firefox |
+| `WT_LANE_UNAVAILABLE` | `call()` or `stream()` on a session over the WebSocket fallback | check `client.native` first; it is `null` there |
 | `WT_DATAGRAM_TOO_LARGE` | payload past the path limit | shorten it, or use the reliable lane |
 | `WT_ROOM_NOT_JOINED` | broadcast to a room this session is not in | join first |
 | `WT_SESSION_CLOSED` | session closed while an operation was pending | reconnect and retry |

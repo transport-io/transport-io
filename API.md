@@ -444,6 +444,30 @@ The session refuses at connect as well, for a caller with no compiler:
 `WT_RELIABILITY_REFUSED`, before the handshake. The server side is `server.withFallback`,
 under the same type (§3).
 
+The one fallback transport is the emit lane over a WebSocket, `PROTOCOL.md` §3.3:
+
+```ts standalone
+import { defineContract, type MapOf, reliable, unreliable, withFallback } from 'transport-io'
+import { connectBrowser } from 'transport-io/browser-transport'
+import { connectWebSocket } from 'transport-io/websocket-transport'
+
+export const contract = defineContract({
+  chat: reliable<{ from: string; body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>({ fallback: 'newest' }),
+})
+export interface AppMap extends MapOf<typeof contract> {}
+
+export const client = withFallback<AppMap>({
+  contract,
+  connect: () => connectBrowser({ url: 'https://example.com:4433/' }),
+  fallback: () => connectWebSocket({ url: 'wss://example.com/transport-io' }),
+})
+```
+
+A `wss://` origin needs a certificate the platform trusts; a browser pins no hash for a
+WebSocket, so in local development the listener is `ws://` on loopback. A session on the
+fallback has no idle timeout: a dead TCP path is noticed when the platform reports it.
+
 ---
 
 ## 3. Server
@@ -478,6 +502,25 @@ only, after `listen()`. Its parameter type is the gate from §2.5: the call comp
 every unreliable event in the contract declares a fallback (§1.4). A session that reaches
 `accept` from such a source with an undeclared event is refused with `WT_RELIABILITY_REFUSED`
 and counted, for callers with no compiler. `peer.transport` says what carries each peer.
+
+The source is `listenWebSocket`, from `transport-io/websocket-node-transport`, in a
+`*.node.ts` file:
+
+```ts standalone
+import { listenWebSocket } from 'transport-io/websocket-node-transport'
+
+declare const cert: string
+declare const privKey: string
+
+export async function fallbackListener(port: number) {
+  return await listenWebSocket({ port, cert, privKey, path: '/transport-io' })
+}
+```
+
+With `cert` and `privKey` it is `wss://` on the certificate the site already serves; without
+them it is `ws://`. It answers any HTTP request on its port, which makes it the probe target
+that turns a failed handshake into `WT_UDP_UNREACHABLE` (§3.3). It needs `ws`, an optional
+peer of this package, installed only where a listener runs.
 
 ### 3.1 Rooms are server-authoritative
 

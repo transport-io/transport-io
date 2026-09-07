@@ -54,14 +54,28 @@ export class DatagramQueue<T> {
     this.#items.length = 0
   }
 
-  /** Drains what is still fresh. Anything past its TTL is discarded here, not on entry. */
-  drain(now: number): T[] {
+  /**
+   * Drains what is still fresh. Anything past its TTL is discarded here, not on entry.
+   *
+   * `limit` caps how many fresh items leave; the rest stay queued with their original
+   * timestamps, so a later drain still judges their age from when they were pushed. The
+   * WebSocket mapping uses it to take only as many as the emit lane has room for.
+   */
+  drain(now: number, limit: number = Number.POSITIVE_INFINITY): T[] {
     const out: T[] = []
-    for (const q of this.#items) {
-      if (now - q.at >= this.#ttlMs) this.#staleDropped++
-      else out.push(q.item)
+    let taken = 0
+    while (taken < this.#items.length) {
+      const q = this.#items[taken] as Queued<T>
+      if (now - q.at >= this.#ttlMs) {
+        this.#staleDropped++
+        this.#items.splice(taken, 1)
+        continue
+      }
+      if (out.length >= limit) break
+      out.push(q.item)
+      taken++
     }
-    this.#items.length = 0
+    this.#items.splice(0, taken)
     return out
   }
 

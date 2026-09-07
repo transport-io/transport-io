@@ -13,6 +13,7 @@ import {
   CloseCode,
   Codec,
   EVENT_ID_NOT_APPLICABLE,
+  FALLBACK_UNRELIABLE_LOW_WATER,
   FrameType,
   HANDSHAKE_DEADLINE_MS,
   MAX_CONCURRENT_CALL_STREAMS,
@@ -1211,7 +1212,25 @@ export class Session {
     this.#flushScheduled = true
     this.#schedule(() => {
       this.#flushScheduled = false
-      for (const dg of this.#dgQueue.drain(this.#now())) this.#conn.sendDatagram(dg)
+      if (this.#conn.kind() === 'webtransport') {
+        for (const dg of this.#dgQueue.drain(this.#now())) this.#conn.sendDatagram(dg)
+        return
+      }
+      // §3.3: on a transport with no datagrams the emit lane carries them, each wrapped in a
+      // DATAGRAM frame, and only while that lane has room. Above the low-water mark they stay
+      // in the ring, where overflow and TTL drop them, so a burst on the unreliable lane can
+      // never push the reliable one to `WT_PEER_TOO_SLOW`. The rest leave when a write
+      // completes; see `#flushEmits`.
+      const room = FALLBACK_UNRELIABLE_LOW_WATER - this.#emitQueue.depth
+      if (room <= 0) return
+      for (const dg of this.#dgQueue.drain(this.#now(), room)) {
+        this.sendFrame({
+          type: FrameType.DATAGRAM,
+          codec: Codec.JSON,
+          eventId: EVENT_ID_NOT_APPLICABLE,
+          payload: dg,
+        })
+      }
     })
   }
 
@@ -1240,6 +1259,11 @@ export class Session {
         this.#emitQueue.shift()
         this.#writing = false
         this.#flushEmits()
+        // A write completing is what makes room for the unreliable frames parked in the
+        // ring on the WebSocket mapping; nothing else would ever move them.
+        if (this.#conn.kind() !== 'webtransport' && this.#dgQueue.stats().queueDepth > 0) {
+          this.#flushDatagrams()
+        }
       },
       (e: unknown) => {
         this.#writing = false
@@ -1315,6 +1339,19 @@ export class Session {
     }
     if (frame.type === FrameType.EMIT) {
       await this.#deliver(frame.eventId, frame.payload, this.#origin)
+      return
+    }
+    if (frame.type === FrameType.DATAGRAM) {
+      // §3.3: valid on the WebSocket mapping only. On a session that has real datagrams, a
+      // wrapped one is a peer routing around the lane's guarantees, and it is refused.
+      if (this.#conn.kind() === 'webtransport') {
+        throw new TransportError(
+          'WT_PROTOCOL_ERROR',
+          'a DATAGRAM frame arrived on a WebTransport session',
+          'DATAGRAM frames are valid only on the WebSocket mapping. See PROTOCOL.md §3.3.',
+        )
+      }
+      this.#onDatagram(frame.payload)
       return
     }
     if (frame.type === FrameType.JOIN || frame.type === FrameType.LEAVE) {

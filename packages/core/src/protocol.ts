@@ -9,6 +9,25 @@
 /** PROTOCOL.md §4.2 - Stage 0 requires exact equality and refuses otherwise. */
 export const PROTOCOL_VERSION = 0
 
+/**
+ * PROTOCOL.md §3.3, the emit lane over WebSocket.
+ *
+ * Unreliable frames ride the emit lane there, wrapped, and only while that lane has room:
+ * above this many queued frames they stay in the datagram ring, where overflow and TTL drop
+ * them, so a burst on the unreliable lane can never disconnect a peer for being slow on the
+ * reliable one. Absolute, not a proportion of `EMIT_QUEUE_MAX`.
+ */
+export const FALLBACK_UNRELIABLE_LOW_WATER = 32
+
+/**
+ * PROTOCOL.md §3.3. RFC 6455 reserves 1000 to 2999 and gives applications 4000 to 4999, so a
+ * session close code is carried as itself plus this offset, and `WT_NO_ERROR` as the normal
+ * closure code. A close reason on a WebSocket is at most 123 bytes.
+ */
+export const WS_CLOSE_NORMAL = 1000
+export const WS_CLOSE_OFFSET = 3000
+export const WS_CLOSE_REASON_MAX_BYTES = 123
+
 /** PROTOCOL.md §5.2 */
 export const FrameType = {
   HANDSHAKE: 0x01,
@@ -19,6 +38,8 @@ export const FrameType = {
   JOIN: 0x06,
   LEAVE: 0x07,
   CALL_CREDIT: 0x08,
+  /** §3.3: a §7.1 datagram carried on the emit lane. Valid on the WebSocket mapping only. */
+  DATAGRAM: 0x09,
 } as const
 export type FrameType = (typeof FrameType)[keyof typeof FrameType]
 

@@ -122,7 +122,8 @@ the others.
 These are properties of the library, not things it will grow out of.
 
 - **Chrome and Firefox only.** Safari establishes a session and then never sends.
-- **No fallback.** An unsupported runtime gets `WT_NO_SUPPORT` and nothing else.
+- **One fallback, emits only.** A WebSocket carries the emit lane where the contract declares
+  it; calls and streams need WebTransport.
 - **It needs raw UDP ingress to your process.** Many managed platforms do not provide it.
   Check yours before building on this.
 - **`0.x`, so a minor bump may break you.** A minor release is allowed to change the wire, so

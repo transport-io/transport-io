@@ -11,9 +11,12 @@ Status: Phase 1a in progress. Entries below are settled unless marked OPEN.
 
 ## Part 1 - Fixed design decisions (from the kickoff, not relitigated)
 
-> **These rows are the kickoff as it was written and are not updated in place.** Two have
-> since moved: D1's lane values are now `reliable` and `unreliable` (D92), and `stream()` is
-> shipped rather than a non-goal (D93). The rows below keep their original wording because
+> **These rows are the kickoff as it was written and are not updated in place.** Three have
+> since moved: D1's lane values are now `reliable` and `unreliable` (D92), `stream()` is
+> shipped rather than a non-goal (D93), and D3's "no WebSocket fallback, ever" held until
+> 2026-09-07, when D121 and D122 admitted one fallback, the emit lane over a WebSocket, refused
+> in the contract rather than silently degrading. The lie D3 named is still refused; what
+> changed is that refusal became a type an application can satisfy. The rows below keep their original wording because
 > this table is a record of what was decided, not a description of the current API. For that,
 > read `API.md`.
 
@@ -3050,3 +3053,47 @@ that an undeclared one fails there.
 
 **Reconsider when:** a second policy is asked for by name, with the guarantee it preserves
 written down before its name.
+
+### D122. The one fallback is the emit lane over a WebSocket
+Of every candidate costed on 2026-09-07, this is the one that carries a lane without
+rebuilding the session: a WebSocket is one ordered, reliable pipe per direction, which is the
+emit lane's own definition (D32), so the socket is both peers' emit streams and the framer,
+the handshake and the queues run untouched above the seam. Everything else on the seam
+refuses. The multiplexed variant, virtual streams with correlation ids and credit on every
+one, is Socket.IO's engine rebuilt and was declined.
+
+**Decision.** `connectWebSocket` for the client, runtime-neutral over the global `WebSocket`;
+`listenWebSocket` for the server, over `ws`, an optional peer loaded by dynamic import as the
+quiche transport is, `wss://` with the site's certificate and `ws://` without one, and its
+HTTP server answers the D120 probe. Calls and `stream()` fail locally with
+`WT_LANE_UNAVAILABLE`, which the types make unreachable through `FallbackClient`. A declared
+unreliable event travels as a `DATAGRAM` frame (0x09) whose payload is a §7.1 datagram
+unchanged, so the hub's fan-out bytes are forwarded as they are and the producing origin
+survives. Unreliable frames leave the ring for the emit lane only while that lane holds fewer
+than 32 frames, so a burst on the unreliable lane can never close a session as
+`WT_PEER_TOO_SLOW`. Close codes ride the private range, 3000 plus the code, with `WT_NO_ERROR`
+as 1000, and the reason cut to 123 bytes on a character boundary. A local close settles
+`closed` at once: `ws` waits thirty seconds for a closing handshake a paused peer never
+answers, and a session that has decided to drop a slow peer must not wait behind that peer.
+
+**The sink polls `bufferedAmount`.** A browser socket has no drain event, so a write resolves
+only when `bufferedAmount` is at or below 65,536 bytes. Without it every write resolves at
+once and the emit queue's bound measures nothing, which is D93 on a new transport.
+
+**Measured.** On a real `ws` pair with the receiving socket paused, the client's
+`bufferedAmount` passed 176 MB within 250 ms. With the sink polling, a producer emitting one
+32 KiB frame per task reaches the 256-frame bound and is closed as `WT_PEER_TOO_SLOW` in
+340 ms; with the poll removed the same test never closes, and the same run with the low-water
+mark set to infinity keeps the queue at one frame. The parity suite runs against the mapping
+with its two call assertions skipped by a `lanes` capability and one refusal asserted in
+their place; the other four assertions and all of its plumbing apply unchanged. A real browser
+dials a UDP-dead port, is told the same port answers over TCP, falls back, and carries emits
+both ways and a declared cursor wrapped (`e2e/websocket-fallback.spec.ts`).
+
+**Not in this entry.** `transport-io dev` starts no fallback listener, and the React binding
+does not yet accept a `FallbackClient` in its provider. Both are follow-ups with their shape
+recorded in D121. There is no idle timeout on the mapping; a dead TCP path is the platform's
+to notice.
+
+**Reconsider when:** a user needs calls over the fallback, at which point the multiplexed
+variant is costed again against what that user actually does with them.

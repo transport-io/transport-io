@@ -45,13 +45,23 @@ publishes the certificate's expiry alongside its hash, so an expired certificate
 before the connection is attempted, with `WT_CERT_EXPIRED` and the command that fixes it.
 That removes the trap entirely from the path a newcomer takes.
 
-## There is no fallback
+## The fallback carries the emit lane only, and only by declaration
 
-Not to WebSocket, not to anything. A WebSocket is reliable and ordered, so falling back to
-one would silently convert every `lane: 'unreliable'` event into a reliable one - your
-contract would still say the message may be dropped while the transport guaranteed it
-never is. Degrading availability is honest. Degrading a guarantee is not. An unsupported
-runtime gets `WT_NO_SUPPORT` and nothing else.
+A WebSocket is reliable and ordered, so it cannot carry a `lane: 'unreliable'` event as the
+contract describes it, and it has no streams to carry a call or a `stream()` on. So the
+fallback carries emits and nothing else. `call()` and `stream()` are not methods of a client
+built with `withFallback`; they live on `native`, which is `null` on a fallback session, and
+the compiler makes that check unavoidable. An unreliable event crosses the fallback only when
+the contract says what it accepts there, `fallback: 'newest'`: in order, with the oldest and
+the stale dropped at the sender as the datagram ring drops them. A contract with an
+unreliable event that declares nothing cannot be wired to a fallback at all; the line that
+adds one fails to compile and names the event, and a session that reaches the wire anyway is
+refused with `WT_RELIABILITY_REFUSED` before the handshake.
+
+The fallback engages on two conditions and no other: the runtime has no WebTransport, or the
+server answers over HTTPS and not over QUIC, which is `WT_UDP_UNREACHABLE`. A dead server does
+not fall back. Every reconnect starts from WebTransport again. There is no idle timeout on a
+WebSocket, so a dead TCP path is noticed when the platform reports it, not before.
 
 ## Reconnect creates a new session
 

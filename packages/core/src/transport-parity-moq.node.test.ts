@@ -32,6 +32,7 @@ test.skip('moq: both lanes, a call, an abort and an oversized datagram', {
     name: 'moq',
     port: randomPort(),
     listen: listenMoq,
+    lanes: 'all',
     propagatesAbortToHandler: false,
     connect: connectMoq,
   })

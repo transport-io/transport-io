@@ -28,7 +28,10 @@ resets a stream or closes the session is specified per case in §10.
 
 ## 2. Transport requirements
 
-transport-io runs over **WebTransport on HTTP/3 (QUIC) only**.
+transport-io runs over **WebTransport on HTTP/3 (QUIC)**, which carries every lane. One other
+mapping exists, the emit lane over a WebSocket (§3.3), and a peer accepts it only for a
+contract in which every unreliable event declares what it accepts there (§7.6). Nothing else
+carries a session.
 
 A peer MUST NOT establish or accept a session over WebTransport on HTTP/2. That mapping
 retransmits lost data, which would make the unreliable lane (§7) reliable and ordered while
@@ -38,17 +41,22 @@ application declared is the specific failure this protocol exists to prevent.
 Servers MUST refuse HTTP/2 WebTransport sessions rather than downgrading. This is the
 enforcement point: a server that never offers the HTTP/2 mapping cannot be negotiated into
 it, regardless of client behaviour. Clients SHOULD additionally request unreliable-capable
-sessions where the platform exposes that control, and MUST refuse a session it can observe
+sessions where the platform exposes that control, and MUST refuse a WebTransport session it
 <!-- norm: reliable-only-refused -> packages/core/src/protocol-promises.test.ts -->
-to be reliable-only.
+can observe to be reliable-only.
 
-There is no fallback to WebSocket or any other transport, under any condition.
+A session on a transport that carries only the reliable lane MUST be refused with
+`WT_RELIABILITY_REFUSED` (§10.2), before the handshake, unless every unreliable event in the
+<!-- norm: fallback-refused-unless-declared -> packages/core/src/fallback.test.ts -->
+peer's contract declares a fallback (§7.6). Each peer knows the transport from the listener or
+connector that produced the connection; the handshake never carries it.
 
 ---
 
 ## 3. Streams and their roles
 
-A session uses two kinds of QUIC stream, plus datagrams.
+On WebTransport, a session uses two kinds of QUIC stream, plus datagrams. §3.3 is the one
+other mapping, and it carries the first row of the table below and nothing else.
 
 **Lane names describe the guarantee; this section describes the mechanism that carries it.**
 The **reliable** lane is carried on QUIC streams. The **unreliable** lane is carried on QUIC
@@ -107,6 +115,47 @@ distinguishes them.
 Receivers MUST accept a `CALL_RESPONSE` sequence of any length regardless of shape, so that
 <!-- norm: receiver-accepts-multi-frame-response -> packages/core/src/reserved-and-limits.test.ts -->
 a peer implementing only `returns` events is not broken by one that implements both.
+
+---
+
+### 3.3 The emit lane over WebSocket
+
+The only mapping other than WebTransport, and it carries the emit lane alone. A WebSocket is
+one ordered, reliable pipe per direction, which is what §3.1 describes, so the socket is both
+peers' emit streams: the client's messages are the client's emit stream and the server's are
+the server's. Frame 0 is the handshake (§4), unchanged.
+
+| rule | on this mapping |
+|---|---|
+| messages | binary only; a text message is a protocol error |
+| framing | §5, unchanged: a message carries bytes of the stream, and message boundaries carry no meaning |
+| bidirectional streams | none; a call fails locally with `WT_LANE_UNAVAILABLE` (§10.3) |
+| datagrams | none on the socket; a declared unreliable event travels as a `DATAGRAM` frame (§5.2) whose payload is a §7.1 datagram, unchanged |
+| unreliable frames on the lane | queued in the §9 ring, and moved onto the emit lane only while it holds fewer than 32 frames |
+| close | `WT_NO_ERROR` as WebSocket code 1000, every other §10.2 code as 3000 plus the code, and the reason cut to 123 bytes on a character boundary |
+
+A peer MUST send binary messages only and MUST treat a text message as a protocol error.
+<!-- norm: websocket-binary-only -> packages/core/src/transport/websocket.test.ts -->
+
+A peer MUST NOT open a bidirectional stream on this mapping. A `DATAGRAM` frame MUST be
+refused as a protocol error on any other mapping, where it would carry an unreliable event on
+<!-- norm: datagram-frame-websocket-only -> packages/core/src/transport/websocket.test.ts -->
+a lane that acknowledges.
+
+A `DATAGRAM` frame's header carries codec `0x01` and event id `0`; the datagram inside it
+carries the real event id, origin and sequence, and the receiver applies §7.3 to it as it
+would to a datagram. A sender MUST queue unreliable frames in the §9 datagram ring and MUST
+move them onto the emit lane only while that lane is below the mark in the table, so a burst
+<!-- norm: websocket-unreliable-low-water -> packages/core/src/transport/websocket.test.ts -->
+on the unreliable lane cannot close the session as `WT_PEER_TOO_SLOW`.
+
+Session close codes MUST be carried as the table says. A peer that closes treats the session
+<!-- norm: websocket-close-code-offset -> packages/core/src/transport/websocket.test.ts -->
+as closed at once rather than waiting for the closing handshake, which a peer that has stopped
+reading may never complete.
+
+There is no idle timeout on this mapping: a dead TCP path is noticed when the platform reports
+it, not before.
 
 ---
 
@@ -308,7 +357,8 @@ the lane.
 | `0x06` | `JOIN` | emit stream, server to client only |
 | `0x07` | `LEAVE` | emit stream, server to client only |
 | `0x08` | `CALL_CREDIT` | call stream, initiator to responder, streaming events only |
-| `0x09`–`0xFF` | reserved | - |
+| `0x09` | `DATAGRAM` | emit stream, WebSocket mapping only (§3.3) |
+| `0x0A`–`0xFF` | reserved | - |
 
 Receiving a reserved or contextually invalid type is a protocol error.
 
@@ -676,6 +726,19 @@ Applications requiring any of these properties MUST declare the event on the rel
 instead. The lane is declared in the contract precisely so this choice is explicit and
 visible in the type system.
 
+### 7.6 What an unreliable event accepts on a fallback
+
+A transport that carries only the reliable lane (§3.3) cannot deliver an unreliable event as
+§7.5 describes it. An unreliable event therefore declares, beside its lane in the contract,
+what it accepts there, and a session on such a transport exists only when every unreliable
+event has (§2). The declaration is local to each peer and is not carried in the handshake;
+each sender applies its own.
+
+| declaration | on a reliable-only transport |
+|---|---|
+| none | no session is possible for this contract |
+| `newest` | carried on the emit lane in order, with the oldest dropped on overflow and the stale dropped at dequeue as §9 already says, and counted in the same counters |
+
 ---
 
 ## 8. Abort and stream reset
@@ -766,7 +829,10 @@ exceed **1024 bytes**, per the HTTP/3 WebTransport draft.
 | `1002` | `WT_HANDSHAKE_TIMEOUT` | No handshake within 5000 ms. |
 | `1003` | `WT_PEER_TOO_SLOW` | Emit queue exceeded 256 frames. Consume faster. |
 | `1004` | `WT_PROTOCOL_ERROR` | Unrecoverable framing violation. |
-| `1006` | `WT_RELIABILITY_REFUSED` | Session was reliable-only. Not usable, see §2. |
+| `1006` | `WT_RELIABILITY_REFUSED` | Session was reliable-only, or on a fallback transport with an undeclared unreliable event in the contract. See §2. |
+
+On the WebSocket mapping these are carried as WebSocket close codes: 1000 for `WT_NO_ERROR`,
+and 3000 plus the code otherwise (§3.3).
 
 ### 10.3 Local codes
 
@@ -774,7 +840,8 @@ Raised by an implementation to its own application and never transmitted.
 
 | name | meaning and remedy |
 |---|---|
-| `WT_NO_SUPPORT` | The runtime has no WebTransport. There is no fallback; the browser is unsupported. |
+| `WT_NO_SUPPORT` | The runtime has no WebTransport, or no WebSocket where a fallback was configured. A client with no fallback configured is unsupported on that runtime. |
+| `WT_LANE_UNAVAILABLE` | A call or a stream on a session over the WebSocket mapping (§3.3), which has no bidirectional streams. The session stays up. |
 | `WT_DATAGRAM_TOO_LARGE` | Payload exceeded §7.4. Shorten it, or move the event to the reliable lane. |
 | `WT_ROOM_NOT_JOINED` | Broadcast to a room this session is not in. Join first. |
 | `WT_SESSION_CLOSED` | The session closed while the operation was pending. Reconnect and retry. |
@@ -790,7 +857,9 @@ Raised by an implementation to its own application and never transmitted.
 A session is established, handshakes (§4), carries traffic, and closes.
 
 **Reconnection creates a new session.** Nothing is resumed: not the session identifier, not
-room membership, not pending calls. Pending calls reject with `WT_SESSION_CLOSED`.
+room membership, not pending calls. Pending calls reject with `WT_SESSION_CLOSED`. A new
+session may be on a different transport from the last (§3.3); a session never changes
+transport in place.
 Re-establishing application state after a reconnect is the application's responsibility,
 and the `session-resume` feature token (§4.2) is reserved for a future version that changes
 this.

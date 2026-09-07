@@ -21,6 +21,7 @@ export type TransportErrorCode =
   | 'WT_DEV_ONLY'
   | 'WT_HANDSHAKE_FAILED'
   | 'WT_UDP_UNREACHABLE'
+  | 'WT_LANE_UNAVAILABLE'
   | 'WT_CERT_EXPIRED'
 
 export class TransportError extends Error {

@@ -47,7 +47,9 @@ type, bounds concurrent inbound streams whether they carry a call or a sequence,
 datagrams that arrive before the
 handshake. It does not assume good faith. Report anything that gets past those.
 
-**There is no WebSocket fallback, deliberately.** A fallback would silently make the
-unreliable lane reliable and ordered, which is a lie about your data that nobody would catch.
-If WebTransport is unavailable, the connection fails rather than degrading quietly.
+**The WebSocket fallback carries the emit lane only, and only by declaration.** It has no
+streams, so no call or `stream()` runs on it, and an unreliable event crosses it only where the
+contract has declared what it accepts there; a contract with an undeclared one cannot be wired
+to a fallback at all. Nothing degrades quietly: the snapshot says which transport carries a
+session and why.
 
