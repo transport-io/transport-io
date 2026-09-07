@@ -22,7 +22,9 @@ before you start.** It lists what this library will not do. Full documentation i
 [repository README](https://github.com/transport-io/transport-io#readme). The short version:
 
 - **WebTransport first.** The WebSocket fallback carries emits only, where the contract
-  declares it; calls and streams need WebTransport.
+  declares it; calls and streams need WebTransport. The
+  [fallback guide](https://transport-io.github.io/transport-io/guides/fallback/) has it end
+  to end.
 - **Chrome and Firefox.** Safari cannot talk to a quiche-backed server and is unsupported.
 - **The server needs a separate native install**, and its Linux prebuild needs glibc 2.38 -
   no default Node `-slim` image has it, and Alpine has no prebuild at all.

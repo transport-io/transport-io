@@ -168,3 +168,7 @@ right shape, and what to do about it is a product decision.
 
 It does not retry. `client.connect()` is idempotent and refcounted, so a retry loop around
 it is safe to write, and the library does not write one for you.
+
+It does not keep a transport. A reconnect starts from WebTransport every time, so it may
+land on [the fallback](/guides/fallback/) or come back off it, and `transport` in the
+snapshot says which carried this session.

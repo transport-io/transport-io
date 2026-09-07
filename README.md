@@ -60,10 +60,9 @@ export interface AppMap extends MapOf<typeof contract> {}
 what comes back.
 
 Write the `AppMap` interface line. Without it, every hover shows the whole contract with
-your validator's internals in it. `AppMap` is what each end is given, once,
-`browserClient<AppMap>` and `createServer<AppMap>` below, and it is never inferred from
-`contract`. [`API.md`](API.md) has the measurement. Registering the map globally instead is
-opt-in; see
+your validator's internals in it. `AppMap` is what each end is given,
+`browserClient<AppMap>` and `createServer<AppMap>` below, and never inferred from
+`contract`. Registering the map globally instead is opt-in; see
 [Registering the map](https://transport-io.github.io/transport-io/getting-started/#registering-the-map-optional).
 
 ### A type, or a schema
@@ -158,6 +157,12 @@ handler's `finally` runs. The producer runs at most 32 frames ahead of what the 
 taken. Stopping from a button, deadlines and the helpers are in the
 [guide](https://transport-io.github.io/transport-io/guides/call-and-stream/).
 
+Where UDP does not get through, or the browser has no WebTransport, a WebSocket fallback
+carries the emit lane and nothing else: `withFallback` on the client, `server.withFallback`
+on the server, and an unreliable event crosses it only where the contract declares
+`fallback: 'newest'`. [The fallback](https://transport-io.github.io/transport-io/guides/fallback/)
+has the whole thing.
+
 A wrong event name or payload fails to compile. The error names the event instead of
 unrolling the contract type.
 
@@ -188,12 +193,9 @@ and the measurements behind each one, and is worth reading before you build on t
 - **One event name serves both directions**, which is a modelling tax when the two directions
   want different payloads.
 
-The certificate rule, the native package and the Safari gap are shared with Socket.IO's
-WebTransport transport. They are properties of the stack, and the comparison below says so.
-
 **Not in this version:** namespaces (a room-name prefix covers it), presence, middleware chains
 (auth is one hook), binary payloads (JSON only, with a codec seam reserved), server-initiated
-streaming (a response shape only), framework bindings, and the Redis adapter.
+streaming (a response shape only), and the Redis adapter.
 
 ## Compared with Socket.IO
 
@@ -201,10 +203,10 @@ Socket.IO has supported WebTransport since 4.7.0, released in June 2023. Everyth
 section comes from Socket.IO's own documentation and source, linked at the end, so each line
 can be checked.
 
-**Where Socket.IO is the better choice.** Socket.IO falls back to WebSocket, and then to HTTP
-long-polling. Safari works, and so do networks that block UDP. transport-io's fallback carries
-emits only, so calls and streams need WebTransport. For those on Safari, or where UDP cannot
-reach your server, use Socket.IO. Socket.IO
+**Where Socket.IO is the better choice.** Socket.IO falls back to WebSocket and then to HTTP
+long-polling with everything it offers intact, so Safari works and so do networks that block
+UDP; transport-io's fallback carries emits and declared unreliable events, and nothing else.
+For calls or streams on Safari, or where UDP cannot reach your server, use Socket.IO. Socket.IO
 also guarantees ordering across a transport upgrade, buffers client events across a
 reconnection, offers at-least-once client-to-server delivery with `retries`, and has
 namespaces, middleware, a Redis adapter and years of production use. transport-io starts a new
@@ -213,8 +215,7 @@ session on reconnect, keeps no buffer, and has rooms and an in-memory adapter.
 **What is the same.** Both servers need the same native QUIC package,
 `@fails-components/webtransport`, because Node has no WebTransport of its own. Both are bound
 by the same rule for a self-signed development certificate: ECDSA, at most fourteen days.
-Neither reaches Safari over WebTransport. The install caveats further down this page are
-properties of the transport stack, not of either library.
+Neither reaches Safari over WebTransport.
 
 The differences that can be checked in their source:
 
@@ -271,9 +272,9 @@ npm install @fails-components/webtransport-transport-http3-quiche
 ```
 
 It is not a dependency of anything, only a dynamic import, so no package manager will pull
-it in for you. Browsers need nothing extra - they use the platform's own WebTransport.
+it in for you.
 
-Two things about that native package are worth knowing before CI surprises you:
+Two things about that native package:
 
 - **Its prebuilt binaries come from GitHub Releases, not npm.** A registry mirror alone is
   not enough. Pin the version exactly and cache the download.
@@ -297,7 +298,7 @@ use WSL.
 ## Documentation
 
 - [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) - **read this before you start**: what this library
-  refuses to do and will not change, plus the one measured defect
+  refuses to do and will not change
 - [`PROTOCOL.md`](PROTOCOL.md) - the wire format, written to be implemented in another language
 - [`API.md`](API.md) - the TypeScript surface
 - [`DECISIONS.md`](DECISIONS.md) - every question this project raised, answered

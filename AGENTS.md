@@ -220,6 +220,46 @@ identified. See PROTOCOL.md §3.
 delivery does not wait for it. Broadcasting to a room with no members is not an error.
 `server.memberCount(room)` counts members on this node only.
 
+## The fallback
+
+The emit lane over a WebSocket, for a browser without WebTransport or a network where UDP
+does not reach the server. It carries `emit` both ways and rooms, and nothing else: no
+`call()`, no `stream()`, no datagrams. An unreliable event crosses it only with
+`fallback: 'newest'` in the contract, and a contract with an undeclared one cannot be wired to
+a fallback; the line fails to compile and names the event.
+
+```ts standalone
+import { defineContract, type MapOf, reliable, unreliable, withFallback } from 'transport-io'
+import { connectBrowser } from 'transport-io/browser-transport'
+import { connectWebSocket } from 'transport-io/websocket-transport'
+
+const contract = defineContract({
+  chat: reliable<{ from: string; body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>({ fallback: 'newest' }),
+})
+interface AppMap extends MapOf<typeof contract> {}
+
+export const client = withFallback<AppMap>({
+  contract,
+  connect: () => connectBrowser({ url: 'https://example.com:4433/' }),
+  fallback: () => connectWebSocket({ url: 'wss://example.com/transport-io' }),
+})
+export const lanes = client.native // call() and stream(); null on a fallback session
+```
+
+Rules:
+
+- WebTransport first, every connect. The fallback engages only on `WT_NO_SUPPORT` and
+  `WT_UDP_UNREACHABLE`; a dead server or a wrong hash does not fall back. A session never
+  changes transport in place.
+- The snapshot says which: `transport` is `'webtransport' | 'websocket' | null`, and
+  `fallbackReason` is `'unsupported' | 'unreachable' | null`.
+- The server side is `server.withFallback(await listenWebSocket({ port, cert, privKey }))`
+  after `listen()`, in a `*.node.ts` file, and needs the optional peer `ws`. With a
+  certificate it is `wss://`; without one, `ws://`, which is what development on loopback
+  uses because a browser pins no hash for a WebSocket.
+- No idle timeout on the fallback: a dead TCP path is noticed when the platform reports it.
+
 ## Errors
 
 Every error is a `TransportError` with a `code` and a `remedy` sentence. A bare `TypeError`

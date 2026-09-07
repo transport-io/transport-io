@@ -257,4 +257,6 @@ map the same way everything else takes one.
 [The two lanes](/guides/lanes/) covers choosing between them.
 [`call()` and `stream()`](/guides/call-and-stream/) covers request shapes.
 [React](/guides/react/) is the binding, if that is what you are building in.
+[The fallback](/guides/fallback/) covers browsers without WebTransport and networks that
+block UDP.
 [Limitations](/limitations/) is worth reading before you commit to this.

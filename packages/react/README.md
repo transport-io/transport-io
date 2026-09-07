@@ -67,6 +67,10 @@ responder's `finally`.
 **Your `connect` function must return a new connection each call.** A reconnect is a new
 session and StrictMode calls it twice in development.
 
+**A fallback session has no calls.** `useCall` and `useStream` report `unavailable` there
+before anything is asked, `useNative()` is `null`, and `useClient()` returns either kind of
+client, so reach `call` and `stream` through `useNative()`.
+
 The [React guide](https://transport-io.github.io/transport-io/guides/react/) has the whole
 thing with code.
 

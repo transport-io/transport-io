@@ -29,7 +29,7 @@ import { existsSync, readFileSync } from 'node:fs'
  * ceiling down to the new measurement plus about three percent, and it never moves up.
  */
 const BUDGET: Readonly<Record<string, number>> = {
-  'README.md': 1670,
+  'README.md': 1655,
 }
 
 export function proseWords(md: string): number {

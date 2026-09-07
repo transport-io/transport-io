@@ -109,7 +109,8 @@ export function Status(): ReactNode {
 
 All state comes through `useSyncExternalStore`, and the object this returns is referentially
 stable: it changes only when the connection state does, so putting it in a dependency array
-is safe.
+is safe. `transport` and `fallbackReason` are on the same object: what carries the session,
+and why it is a fallback when it is. [The fallback](/guides/fallback/) covers the rest.
 
 **During server rendering it reports `idle`.** That is true, since no connection exists on a
 server, and it makes the server's HTML identical to the client's first render, so hydration
