@@ -3,11 +3,7 @@
   "ignoreDependencies": [
     "@fails-components/webtransport-transport-http3-quiche",
     "zod",
-    "@moq/web-transport",
-    // An optional peer of core, imported dynamically behind a guard that names the install
-    // when it is absent, the same shape as the quiche transport above. The root
-    // devDependency is what the Node tests and the e2e run against.
-    "ws"
+    "@moq/web-transport"
   ],
   "ignoreBinaries": [
     "openssl",

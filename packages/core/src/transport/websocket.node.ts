@@ -1,11 +1,11 @@
 /**
  * The WebSocket listener. PROTOCOL.md §3.3.
  *
- * Node has no WebSocket server of its own, so this one is `ws`, loaded by dynamic import
- * exactly as the QUIC transport is: an optional peer, installed only where a fallback
- * listener runs, and reported plainly when it is absent. The HTTP server underneath it is
- * also the probe target from D120: any request gets an answer, so a client that reaches this
- * port over TCP and not the QUIC port over UDP learns which it is.
+ * Node has no WebSocket server of its own, so this one is `ws`, a dependency of the package:
+ * a few hundred kilobytes of JavaScript beside a native QUIC binding that is already
+ * required, so nothing is gained by making it optional (D122). The HTTP server underneath it
+ * is also the probe target from D120: any request gets an answer, so a client that reaches
+ * this port over TCP and not the QUIC port over UDP learns which it is.
  *
  * `cert` and `privKey` make it `wss://`, on the certificate the site already serves. Without
  * them it is `ws://`, which is what development on loopback uses, since a browser pins no
@@ -17,7 +17,7 @@ import {
   type ServerResponse,
 } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
-import { TransportError } from '../errors.ts'
+import { WebSocketServer } from 'ws'
 import { PROBE_PATH } from './probe.ts'
 import type { Connection } from './types.ts'
 import { type SocketLike, WebSocketConnection } from './websocket.ts'
@@ -37,19 +37,6 @@ export interface WebSocketListener {
   stop(): void
 }
 
-async function loadWs(): Promise<typeof import('ws')> {
-  try {
-    return await import('ws')
-  } catch (cause) {
-    throw new TransportError(
-      'WT_NO_SUPPORT',
-      'the WebSocket listener needs the ws package, and it is not installed',
-      'Run `npm install ws`. It is an optional peer of transport-io, needed only by a process that listens for the fallback.',
-      cause,
-    )
-  }
-}
-
 function answer(req: IncomingMessage, res: ServerResponse): void {
   // Any status is an answer to the probe. 204 at its path, 404 elsewhere, and nothing else
   // is served: this is a transport listener, not a web server.
@@ -59,12 +46,11 @@ function answer(req: IncomingMessage, res: ServerResponse): void {
 export async function listenWebSocket(
   opts: WebSocketServerOptions,
 ): Promise<WebSocketListener> {
-  const ws = await loadWs()
   const http =
     opts.cert !== undefined && opts.privKey !== undefined
       ? createHttpsServer({ cert: opts.cert, key: opts.privKey }, answer)
       : createHttpServer(answer)
-  const wss = new ws.WebSocketServer({ server: http, path: opts.path ?? '/' })
+  const wss = new WebSocketServer({ server: http, path: opts.path ?? '/' })
 
   const queue: Connection[] = []
   let waiting: ((next: Connection | undefined) => void) | undefined

@@ -115,8 +115,8 @@ Part 2.
   40, growing with the run. `stream()` carries its own credit window because of it.
 - **A browser WebSocket has no drain event either**, only `bufferedAmount`, so the fallback's
   sink polls it before a write resolves. A browser pins no hash for a WebSocket, so the dev
-  fallback is plain `ws://` on loopback. `ws` is an optional peer loaded by dynamic import,
-  like the quiche transport.
+  fallback is plain `ws://` on loopback. `ws` is a plain dependency of core; a browser bundle
+  that imports only the browser subpaths does not pull it in, measured with Bun and Vite.
 
 ## Rules that exist because something nearly shipped
 

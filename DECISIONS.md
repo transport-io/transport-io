@@ -3098,6 +3098,14 @@ to notice.
 **Reconsider when:** a user needs calls over the fallback, at which point the multiplexed
 variant is costed again against what that user actually does with them.
 
+**Note, 2026-09-07.** `ws` is a plain dependency of core, no longer an optional peer. It is
+151 KB unpacked with no dependencies of its own, beside a required native QUIC binding that
+is 7.1 MB on disk, so optional bought nothing but an install step and a runtime error that
+could only say "install this". Measured before the change: a browser bundle importing
+`transport-io`, `transport-io/browser-transport` and `transport-io/websocket-transport`
+contains no `ws` and no node subpath under Bun or Vite, because the listener module is the
+only importer and nothing on the browser subpaths imports it.
+
 ### D123. The React binding accepts a fallback client, and says what it cannot carry
 D121 left the binding typing its provider against `Client<M>`, which a `FallbackClient<M>`
 does not satisfy, so an application with a fallback could not mount one. Hooks cannot be

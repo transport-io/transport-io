@@ -517,10 +517,10 @@ export async function fallbackListener(port: number) {
 }
 ```
 
-With `cert` and `privKey` it is `wss://` on the certificate the site already serves; without
-them it is `ws://`. It answers any HTTP request on its port, which makes it the probe target
-that turns a failed handshake into `WT_UDP_UNREACHABLE` (§3.3). It needs `ws`, an optional
-peer of this package, installed only where a listener runs.
+With `cert` and `privKey` it terminates `wss://` in the process; without them it is `ws://`,
+for a reverse proxy that terminates TLS in front of it, or for loopback in development. It
+answers any HTTP request on its port, which makes it the probe target that turns a failed
+handshake into `WT_UDP_UNREACHABLE` (§3.3).
 
 ### 3.1 Rooms are server-authoritative
 

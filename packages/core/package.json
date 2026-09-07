@@ -51,7 +51,8 @@
   },
   "dependencies": {
     "@fails-components/webtransport": "1.6.8",
-    "@standard-schema/spec": "^1.1.0"
+    "@standard-schema/spec": "^1.1.0",
+    "ws": "^8.21.3"
   },
   "optionalDependencies": {
     "@moq/web-transport-darwin-arm64": "0.1.4",
@@ -79,13 +80,5 @@
     "streaming",
     "typescript",
     "websocket-alternative"
-  ],
-  "peerDependencies": {
-    "ws": "^8.21.3"
-  },
-  "peerDependenciesMeta": {
-    "ws": {
-      "optional": true
-    }
-  }
+  ]
 }

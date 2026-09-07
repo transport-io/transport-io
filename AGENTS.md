@@ -30,7 +30,7 @@ Node ≥ 22. TypeScript ≥ 5.0 for consumers.
 | `transport-io/dev-transport` | `devClient`, `connectDev`, `DEV_ENDPOINT` | browser, loopback only |
 | `transport-io/node-transport` | `listenHttp3`, `listenDev`, `http3Client`, `connectHttp3`, `resetCodeFromError` | Node only |
 | `transport-io/websocket-transport` | `connectWebSocket` | anywhere with a `WebSocket` global |
-| `transport-io/websocket-node-transport` | `listenWebSocket` | Node only, needs the optional peer `ws` |
+| `transport-io/websocket-node-transport` | `listenWebSocket` | Node only |
 | `transport-io/testing` | `HostileAdapter`, `loopbackPair`, `UnreliableConnection` | tests |
 | `@transport-io/react` | `TransportProvider`, `createHooks`, `useClient`, `useNative`, `useConnection`, `useEvent`, `useCall`, `useStream` | React 19.2 or newer |
 
@@ -254,10 +254,10 @@ Rules:
   changes transport in place.
 - The snapshot says which: `transport` is `'webtransport' | 'websocket' | null`, and
   `fallbackReason` is `'unsupported' | 'unreachable' | null`.
-- The server side is `server.withFallback(await listenWebSocket({ port, cert, privKey }))`
-  after `listen()`, in a `*.node.ts` file, and needs the optional peer `ws`. With a
-  certificate it is `wss://`; without one, `ws://`, which is what development on loopback
-  uses because a browser pins no hash for a WebSocket.
+- The server side is `server.withFallback(await listenWebSocket({ port }))` after
+  `listen()`, in a `*.node.ts` file. Without `cert` and `privKey` it is `ws://`, for a
+  reverse proxy that terminates TLS, or for loopback in development, where a browser pins
+  no hash for a WebSocket; with them it terminates `wss://` itself.
 - No idle timeout on the fallback: a dead TCP path is noticed when the platform reports it.
 
 ## Errors

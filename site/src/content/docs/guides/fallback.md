@@ -123,13 +123,6 @@ with an undeclared unreliable event is refused before the handshake with
 `WT_RELIABILITY_REFUSED`, for the caller with no compiler. `peer.transport` says what carries
 each peer, and a room can hold both kinds.
 
-The WebSocket listener needs `ws`, an optional peer of `transport-io`. Install it where a
-listener runs:
-
-```bash
-npm install ws
-```
-
 ### Certificates
 
 In production the listener is `wss://` on the certificate your site already serves, and the
@@ -203,4 +196,3 @@ that listens only on UDP: that origin does not answer, and the error stays
 - **No idle timeout.** QUIC notices a dead path on its own; a WebSocket does not. A dead TCP
   path is noticed when the platform reports it, not before.
 - **One pipe.** A large emit delays every emit behind it, in both directions.
-- **`ws` is an install.** A server without it cannot listen for the fallback, and says so.
