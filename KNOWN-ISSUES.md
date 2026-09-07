@@ -173,4 +173,5 @@ in [`SECURITY.md`](SECURITY.md). The reasoning behind every position on this pag
 ## Resolved upstream
 
 - Per-stream memory retention in the reference binding, found during development, reported
-  in fails-components/webtransport#510, fixed in 1.6.8 by #511.
+  in [fails-components/webtransport#510](https://github.com/fails-components/webtransport/pull/510),
+  fixed in 1.6.8 by [#511](https://github.com/fails-components/webtransport/pull/511).
