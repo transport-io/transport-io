@@ -2986,3 +2986,32 @@ rather than surfacing in a soak. The README ceiling ratcheted from 1740 to 1670.
 **Reconsider when:** the churn bench reports 1 KB per stream or more on a later binding, at
 which point the exemption returns with its cause, its number and its expiry, as D13 had it.
 
+
+### D120. A failed handshake asks one more question, and a blocked UDP path gets its own code
+The browser reports one `WebTransportError` for a blocked UDP path, a dead server, a wrong
+pinned hash and an expired certificate, on purpose (F9, D16). The library could not tell the
+first two apart, and the first is the case F12's platforms produce by construction: TCP
+reaches the process, UDP never does. A fallback transport, if one is ever wired, needs this
+signal to decide deliberately rather than by racing.
+
+**Decision.** After `ready` rejects, and only then, the connector sends one `HEAD` to the
+URL's origin at `/.well-known/transport-io`: no CORS opt-in, no cache, no credentials, an
+absolute budget of 2000 ms. Any status is an answer, since a 404 proves TCP, TLS and HTTP all
+reached a server. Answered: `WT_UDP_UNREACHABLE`, the server is up and only the QUIC path is
+failing. Unanswered: `WT_HANDSHAKE_FAILED` as before, with the message saying the origin was
+silent, because an origin that listens only on UDP looks exactly like this and is healthy.
+`probe` overrides the target, `probe: false` disables it, and `connectDev` disables it because
+the manifest fetch already proved the dev server answers. The Node connector makes the same
+split; a failed `connectHttp3` was `WT_SESSION_CLOSED` and is now the browser's two codes.
+
+**Measured.** The native client rejects `ready` about 8 s after dialling a loopback port with
+nothing on UDP (`probe.node.test.ts`, 8043 ms and 8010 ms). A browser's latency on a path
+that blackholes UDP rather than refusing it is unmeasured; it needs a firewall rule, which is
+outside the repository.
+
+**Where it is precise.** Any origin that also serves HTTPS, which is the deploy README's
+layout and every deployment behind a TCP proxy. Where the origin is UDP-only the code is the
+generic one and the probe never claims a blocked path on evidence it does not have.
+
+**Reconsider when:** a browser exposes a cause on `WebTransportError`, at which point the
+probe becomes the second signal rather than the only one.

@@ -37,6 +37,7 @@ import {
   STREAM_FRAME_OVERHEAD_BYTES,
   STREAM_INITIAL_CREDIT,
 } from '../packages/core/src/protocol.ts'
+import { PROBE_BUDGET_MS } from '../packages/core/src/transport/probe.ts'
 
 const OUT = '.docs-check'
 let failures = 0
@@ -393,6 +394,7 @@ const TABLE_CONSTANTS: readonly TableConstant[] = [
   { row: /^\|\s*Call stream/, expect: STREAM_INITIAL_CREDIT, name: 'STREAM_INITIAL_CREDIT' },
   { row: /WT_HANDSHAKE_TIMEOUT/, expect: HANDSHAKE_DEADLINE_MS, name: 'HANDSHAKE_DEADLINE_MS' },
   { row: /WT_PEER_TOO_SLOW/, expect: EMIT_QUEUE_MAX, name: 'EMIT_QUEUE_MAX' },
+  { row: /WT_UDP_UNREACHABLE/, expect: PROBE_BUDGET_MS, name: 'PROBE_BUDGET_MS' },
 ]
 
 const withoutFences = proto.replace(/```[\s\S]*?```/g, '')

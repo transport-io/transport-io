@@ -202,7 +202,7 @@ can be checked.
 
 **Where Socket.IO is the better choice.** Socket.IO falls back to WebSocket, and then to HTTP
 long-polling. Safari works, and so do networks that block UDP. transport-io has no fallback:
-an unsupported browser or a UDP-blocked path gets `WT_NO_SUPPORT` and nothing else. If you
+an unsupported browser gets `WT_NO_SUPPORT` and a UDP-blocked path gets `WT_UDP_UNREACHABLE`. If you
 have to support Safari, or cannot rely on UDP reaching your server, use Socket.IO. Socket.IO
 also guarantees ordering across a transport upgrade, buffers client events across a
 reconnection, offers at-least-once client-to-server delivery with `retries`, and has

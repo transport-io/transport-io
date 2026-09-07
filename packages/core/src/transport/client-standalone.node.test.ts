@@ -38,7 +38,7 @@ test('connecting from a server-less process gets past native loading', async () 
   // A failed connect must also be a typed error rather than whatever the binding threw,
   // and must not leave `closed` rejecting with nobody attached: an unhandled rejection
   // terminates a Node server by default.
-  assert.match(message, /WT_SESSION_CLOSED/)
+  assert.match(message, /WT_HANDSHAKE_FAILED/)
 })
 
 test('the native transport is actually loaded, not merely not-thrown', async () => {

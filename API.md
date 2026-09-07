@@ -131,9 +131,9 @@ export async function open(url: string): Promise<void> {
 
 | function | module | connection options |
 |---|---|---|
-| `browserClient<M>(options)` | `transport-io/browser-transport` | `url`, `certificateHash?` |
+| `browserClient<M>(options)` | `transport-io/browser-transport` | `url`, `certificateHash?`, `probe?` |
 | `devClient<M>(options)` | `transport-io/dev-transport` | `endpoint?` |
-| `http3Client<M>(options)` | `transport-io/node-transport` | `url`, `certificateHash` |
+| `http3Client<M>(options)` | `transport-io/node-transport` | `url`, `certificateHash`, `probe?` |
 
 Each takes every `ClientOptions` field except `connect`, plus its transport's own options.
 
@@ -482,6 +482,16 @@ identical.
 `connectBrowser` therefore raises `WT_HANDSHAKE_FAILED`, whose remedy lists those three in
 the order worth ruling out, and keeps the browser's error as `cause`. It does not name a
 single cause, because it cannot know which one it is.
+
+It does check the one fact that is available. After the failure, and only then, it asks
+whether the same origin answers over HTTPS: one `HEAD` to `/.well-known/transport-io`, any
+status counts, two seconds at most. If it does, the server is up and only the QUIC path is
+failing, which is what a firewall, a VPN or a platform with no UDP ingress looks like, and
+the error is `WT_UDP_UNREACHABLE` instead. If nothing answers, the error stays
+`WT_HANDSHAKE_FAILED` and its message says the origin was silent; an origin that listens only
+on UDP looks like that and is healthy. `probe` overrides the target and `probe: false`
+disables it. `connectDev` disables it, because the dev manifest has already proven the server
+answers. `connectHttp3` makes the same split.
 
 `connectDev` can know, and does. The dev server publishes the certificate's expiry with its
 hash, so an expired certificate raises `WT_CERT_EXPIRED` before any connection is attempted,

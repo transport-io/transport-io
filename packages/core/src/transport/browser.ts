@@ -9,6 +9,7 @@ import { Client, type ClientOptions } from '../client.ts'
 import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
+import { handshakeFailure, probe, probeTarget } from './probe.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
 
 interface PlatformSession {
@@ -101,6 +102,12 @@ export interface BrowserConnectOptions {
   readonly url: string
   /** SHA-256 over the DER of the leaf certificate. Required for a pinned certificate. */
   readonly certificateHash?: Uint8Array
+  /**
+   * Where to ask, over HTTPS, whether the server answers at all once the handshake has
+   * failed. Defaults to the URL's origin at `/.well-known/transport-io`; `false` disables it.
+   * An answer turns the failure into `WT_UDP_UNREACHABLE`.
+   */
+  readonly probe?: string | false
 }
 
 export async function connectBrowser(opts: BrowserConnectOptions): Promise<Connection> {
@@ -136,19 +143,12 @@ export async function connectBrowser(opts: BrowserConnectOptions): Promise<Conne
      * expired" when the server is simply down would be a confident wrong answer, and that is
      * worse than an honest vague one.
      *
-     * What it can do is turn a dead end into a checklist, ordered by what is cheapest to
-     * rule out.
+     * The one fact available is whether the origin answers over TCP, and that is asked only
+     * now, after the failure, so a session that connects pays nothing for it.
      */
-    throw new TransportError(
-      'WT_HANDSHAKE_FAILED',
-      `the WebTransport handshake to ${opts.url} failed`,
-      'The browser reports one error for every cause here, so check in this order: (1) the ' +
-        'server is running and its UDP port is reachable; (2) if you pinned a certificate, ' +
-        'that it has not passed its 14-day limit; (3) that the hash matches the certificate ' +
-        'the server is serving - it is SHA-256 over the DER, not over cert.pem. ' +
-        '`npx transport-io dev` handles all three for local development.',
-      cause,
-    )
+    const target = opts.probe === false ? undefined : (opts.probe ?? probeTarget(opts.url))
+    const outcome = target === undefined ? 'skipped' : await probe(target)
+    throw handshakeFailure(opts.url, target, outcome, cause)
   }
   return new BrowserConnection(session)
 }

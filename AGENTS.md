@@ -228,7 +228,8 @@ is never thrown from this library.
 | `WT_PAYLOAD_TOO_LARGE` | frame over its cap | use a call or a `stream()`, or split |
 | `WT_PROTOCOL_ERROR` | malformed frame | check against `PROTOCOL.md` |
 | `WT_HANDSHAKE_INCOMPLETE` | traffic before the handshake | await `connect()` first |
-| `WT_HANDSHAKE_FAILED` | the browser's handshake failed: a wrong pinned hash, an expired certificate, or nothing listening | rule those out in that order; the browser reports all three identically |
+| `WT_HANDSHAKE_FAILED` | the handshake failed and the origin did not answer over HTTPS, or was not asked: a wrong pinned hash, an expired certificate, or nothing listening | rule those out in that order; the browser reports all three identically |
+| `WT_UDP_UNREACHABLE` | the handshake failed but the origin answers over HTTPS: the server is up and UDP is not reaching it | check the firewall, the VPN, or the platform's UDP ingress; nothing in the library routes around it |
 | `WT_CERT_EXPIRED` | the `transport-io dev` certificate has expired | run `transport-io dev` again; it mints a new one |
 | `WT_DEV_ONLY` | `connectDev` or `listenDev` outside loopback, or without the environment `transport-io dev` sets | use `connectBrowser` with your own certificate anywhere that is not local development |
 

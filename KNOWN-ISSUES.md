@@ -36,6 +36,10 @@ costs you.
 out, and keeps the original error as `cause`. It does not guess which one it was, because
 naming a cause would be wrong two times in three.
 
+It does check the one fact that is available. After the failure it asks whether the same
+origin answers over HTTPS, at `/.well-known/transport-io`, and if it does the error is
+`WT_UDP_UNREACHABLE` instead: the server is up, and UDP is not reaching it.
+
 `connectDev` does better, because it does not have to infer anything. `transport-io dev`
 publishes the certificate's expiry alongside its hash, so an expired certificate is refused
 before the connection is attempted, with `WT_CERT_EXPIRED` and the command that fixes it.
@@ -69,7 +73,9 @@ on the reliable lane, and the contract is where you say which.
 
 On the port you listen on. Unlike TCP, many managed platforms do not provide this. Verify
 your platform routes UDP before building on this library - it is the first thing to check
-when nothing connects, and no amount of application code works around it.
+when nothing connects, and no amount of application code works around it. A client that
+reaches the server over TCP but not over QUIC reports `WT_UDP_UNREACHABLE`, which is the
+first thing to look for when nothing connects on a managed platform.
 
 ## The emit lane blocks across rooms
 

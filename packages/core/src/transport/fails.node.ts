@@ -18,6 +18,7 @@ import { Client, type ClientOptions } from '../client.ts'
 import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
+import { handshakeFailure, probe, probeTarget } from './probe.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
 
 type AnySession = {
@@ -222,6 +223,8 @@ export async function listenDev(): Promise<Http3Listener> {
 export interface Http3ConnectOptions {
   readonly url: string
   readonly certificateHash: Uint8Array
+  /** As `BrowserConnectOptions.probe`: where to ask over HTTPS once the handshake has failed. */
+  readonly probe?: string | false
 }
 
 export async function connectHttp3(opts: Http3ConnectOptions): Promise<Connection> {
@@ -249,11 +252,12 @@ export async function connectHttp3(opts: Http3ConnectOptions): Promise<Connectio
     await wt.ready
   } catch (cause) {
     await closedGuard
-    throw new TransportError(
-      'WT_SESSION_CLOSED',
-      `could not open a session to ${opts.url}: ${(cause as Error).message}`,
-      'Check the server is listening, that UDP reaches it, and that the certificate hash matches.',
-    )
+    // The same split the browser connector makes, for the same reason: the binding's error
+    // says no more than the browser's, and a Node client behind a corporate egress is the
+    // blocked-UDP case as often as a page is.
+    const target = opts.probe === false ? undefined : (opts.probe ?? probeTarget(opts.url))
+    const outcome = target === undefined ? 'skipped' : await probe(target)
+    throw handshakeFailure(opts.url, target, outcome, cause)
   }
   return new FailsConnection(wt)
 }

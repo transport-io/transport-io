@@ -129,9 +129,12 @@ export async function connectDev(opts: DevConnectOptions = {}): Promise<Connecti
   }
   if (!LOOPBACK.has(targetHost)) refuse('WebTransport URL', targetHost)
 
+  // No probe: the manifest fetch above already proved the dev server answers over TCP, the
+  // WebTransport port is UDP-only on loopback, and expiry was ruled out before dialling.
   return await connectBrowser({
     url: manifest.url,
     certificateHash: Uint8Array.from(manifest.sha256),
+    probe: false,
   })
 }
 
