@@ -267,6 +267,28 @@ export class Session {
     // Whoever closes, both sides release. Registered before anything can fail, so a
     // session that dies during the handshake is cleaned up too.
     void this.#conn.closed.then(() => this.dispose())
+
+    // The runtime half of the contract gate (D121). A transport that carries only the
+    // reliable lane is refused unless every unreliable event has declared what it accepts
+    // there, on both sides and before frame 0, so a JavaScript caller with no compiler meets
+    // the same refusal the types give a TypeScript one.
+    if (this.#conn.kind() !== 'webtransport') {
+      const undeclared = this.#table.undeclared()
+      if (undeclared.length > 0) {
+        const e = new TransportError(
+          'WT_RELIABILITY_REFUSED',
+          `a ${this.#conn.kind()} session cannot carry '${undeclared.join("', '")}': unreliable, and no fallback declared`,
+          "Declare a fallback on every unreliable event in the contract, for example unreliable(schema, { fallback: 'newest' }), or connect over WebTransport.",
+        )
+        this.#conn.close(
+          CloseCode.WT_RELIABILITY_REFUSED,
+          'undeclared unreliable event on a fallback transport',
+        )
+        this.#settleHandshake(e)
+        throw e
+      }
+    }
+
     this.#conn.onEmitStream((readable) => void this.#readEmitStream(readable))
     this.#conn.onBidi((stream) => this.#acceptCall(stream))
     this.#conn.onDatagram((bytes) => this.#onDatagram(bytes))

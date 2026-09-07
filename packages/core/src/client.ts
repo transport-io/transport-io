@@ -10,21 +10,32 @@ import {
   buildEventTable,
   type CallableOf,
   type Contract,
+  type FallbackReady,
   type Registered,
   type StreamableOf,
 } from './contract.ts'
 import { TransportError } from './errors.ts'
 import { CloseCode, FrameType } from './protocol.ts'
 import { Session, type SessionStats, type StreamResult } from './session.ts'
-import type { Connection } from './transport/types.ts'
+import type { Connection, Transport } from './transport/types.ts'
 
 export type Status = 'idle' | 'connecting' | 'connected' | 'closing' | 'closed'
+
+/** Why the current session is on a fallback transport rather than on WebTransport. */
+export type FallbackReason = 'unsupported' | 'unreachable'
 
 export interface ClientState {
   readonly status: Status
   readonly sessionId: string | null
   readonly rooms: readonly string[]
   readonly lastError: TransportError | null
+  /** What carries the current session. `null` until connected. */
+  readonly transport: Transport | null
+  /**
+   * Why the current session is a fallback: the runtime has no WebTransport, or the server
+   * answered over HTTPS and not over QUIC. `null` on a native session.
+   */
+  readonly fallbackReason: FallbackReason | null
 }
 
 export interface ClientOptions<C extends Contract = Contract> {
@@ -67,6 +78,8 @@ export class Client<M extends AnyMap = Registered> {
     sessionId: null,
     rooms: [],
     lastError: null,
+    transport: null,
+    fallbackReason: null,
   })
   #refs = 0
   #connecting: Promise<void> | undefined
@@ -124,7 +137,13 @@ export class Client<M extends AnyMap = Registered> {
     closing?.dispose()
     this.#session = undefined
     this.#connecting = undefined
-    this.#patch({ status: 'closed', sessionId: null, rooms: [] })
+    this.#patch({
+      status: 'closed',
+      sessionId: null,
+      rooms: [],
+      transport: null,
+      fallbackReason: null,
+    })
   }
 
   /** The lane comes from the contract, never from this call site. */
@@ -183,12 +202,14 @@ export class Client<M extends AnyMap = Registered> {
     const generation = this.#generation
     try {
       const table = await buildEventTable(this.#opts.contract)
-      const conn = await this.#opts.connect()
+      const { conn, fallbackReason } = await this.#open()
 
       // Chrome implements neither `requireUnreliable` nor `reliability`, so `undefined`
       // must pass or every session on the dominant browser would be refused. Only an
-      // explicit reliable-only would misreport what the unreliable lane does.
-      if (conn.reliability() === 'reliable-only') {
+      // explicit reliable-only would misreport what the unreliable lane does. A fallback
+      // transport is reliable-only by definition and is judged by the session instead,
+      // against the contract's declarations (D121).
+      if (conn.kind() === 'webtransport' && conn.reliability() === 'reliable-only') {
         // §10.2 code 1006. Throwing without closing left the peer holding a session this
         // side had already abandoned, with nothing on the wire to say why.
         conn.close(CloseCode.WT_RELIABILITY_REFUSED, 'reliable-only transport refused')
@@ -228,10 +249,21 @@ export class Client<M extends AnyMap = Registered> {
       session.onControl((type, body) => this.#onMembership(type, body))
 
       await session.start()
-      this.#patch({ status: 'connected', sessionId: `s-${session.origin}` })
+      this.#patch({
+        status: 'connected',
+        sessionId: `s-${session.origin}`,
+        transport: conn.kind(),
+        fallbackReason,
+      })
 
       void conn.closed.then(() => {
-        this.#patch({ status: 'closed', sessionId: null, rooms: [] })
+        this.#patch({
+          status: 'closed',
+          sessionId: null,
+          rooms: [],
+          transport: null,
+          fallbackReason: null,
+        })
       })
     } catch (e) {
       const err =
@@ -253,6 +285,24 @@ export class Client<M extends AnyMap = Registered> {
     this.#patch({ rooms: [...rooms].sort() })
   }
 
+  /**
+   * The native connector, then the fallback if one was installed and the failure is one a
+   * fallback answers: no WebTransport in this runtime, or a server that answers over HTTPS
+   * and not over QUIC. Every other failure is thrown as it is, because a dead server or a
+   * wrong hash is not a reason to change transport.
+   */
+  async #open(): Promise<{ conn: Connection; fallbackReason: FallbackReason | null }> {
+    const fallback = fallbacks.get(this)
+    try {
+      return { conn: await this.#opts.connect(), fallbackReason: null }
+    } catch (e) {
+      if (fallback === undefined) throw e
+      const reason = fallbackReasonFor(e)
+      if (reason === undefined) throw e
+      return { conn: await fallback(), fallbackReason: reason }
+    }
+  }
+
   #requireSession(): Session {
     if (this.#session === undefined) {
       throw new TransportError(
@@ -268,4 +318,54 @@ export class Client<M extends AnyMap = Registered> {
     this.#snapshot = Object.freeze({ ...this.#snapshot, ...next })
     for (const l of this.#listeners) l()
   }
+}
+
+/**
+ * The fallback connector a client was built with, keyed by the client and readable only from
+ * this module. `ClientOptions` deliberately has no `fallback` field: putting one there would
+ * let `new Client(...)` take a fallback without passing the gate below.
+ */
+const fallbacks = new WeakMap<object, () => Promise<Connection>>()
+
+function fallbackReasonFor(e: unknown): FallbackReason | undefined {
+  if (!(e instanceof TransportError)) return undefined
+  if (e.code === 'WT_NO_SUPPORT') return 'unsupported'
+  if (e.code === 'WT_UDP_UNREACHABLE') return 'unreachable'
+  return undefined
+}
+
+/** The lanes only a native session carries. */
+export type NativeLanes<M extends AnyMap> = Pick<Client<M>, 'call' | 'stream'>
+
+/**
+ * A client that may be on a fallback transport, so `call()` and `stream()` are not its
+ * methods: they live on `native`, which is `null` while the session is a fallback. The
+ * compiler makes the check unavoidable; nothing about it is discovered at runtime.
+ */
+export type FallbackClient<M extends AnyMap> = Omit<Client<M>, 'call' | 'stream'> & {
+  /** `call()` and `stream()`, on a native session. `null` on a fallback, or when not connected. */
+  readonly native: NativeLanes<M> | null
+}
+
+/**
+ * A client with a second transport behind the first (D121).
+ *
+ * The native connector is tried first, every time. The fallback is used only when the
+ * runtime has no WebTransport or when the server answers over HTTPS and not over QUIC, and
+ * the snapshot says which. The type argument is the gate: `FallbackReady<M>` is `unknown`
+ * when every unreliable event in the map declares a fallback, and otherwise a required
+ * property naming the event that has not, so this call fails to compile rather than an
+ * emit failing in production.
+ */
+export function withFallback<M extends AnyMap = Registered>(
+  options: ClientOptions & FallbackReady<M> & { readonly fallback: () => Promise<Connection> },
+): FallbackClient<M> {
+  const client = new Client<M>(options)
+  fallbacks.set(client, options.fallback)
+  Object.defineProperty(client, 'native', {
+    enumerable: true,
+    get: (): NativeLanes<M> | null =>
+      client.getSnapshot().transport === 'webtransport' ? client : null,
+  })
+  return client as unknown as FallbackClient<M>
 }

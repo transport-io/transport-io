@@ -223,6 +223,10 @@ class MoqConnection implements Connection {
    * the correct answer and is safe: D10 refuses only an explicit `reliable-only`, and
    * there is no HTTP/2 mapping here to be negotiated into.
    */
+  kind(): 'webtransport' {
+    return 'webtransport'
+  }
+
   reliability(): undefined {
     return undefined
   }

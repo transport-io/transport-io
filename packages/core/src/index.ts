@@ -12,7 +12,16 @@ export {
   // times.
   type RemoteEnvelope,
 } from './adapter.ts'
-export { Client, type ClientOptions, type ClientState, type Status } from './client.ts'
+export {
+  Client,
+  type ClientOptions,
+  type ClientState,
+  type FallbackClient,
+  type FallbackReason,
+  type NativeLanes,
+  type Status,
+  withFallback,
+} from './client.ts'
 export {
   type AnyMap,
   type CallableOf,
@@ -20,6 +29,8 @@ export {
   defineContract,
   type EventDef,
   type EventShape,
+  type FallbackPolicy,
+  type FallbackReady,
   type Infer,
   type Lane,
   type MapOf,
@@ -31,6 +42,7 @@ export {
   type StreamableOf,
   streaming,
   type$,
+  type UnreliableOptions,
   unreliable,
 } from './contract.ts'
 export { maxDatagramPayload } from './datagram.ts'
@@ -59,6 +71,7 @@ export {
   type ServerPeer,
 } from './server.ts'
 export type { SessionStats, StreamResult } from './session.ts'
+export type { Transport } from './transport/types.ts'
 
 /**
  * Hand-maintained and asserted against `package.json` by `index.test.ts`, because

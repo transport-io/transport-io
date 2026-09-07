@@ -75,6 +75,7 @@ describe('a failed accept is counted, not swallowed and not fatal', () => {
       sendDatagram: () => {},
       onDatagram: () => {},
       maxDatagramSize: () => 1024,
+      kind: () => 'webtransport' as const,
       close: () => {},
       closed: new Promise(() => {}),
     } as unknown as Connection
@@ -110,6 +111,7 @@ describe('a failed accept is counted, not swallowed and not fatal', () => {
       sendDatagram: () => {},
       onDatagram: () => {},
       maxDatagramSize: () => 1024,
+      kind: () => 'webtransport' as const,
       close: () => {},
       closed: new Promise(() => {}),
     } as unknown as Connection

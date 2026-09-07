@@ -92,6 +92,7 @@ describe('the handshake deadline covers the whole handshake', () => {
       onDatagram: () => {},
       maxDatagramSize: () => 1024,
       reliability: () => 'supports-unreliable',
+      kind: () => 'webtransport' as const,
       close: () => {},
     }
     const client = new Client<AppMap>({

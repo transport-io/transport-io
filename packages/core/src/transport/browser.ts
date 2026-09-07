@@ -69,6 +69,10 @@ class BrowserConnection implements Connection {
     return typeof r === 'number' && r > 0 ? r : DATAGRAM_CONSERVATIVE_FLOOR
   }
 
+  kind(): 'webtransport' {
+    return 'webtransport'
+  }
+
   reliability(): 'pending' | 'reliable-only' | 'supports-unreliable' | undefined {
     const r = this.#s.reliability
     return r === 'pending' || r === 'reliable-only' || r === 'supports-unreliable'

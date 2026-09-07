@@ -133,6 +133,7 @@ function stalledConnection(): Connection {
     onDatagram: () => {},
     maxDatagramSize: () => 1024,
     reliability: () => 'supports-unreliable',
+    kind: () => 'webtransport' as const,
     close: () => {},
   }
 }

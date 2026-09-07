@@ -7,6 +7,16 @@ import { TransportError } from './errors.ts'
 import { EVENT_ID_NOT_APPLICABLE } from './protocol.ts'
 
 export type Lane = 'reliable' | 'unreliable'
+
+/**
+ * What an unreliable event accepts on a transport that cannot carry the unreliable lane.
+ *
+ * `'newest'`: carried on the reliable pipe, with the oldest frame dropped on overflow and
+ * stale frames dropped at dequeue exactly as the datagram ring drops them, delivered in
+ * order. An event that declares nothing has consented to nothing, and no fallback can be
+ * wired for a contract that contains one (D121).
+ */
+export type FallbackPolicy = 'newest'
 export type Schema = StandardSchemaV1
 
 /**
@@ -32,6 +42,7 @@ export type EventDef =
       readonly lane: 'unreliable'
       readonly payload: Schema
       readonly id?: number
+      readonly fallback?: FallbackPolicy
       readonly returns?: never
       readonly yields?: never
     }
@@ -41,6 +52,7 @@ export type EventDef =
       readonly returns?: Schema
       readonly id?: number
       readonly yields?: never
+      readonly fallback?: never
     }
   | {
       readonly lane: 'reliable'
@@ -48,6 +60,7 @@ export type EventDef =
       readonly yields: Schema
       readonly id?: number
       readonly returns?: never
+      readonly fallback?: never
     }
 
 export type Contract = Readonly<Record<string, EventDef>>
@@ -67,6 +80,10 @@ export type MapOf<C extends Contract> = {
       ? Infer<R>
       : never
     readonly yields: C[K] extends { readonly yields: infer Y extends Schema } ? Infer<Y> : never
+    readonly lane: C[K]['lane']
+    readonly fallback: C[K] extends { readonly fallback: infer F extends FallbackPolicy }
+      ? F
+      : undefined
   }
 }
 
@@ -74,6 +91,9 @@ export interface EventShape {
   readonly payload: unknown
   readonly returns: unknown
   readonly yields: unknown
+  /** Optional so a hand-written map still satisfies `AnyMap`; `MapOf` always sets both. */
+  readonly lane?: Lane | undefined
+  readonly fallback?: FallbackPolicy | undefined
 }
 export type AnyMap = Readonly<Record<string, EventShape>>
 
@@ -162,6 +182,30 @@ export function defineContract<const C extends Contract>(contract: C & CheckPayl
   return contract as unknown as C
 }
 
+/** The unreliable events of a map that declare no fallback, as a union of their names. */
+type Undeclared<M extends AnyMap> = {
+  [K in keyof M]: M[K] extends { readonly lane: 'unreliable' }
+    ? M[K] extends { readonly fallback: FallbackPolicy }
+      ? never
+      : K & string
+    : never
+}[keyof M]
+
+/**
+ * The compile-time half of the contract gate (D121).
+ *
+ * `unknown` when every unreliable event in `M` declares a fallback, so intersecting it with
+ * an options type changes nothing. Otherwise a required property whose name and value spell
+ * out an event that has not, so the error lands on the line that adds the fallback and
+ * names what to fix. The same intersection shape as `CheckPayloads`, for the same reason:
+ * it is the form that survives the TypeScript 5.0 floor.
+ */
+export type FallbackReady<M extends AnyMap> = [Undeclared<M>] extends [never]
+  ? unknown
+  : {
+      readonly 'fallback refused': `event '${Undeclared<M>}' is unreliable and declares no fallback`
+    }
+
 /**
  * Sugar over the object literal. The literal keeps working, and anything generating a
  * contract programmatically needs it, so these add nothing the literal cannot express.
@@ -187,18 +231,47 @@ export function reliable(schema?: Schema): {
   return { lane: 'reliable', payload: schema ?? type$<unknown>() }
 }
 
+export interface UnreliableOptions {
+  readonly fallback: FallbackPolicy
+}
+
+/**
+ * The declaration is returned as the literal, not as an optional, because the gate reads it
+ * from the map: `fallback?: FallbackPolicy` in a return type is indistinguishable from no
+ * declaration at all. One overload per policy keeps that true.
+ */
 export function unreliable<T>(): {
   readonly lane: 'unreliable'
   readonly payload: StandardSchemaV1<unknown, T>
 }
+export function unreliable<T>(options: { readonly fallback: 'newest' }): {
+  readonly lane: 'unreliable'
+  readonly payload: StandardSchemaV1<unknown, T>
+  readonly fallback: 'newest'
+}
 export function unreliable<S extends Schema>(
   schema: S,
 ): { readonly lane: 'unreliable'; readonly payload: S }
-export function unreliable(schema?: Schema): {
+export function unreliable<S extends Schema>(
+  schema: S,
+  options: { readonly fallback: 'newest' },
+): { readonly lane: 'unreliable'; readonly payload: S; readonly fallback: 'newest' }
+export function unreliable(
+  first?: Schema | UnreliableOptions,
+  options?: UnreliableOptions,
+): {
   readonly lane: 'unreliable'
   readonly payload: Schema
+  readonly fallback?: FallbackPolicy
 } {
-  return { lane: 'unreliable', payload: schema ?? type$<unknown>() }
+  const isSchema = first !== undefined && '~standard' in first
+  const schema = isSchema ? first : undefined
+  const declared = isSchema ? options : first
+  return {
+    lane: 'unreliable',
+    payload: schema ?? type$<unknown>(),
+    ...(declared === undefined ? {} : { fallback: declared.fallback }),
+  }
 }
 
 export function rpc<P, R>(): {
@@ -258,6 +331,7 @@ export interface EventEntry {
   readonly name: string
   readonly id: number
   readonly lane: Lane
+  readonly fallback: FallbackPolicy | undefined
   readonly def: EventDef
 }
 
@@ -265,6 +339,8 @@ export interface EventTable {
   readonly entries: readonly EventEntry[]
   byName(name: string): EventEntry | undefined
   byId(id: number): EventEntry | undefined
+  /** Unreliable events that declare no fallback: the runtime half of the gate reads this. */
+  undeclared(): readonly string[]
   /** The `[name, id, lane]` triples the handshake carries. PROTOCOL.md §4.3. */
   wire(): readonly [string, number, Lane][]
 }
@@ -305,7 +381,7 @@ export async function buildEventTable(contract: Contract): Promise<EventTable> {
         `Set an explicit \`id\` on one of them, for example { ..., id: ${id + 1} }. Do not rename your events.`,
       )
     }
-    const entry: EventEntry = { name, id, lane: def.lane, def }
+    const entry: EventEntry = { name, id, lane: def.lane, fallback: def.fallback, def }
     entries.push(entry)
     byId.set(id, entry)
     byName.set(name, entry)
@@ -315,6 +391,10 @@ export async function buildEventTable(contract: Contract): Promise<EventTable> {
     entries,
     byName: (n) => byName.get(n),
     byId: (i) => byId.get(i),
+    undeclared: () =>
+      entries
+        .filter((e) => e.lane === 'unreliable' && e.fallback === undefined)
+        .map((e) => e.name),
     wire: () => entries.map((e) => [e.name, e.id, e.lane] as [string, number, Lane]),
   }
 }

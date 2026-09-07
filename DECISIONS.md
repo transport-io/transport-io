@@ -3015,3 +3015,38 @@ generic one and the probe never claims a blocked path on evidence it does not ha
 
 **Reconsider when:** a browser exposes a cause on `WebTransportError`, at which point the
 probe becomes the second signal rather than the only one.
+
+### D121. A fallback is refused in the contract, and the refusal is a type
+A transport that carries the reliable lane only cannot carry an unreliable event as declared.
+PROTOCOL §7.5 lists what that lane does not guarantee, and delivering everything in order
+violates none of it; the lie D3 names is the property applications depend on, freshness under
+congestion and independence from the reliable lane, and both go on a TCP pipe. So the default
+is refusal, and consent lives where the lane lives: in the contract, per event.
+
+**Decision.** `unreliable(payload?, { fallback: 'newest' })` declares what the event accepts on
+a fallback: carried on the reliable pipe, oldest dropped on overflow and stale at dequeue as the
+datagram ring already does, in order, counted in the same counters. `MapOf` carries `lane` and
+`fallback` per event so the gate can read them from the map. `FallbackReady<M>` is `unknown`
+when every unreliable event declares one and otherwise a required property whose value names
+the event, intersected into the options of `withFallback` on the client and `server.withFallback`
+on the server, the same shape `CheckPayloads` uses because it is the form that survives the
+5.0 floor. The compiler's own text is the error, and it names the event. `FallbackClient<M>`
+has no `call()` or `stream()`; they live on `native`, `null` on a fallback session, so the check
+cannot be skipped. The runtime twin is the session: the connection's `kind()` is a property both
+ends know from the listener or connector that made it, never a handshake field, and a session on
+anything but `webtransport` whose table has an undeclared unreliable event closes with
+`WT_RELIABILITY_REFUSED` before frame 0, on both sides.
+
+**Orchestration.** The native connector first, on every connect. The fallback only on
+`WT_NO_SUPPORT` and `WT_UDP_UNREACHABLE` (D120); every other failure is thrown as it is. The
+snapshot gains `transport` and `fallbackReason`, and the React hook inherits both through
+`ClientState`. Nothing ships a fallback connector in this entry; the WebSocket mapping is the
+next one.
+
+**Measured.** Hover against the README contract after `MapOf` gained the two fields: emit 107,
+call 169, stream 157, and every hook, identical to before. The D57 and D100 ceilings did not
+move. The floor gate compiles a declared contract behind `withFallback` at 5.0.4 and asserts
+that an undeclared one fails there.
+
+**Reconsider when:** a second policy is asked for by name, with the guarantee it preserves
+written down before its name.

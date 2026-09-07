@@ -71,6 +71,7 @@ function stallingPeer(opts: { failWrite?: boolean } = {}): Stalling {
     onDatagram: () => {},
     maxDatagramSize: () => 1024,
     reliability: () => 'supports-unreliable',
+    kind: () => 'webtransport' as const,
     close: (code, reason) => resolveClosed({ code, reason }),
   }
   return Object.assign(state, { conn })

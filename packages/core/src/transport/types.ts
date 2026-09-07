@@ -6,6 +6,9 @@
  * `streamErrorCode` so reset codes are only recoverable by parsing a message string, and
  * it ships a reliability fallback that must be actively disabled.
  */
+/** What carries a session: every lane on `webtransport`, the reliable lane only on `websocket`. */
+export type Transport = 'webtransport' | 'websocket'
+
 export interface CloseInfo {
   readonly code: number
   readonly reason: string
@@ -35,6 +38,14 @@ export interface Connection {
    * refused. See D10.
    */
   reliability(): 'pending' | 'reliable-only' | 'supports-unreliable' | undefined
+
+  /**
+   * A property of the connection, known at both ends from the listener or connector that
+   * produced it, which is why the handshake never carries it. A session on anything but
+   * `webtransport` is refused unless every unreliable event in the contract declares a
+   * fallback (D121).
+   */
+  kind(): Transport
 
   close(code: number, reason: string): void
   readonly closed: Promise<CloseInfo>

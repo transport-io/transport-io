@@ -10,7 +10,7 @@
  * Streams are passed through untouched: they are reliable and ordered, and pretending
  * otherwise would test the wrong thing.
  */
-import type { BidiStream, CloseInfo, Connection } from './types.ts'
+import type { BidiStream, CloseInfo, Connection, Transport } from './types.ts'
 
 export interface UnreliableOptions {
   /** Drop the nth datagram, 1-based, for every n in this set. */
@@ -75,6 +75,10 @@ export class UnreliableConnection implements Connection {
   maxDatagramSize(): number {
     return this.#inner.maxDatagramSize()
   }
+  kind(): Transport {
+    return this.#inner.kind()
+  }
+
   reliability(): 'pending' | 'reliable-only' | 'supports-unreliable' | undefined {
     return this.#inner.reliability()
   }

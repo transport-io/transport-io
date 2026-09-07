@@ -6,7 +6,7 @@
  * Anything that depends on real unreliability belongs in a *.node.test.ts against the
  * actual transport.
  */
-import type { BidiStream, CloseInfo, Connection } from './types.ts'
+import type { BidiStream, CloseInfo, Connection, Transport } from './types.ts'
 
 class Side implements Connection {
   peer!: Side
@@ -23,9 +23,11 @@ class Side implements Connection {
   #closedFlag = false
   readonly closed: Promise<CloseInfo>
   #maxDatagram: number
+  readonly #kind: Transport
 
-  constructor(maxDatagram: number) {
+  constructor(maxDatagram: number, kind: Transport) {
     this.#maxDatagram = maxDatagram
+    this.#kind = kind
     this.closed = new Promise<CloseInfo>((res) => {
       this.#resolveClosed = res
     })
@@ -87,6 +89,10 @@ class Side implements Connection {
     return 'supports-unreliable'
   }
 
+  kind(): Transport {
+    return this.#kind
+  }
+
   close(code: number, reason: string): void {
     if (this.#closedFlag) return
     this.#closedFlag = true
@@ -96,9 +102,17 @@ class Side implements Connection {
   }
 }
 
-export function loopbackPair(maxDatagram = 1024): [Connection, Connection] {
-  const a = new Side(maxDatagram)
-  const b = new Side(maxDatagram)
+/**
+ * `kind` is what the pair reports itself as. The default is the native transport; a pair
+ * reporting `'websocket'` exercises the refusal a fallback session meets when its contract
+ * has an undeclared unreliable event, without a socket anywhere.
+ */
+export function loopbackPair(
+  maxDatagram = 1024,
+  kind: Transport = 'webtransport',
+): [Connection, Connection] {
+  const a = new Side(maxDatagram, kind)
+  const b = new Side(maxDatagram, kind)
   a.peer = b
   b.peer = a
   return [a, b]

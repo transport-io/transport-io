@@ -112,6 +112,31 @@ export interface ExplicitMap extends MapOf<typeof explicit> {}
 own QUIC stream, so there is no unreliable variant of either. The rest of this page uses the
 helpers.
 
+### 1.4 What an unreliable event accepts on a fallback
+
+A fallback transport carries the reliable lane only. An unreliable event says what it accepts
+there beside its lane, in the contract:
+
+```ts standalone
+import { defineContract, type MapOf, reliable, unreliable } from 'transport-io'
+
+export const declared = defineContract({
+  chat: reliable<{ from: string; body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>({ fallback: 'newest' }),
+})
+
+export interface DeclaredMap extends MapOf<typeof declared> {}
+```
+
+`'newest'` is carried on the reliable pipe with the oldest frame dropped on overflow and stale
+frames dropped at dequeue, exactly as the datagram ring drops them, delivered in order and
+counted in the same `overflowDropped` and `staleDropped`. It is the only policy. The object
+form takes the same `fallback` field, and a reliable event cannot carry one.
+
+An event that declares nothing has consented to nothing. A contract that contains one cannot
+be wired to a fallback at all: the line that adds the fallback fails to compile and names the
+event (§2.5).
+
 ---
 
 ## 2. Client
@@ -371,21 +396,53 @@ export function watch(client: Client, log: (s: ClientState) => void): () => void
 ```
 
 ```ts
-import type { Status } from 'transport-io'
+import type { FallbackReason, Status, Transport } from 'transport-io'
 
 declare const state: ClientState
 declare const status: Status
-export const fields: [Status, string | null, readonly string[]] = [
-  state.status,
-  state.sessionId,
-  state.rooms,
-]
+export const fields: [
+  Status,
+  string | null,
+  readonly string[],
+  Transport | null,
+  FallbackReason | null,
+] = [state.status, state.sessionId, state.rooms, state.transport, state.fallbackReason]
 export const known: Status[] = ['idle', 'connecting', 'connected', 'closing', 'closed']
 void status
 ```
 
+`transport` is what carries the current session, `null` until connected. `fallbackReason`
+says why that session is on a fallback transport, and is `null` on a native one.
+
 **`getSnapshot()` returns the same reference until something changes**, so it is safe to hand
 to `useSyncExternalStore`.
+
+### 2.5 A fallback transport
+
+`withFallback<M>(options)` builds a client with a second transport behind the first.
+`options` is `ClientOptions` plus `fallback`, a connector for a transport that carries the
+reliable lane only. The native connector is tried first on every connect. The fallback is used
+when the runtime has no WebTransport or when the server answers over HTTPS and not over QUIC,
+which are `WT_NO_SUPPORT` and `WT_UDP_UNREACHABLE`; any other failure is thrown as it is,
+because a dead server or a wrong hash is not a reason to change transport.
+
+It returns `FallbackClient<M>`: everything `Client<M>` has except `call()` and `stream()`,
+which live on `native`. `native` is `null` while the session is a fallback or not connected,
+so the check is one the compiler will not let you skip, and nothing about it is discovered at
+runtime.
+
+The line that adds the fallback compiles only when every unreliable event in the contract
+declares what it accepts there (§1.4). Otherwise the error names the event:
+
+```text
+Property ''fallback refused'' is missing in type '{ contract: ...; connect: ...; fallback: ...; }'
+  but required in type '{ readonly 'fallback refused':
+  "event 'cursor' is unreliable and declares no fallback"; }'.
+```
+
+The session refuses at connect as well, for a caller with no compiler:
+`WT_RELIABILITY_REFUSED`, before the handshake. The server side is `server.withFallback`,
+under the same type (§3).
 
 ---
 
@@ -415,6 +472,12 @@ Passing a connection source hands `listen()` the accept loop. A rejected accept 
 `server.acceptErrors` and passed to `onAcceptError` if one is given; it does not stop the
 loop, and it does not vanish. Call `listen()` with no argument and drive `accept()` yourself
 when a connection has to be inspected before it is accepted.
+
+`server.withFallback(source)` accepts sessions from a transport that carries the reliable lane
+only, after `listen()`. Its parameter type is the gate from §2.5: the call compiles only when
+every unreliable event in the contract declares a fallback (§1.4). A session that reaches
+`accept` from such a source with an undeclared event is refused with `WT_RELIABILITY_REFUSED`
+and counted, for callers with no compiler. `peer.transport` says what carries each peer.
 
 ### 3.1 Rooms are server-authoritative
 
@@ -524,7 +587,9 @@ Two worth knowing:
   write, because the transport accepts an oversized datagram, discards it, and reports
   success.
 - **`WT_RELIABILITY_REFUSED`** means the session negotiated reliable-only transport and was
-  refused, because the unreliable lane would otherwise become reliable and ordered.
+  refused, because the unreliable lane would otherwise become reliable and ordered; or a
+  session on a fallback transport whose contract has an unreliable event with no fallback
+  declared (§1.4).
 
 ---
 

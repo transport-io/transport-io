@@ -6,6 +6,7 @@ import {
   type CallableOf,
   type Contract,
   type EventTable,
+  type FallbackReady,
   type Registered,
   type StreamableOf,
 } from './contract.ts'
@@ -13,11 +14,13 @@ import { Hub } from './hub.ts'
 import { OriginAllocator } from './origin.ts'
 import { CloseCode } from './protocol.ts'
 import { Session, type SessionStats } from './session.ts'
-import type { Connection } from './transport/types.ts'
+import type { Connection, Transport } from './transport/types.ts'
 
 export interface ServerPeer<M extends AnyMap = Registered> {
   readonly id: PeerId
   readonly origin: number
+  /** What carries this peer's session. The reliable lane only, on anything but `webtransport`. */
+  readonly transport: Transport
   readonly rooms: readonly string[]
   join(room: string): Promise<void>
   leave(room: string): Promise<void>
@@ -75,7 +78,6 @@ export class Server<M extends AnyMap = Registered> {
   readonly #origins: OriginAllocator
   readonly #peers = new Map<PeerId, { peer: ServerPeer<M>; session: Session }>()
   #acceptErrors = 0
-  #accepting: Promise<void> | undefined
   readonly #onPeer: ((peer: ServerPeer<M>) => void)[] = []
   #table: EventTable | undefined
   #hub: Hub | undefined
@@ -113,7 +115,24 @@ export class Server<M extends AnyMap = Registered> {
     this.#serverOrigin = this.#origins.allocate(Date.now())
 
     if (source === undefined) return
-    this.#accepting = (async () => {
+    void this.#acceptFrom(source, opts)
+  }
+
+  /**
+   * Accept sessions from a transport that carries the reliable lane only.
+   *
+   * The type is the gate: `FallbackReady<M>` is `unknown` when every unreliable event in the
+   * contract declares a fallback, and otherwise a required property that names the event
+   * which has not, so this line fails to compile rather than a session failing at runtime.
+   * The session refuses at accept as well, for callers with no compiler (D121).
+   */
+  withFallback(source: ConnectionSource & FallbackReady<M>, opts?: ListenOptions): void {
+    this.#requireTable()
+    void this.#acceptFrom(source, opts)
+  }
+
+  #acceptFrom(source: ConnectionSource, opts?: ListenOptions): Promise<void> {
+    const loop = (async () => {
       for await (const conn of source.sessions()) {
         // Per connection, so one refused handshake does not end the loop for everyone
         // else. Awaiting here would serialise accepts behind the slowest handshake.
@@ -125,10 +144,11 @@ export class Server<M extends AnyMap = Registered> {
     })()
     // The loop ends when the source ends, which is a transport concern rather than an
     // error. A source that throws surfaces through `acceptErrors` the same way.
-    this.#accepting.catch((e: unknown) => {
+    loop.catch((e: unknown) => {
       this.#acceptErrors++
       opts?.onAcceptError?.(e)
     })
+    return loop
   }
 
   /**
@@ -197,6 +217,7 @@ export class Server<M extends AnyMap = Registered> {
     const peer: ServerPeer<M> = {
       id,
       origin,
+      transport: conn.kind(),
       get rooms() {
         return hub.rooms(id)
       },

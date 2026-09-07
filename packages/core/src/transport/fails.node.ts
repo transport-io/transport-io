@@ -127,6 +127,10 @@ class FailsConnection implements Connection {
     return typeof reported === 'number' && reported > 0 ? reported : DATAGRAM_CONSERVATIVE_FLOOR
   }
 
+  kind(): 'webtransport' {
+    return 'webtransport'
+  }
+
   reliability(): 'pending' | 'reliable-only' | 'supports-unreliable' | undefined {
     const r = this.#session.reliability
     return r === 'pending' || r === 'reliable-only' || r === 'supports-unreliable'

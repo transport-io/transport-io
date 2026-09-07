@@ -59,6 +59,11 @@ Two parts, both required.
 (`{ lane, payload, returns }`) still works and is documented in API.md §1.3; use it only for
 a contract assembled programmatically.
 
+`unreliable(payload?, { fallback: 'newest' })` declares what the event accepts on a fallback
+transport, which carries the reliable lane only: in order, with the oldest and the stale
+dropped at the sender as the datagram ring drops them. An unreliable event that declares
+nothing blocks any fallback for the whole contract, at compile time, naming the event.
+
 **The `MapOf` line.** Without it, every hover shows the whole contract with the validator's
 internals in it (D57).
 
@@ -153,9 +158,12 @@ client.disconnect()
 | `on(event, handler)` | Returns an unsubscribe function. There is no `off()`. |
 | `subscribe(cb)` / `getSnapshot()` | For `useSyncExternalStore`. `getSnapshot` is referentially stable. |
 | `stats()` | Per-peer drop counters. |
+| `withFallback<M>(opts)` | `ClientOptions` plus `fallback`, a connector for a reliable-only transport. Native first on every connect; the fallback only on `WT_NO_SUPPORT` or `WT_UDP_UNREACHABLE`. Returns `FallbackClient<M>`: no `call()` or `stream()`; they live on `native`, which is `null` on a fallback session. Compiles only when every unreliable event declares a fallback, and the error names the event. |
 
-`ClientState` is `{ status, sessionId, rooms, lastError }` where `status` is
-`'idle' | 'connecting' | 'connected' | 'closing' | 'closed'`.
+`ClientState` is `{ status, sessionId, rooms, lastError, transport, fallbackReason }` where
+`status` is `'idle' | 'connecting' | 'connected' | 'closing' | 'closed'`, `transport` is
+`'webtransport' | 'websocket' | null` and `fallbackReason` is
+`'unsupported' | 'unreachable' | null`.
 
 ## Server
 
@@ -185,6 +193,11 @@ await server.listen(listener, { onAcceptError: (e) => console.error(e) })
 `server.acceptErrors` and reaches `onAcceptError`, and does not stop the loop. `listen()`
 with no argument leaves `accept(conn)` to you, which is for the case where a connection must
 be inspected before it is accepted.
+
+`server.withFallback(source)` accepts from a reliable-only transport after `listen()`, under
+the same compile-time gate as the client; a session whose contract has an undeclared
+unreliable event is refused at accept with `WT_RELIABILITY_REFUSED` and counted.
+`peer.transport` names what carries each peer.
 
 A handler receives `ctx.signal`, which fires when the caller aborts; one that returns
 promptly can ignore it. It also receives `ctx.peer`, the `ServerPeer` that made the call,
@@ -223,7 +236,7 @@ is never thrown from this library.
 | `WT_CONTRACT_MISMATCH` | an event's lane or id differs across peers | align the contract |
 | `WT_HANDSHAKE_TIMEOUT` | no handshake within 5s | usually an unsupported browser |
 | `WT_PEER_TOO_SLOW` | emit queue hit 256 frames | the peer was disconnected |
-| `WT_RELIABILITY_REFUSED` | session negotiated reliable-only | refused rather than lie about the unreliable lane |
+| `WT_RELIABILITY_REFUSED` | session negotiated reliable-only, or a fallback session whose contract has an unreliable event with no fallback declared | refused rather than lie about the unreliable lane; declare `fallback` on the event |
 | `WT_UNSUPPORTED_CODEC` | codec other than JSON | send codec `0x01` |
 | `WT_PAYLOAD_TOO_LARGE` | frame over its cap | use a call or a `stream()`, or split |
 | `WT_PROTOCOL_ERROR` | malformed frame | check against `PROTOCOL.md` |

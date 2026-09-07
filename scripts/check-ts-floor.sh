@@ -67,7 +67,18 @@ sed 's/"ok.ts"/"surface.ts"/' tsconfig.json > tsconfig.surface.json
 sed -e 's/"esnext"/"node16"/' -e 's/"bundler"/"node16"/' tsconfig.json > tsconfig.node16.json
 
 cat > ok.ts <<'TS'
-import { Client, createServer, defineContract, type MapOf, type$, VERSION } from 'transport-io'
+import {
+  Client,
+  createServer,
+  defineContract,
+  type MapOf,
+  reliable,
+  rpc,
+  type$,
+  unreliable,
+  VERSION,
+  withFallback,
+} from 'transport-io'
 import { browserClient, connectBrowser } from 'transport-io/browser-transport'
 import { connectDev, DEV_ENDPOINT, devClient } from 'transport-io/dev-transport'
 // Type-only: the node transport's declarations were never loaded at the floor version
@@ -109,6 +120,33 @@ export async function probeOneCall(url: string): Promise<void> {
   dev.disconnect()
 }
 
+/**
+ * The contract gate at the floor. `FallbackReady` is a conditional over a template literal
+ * type intersected into the options, the same shape `CheckPayloads` uses, and this is the
+ * call that instantiates it. `bad-fallback.ts` below is the half that must not compile.
+ */
+export const declared = defineContract({
+  chat: reliable<{ body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>({ fallback: 'newest' }),
+  save: rpc<{ text: string }, { n: number }>(),
+})
+export interface DeclaredMap extends MapOf<typeof declared> {}
+
+export async function probeFallback(url: string): Promise<number> {
+  const client = withFallback<DeclaredMap>({
+    contract: declared,
+    connect: () => connectBrowser({ url }),
+    fallback: () => connectBrowser({ url }),
+  })
+  await client.connect()
+  client.emit('cursor', { x: 1, y: 2 })
+  const lanes = client.native
+  const n = lanes === null ? 0 : (await lanes.call('save', { text: 'x' })).n
+  const transport: string | null = client.getSnapshot().transport
+  client.disconnect()
+  return n + (transport === null ? 0 : 1)
+}
+
 export async function probe(url: string): Promise<number> {
   const server = createServer<AppMap>({ contract, adapter: new HostileAdapter('probe') })
   server.handle('save', async ({ text }) => ({ n: text.length }))
@@ -137,6 +175,25 @@ interface AppMap extends MapOf<typeof contract> {}
 declare const client: Client<AppMap>
 client.emit('nope', { body: 'x' })
 TS
+
+cat > bad-fallback.ts <<'TS'
+import { defineContract, type MapOf, reliable, unreliable, withFallback } from 'transport-io'
+import { connectBrowser } from 'transport-io/browser-transport'
+
+const contract = defineContract({
+  chat: reliable<{ body: string }>(),
+  cursor: unreliable<{ x: number; y: number }>(),
+})
+interface AppMap extends MapOf<typeof contract> {}
+
+// cursor declares no fallback, so this line must not compile.
+withFallback<AppMap>({
+  contract,
+  connect: () => connectBrowser({ url: 'https://x/' }),
+  fallback: () => connectBrowser({ url: 'https://x/' }),
+})
+TS
+sed 's/"ok.ts"/"bad-fallback.ts"/' tsconfig.json > tsconfig.badfallback.json
 
 # Every published export, referenced. Generated from the tarball's own declarations rather
 # than hand-listed: the probe above exercises the surface a user meets first, and this makes
@@ -180,6 +237,7 @@ const UNREACHABLE = {
   "transport/moq.node.d.ts": "the alternative transport behind the ADR 0007 seam, unexported",
   "timers.d.ts": "the timer registry a teardown owns, reachable only through private fields",
   "transport/parity-suite.d.ts": "test infrastructure for transport implementers",
+  "transport/probe.d.ts": "the probe after a failed handshake, reachable only through a connector option",
 }
 const missing = shipped
   .filter((f) => !listed.includes(f))
@@ -208,3 +266,11 @@ if "$TSC" -p tsconfig.bad.json > /dev/null 2>&1; then
   exit 1
 fi
 echo "ts floor: an unknown event name is still rejected at $FLOOR"
+
+# The contract gate: an undeclared unreliable event behind a fallback must fail to compile
+# at the floor, not only on current TypeScript, or the gate is a promise rather than a check.
+if "$TSC" -p tsconfig.badfallback.json > /dev/null 2>&1; then
+  echo "ts floor: an undeclared unreliable event compiled behind withFallback at $FLOOR" >&2
+  exit 1
+fi
+echo "ts floor: the fallback gate still fires at $FLOOR"
