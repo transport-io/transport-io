@@ -3097,3 +3097,25 @@ to notice.
 
 **Reconsider when:** a user needs calls over the fallback, at which point the multiplexed
 variant is costed again against what that user actually does with them.
+
+### D123. The React binding accepts a fallback client, and says what it cannot carry
+D121 left the binding typing its provider against `Client<M>`, which a `FallbackClient<M>`
+does not satisfy, so an application with a fallback could not mount one. Hooks cannot be
+absent the way `call()` is on the client, so the shape is a state instead.
+
+**Decision.** `TransportProvider` takes `Client<M> | FallbackClient<M>`, and `useClient()`
+returns that union, so `call` and `stream` are never reachable through it without narrowing.
+`useNative()` is the narrowed handle, following the session: the client on a native session,
+`null` on a fallback one, re-rendering when that changes. `CallState` and `StreamState` gain
+`unavailable`, driven by the snapshot's transport rather than by the type, so it is reported
+before anything is asked and invoking asks nothing. The branch is in the union for every
+client and reachable only with a fallback, which costs a `case` and buys one type surface
+rather than two. Inside the binding the two clients are one object, and one cast records
+that where `call` is invoked.
+
+**Measured.** Hover for every hook is unchanged. Four tests over a loopback that reports
+itself as a WebSocket: `useCall` and `useStream` render `unavailable` first and ask nothing,
+`useNative()` is `null` there and the client on a native session.
+
+**Reconsider when:** a second binding needs the same split, at which point the branch and the
+narrowed handle move to core as the client's own surface.

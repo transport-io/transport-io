@@ -85,6 +85,11 @@ A reconnect is a new session, and StrictMode calls it twice in development. `con
 already does this; a hand-rolled one that returns a single fixed connection will hang on the
 second call.
 
+A client built with `withFallback` fits the provider as well. On a fallback session, which
+carries emits and nothing else, `useCall` and `useStream` report `unavailable` before anything
+is asked, `useNative()` is `null`, and `useConnection().transport` is `'websocket'`. Nothing
+is discovered by calling.
+
 ## Connection state
 
 ```tsx
@@ -152,10 +157,14 @@ export function Save(): ReactNode {
       {state.status === 'pending' && <span>saving…</span>}
       {state.status === 'error' && <span>{state.error.code}</span>}
       {state.status === 'success' && <span>{state.data.n} characters</span>}
+      {state.status === 'unavailable' && <span>not on this connection</span>}
     </>
   )
 }
 ```
+
+`unavailable` is the state on a fallback session, where there is no stream to carry a call.
+It is there before the button is pressed, and pressing it asks nothing.
 
 **Unmounting aborts an in-flight call.** An unmounted component's answer goes nowhere, and
 aborting is a QUIC stream reset that costs no application message. That bites when the call
@@ -181,6 +190,7 @@ export function Ask(): ReactNode {
           Stop
         </button>
       )}
+      {state.status === 'unavailable' && <span>not on this connection</span>}
       {state.status !== 'idle' && <p>{state.elements.join('')}</p>}
     </>
   )

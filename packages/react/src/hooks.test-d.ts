@@ -47,7 +47,7 @@ expectTypeOf(({ status: 'pending' } as CallState<number>).data)
 
 declare const sstate: StreamState<string>
 if (sstate.status !== 'idle') {
-  // Present in streaming, done and error alike, so a render never loses what arrived.
+  // Present in streaming, done, error and unavailable alike, so a render never loses what arrived.
   expectTypeOf(sstate.elements).toEqualTypeOf<readonly string[]>()
 }
 
@@ -120,4 +120,32 @@ export function FactoryTypes(): null {
   other.useEvent('chat', () => {})
 
   return null
+}
+
+// --- a fallback client fits the provider, and the state says what it cannot carry ---
+//
+// The two clients are one object at runtime; what changes is what the compiler lets a
+// component reach. `useClient` returns the union so `call` is never reachable unnarrowed,
+// and the hooks carry an `unavailable` branch a render can switch on.
+import type { Client, FallbackClient, NativeLanes } from 'transport-io'
+import type { AnyClient, TransportProviderProps } from './context.tsx'
+import type { useNative } from './use-native.ts'
+
+expectTypeOf<TransportProviderProps<TestMap>['client']>().toEqualTypeOf<
+  Client<TestMap> | FallbackClient<TestMap>
+>()
+expectTypeOf<AnyClient<TestMap>>().toEqualTypeOf<Client<TestMap> | FallbackClient<TestMap>>()
+expectTypeOf<ReturnType<typeof useNative>>().toEqualTypeOf<NativeLanes<TestMap> | null>()
+
+const unavailableCall: CallState<{ n: number }> = { status: 'unavailable' }
+const unavailableStream: StreamState<string> = { status: 'unavailable', elements: [] }
+void unavailableCall
+void unavailableStream
+declare const anyClient: AnyClient<TestMap>
+// `emit` is on both kinds; `call` is on neither without narrowing.
+anyClient.emit('chat', { body: 'hi' })
+// @ts-expect-error call() is not reachable through the union
+void anyClient.call
+if (!('native' in anyClient)) {
+  expectTypeOf(anyClient.call('save', { text: 'x' })).toEqualTypeOf<Promise<{ n: number }>>()
 }

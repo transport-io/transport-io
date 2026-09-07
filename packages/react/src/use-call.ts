@@ -1,7 +1,7 @@
 'use client'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { type AnyMap, type CallableOf, type Registered, TransportError } from 'transport-io'
-import { useClient } from './context.tsx'
+import { callable, useClient } from './context.tsx'
 
 /**
  * A union rather than independent flags.
@@ -15,6 +15,13 @@ export type CallState<R> =
   | { readonly status: 'pending' }
   | { readonly status: 'error'; readonly error: TransportError }
   | { readonly status: 'success'; readonly data: R }
+  /**
+   * The session is on a fallback transport, which has no streams to carry a call. Reported
+   * before anything is asked, and only by a client built with `withFallback`.
+   */
+  | { readonly status: 'unavailable' }
+
+const UNAVAILABLE: { readonly status: 'unavailable' } = Object.freeze({ status: 'unavailable' })
 
 export interface UseCallOptions {
   /**
@@ -51,6 +58,16 @@ export function useCall<K extends CallableOf<Registered> & string>(
   const [state, setState] = useState<CallState<Registered[K]['returns']>>({ status: 'idle' })
   const abortOnUnmount = options?.abortOnUnmount ?? true
 
+  // Availability follows the session, so a component knows before it asks and forgets when
+  // a reconnect lands on the native transport again.
+  const subscribe = useCallback((onChange: () => void) => client.subscribe(onChange), [client])
+  const transport = useSyncExternalStore(
+    subscribe,
+    () => client.getSnapshot().transport,
+    () => null,
+  )
+  const unavailable = transport === 'websocket'
+
   const inFlight = useRef<AbortController | null>(null)
   const mounted = useRef(true)
 
@@ -64,6 +81,8 @@ export function useCall<K extends CallableOf<Registered> & string>(
 
   const invoke = useCallback(
     async (payload: Registered[K]['payload']): Promise<void> => {
+      // The state already says so; there is nothing to ask and nothing to report twice.
+      if (client.getSnapshot().transport === 'websocket') return
       // A second call supersedes the first: rendering two answers at once is not a state
       // this union can hold, and the newer one is the one the user asked for.
       inFlight.current?.abort()
@@ -71,7 +90,7 @@ export function useCall<K extends CallableOf<Registered> & string>(
       inFlight.current = controller
       setState({ status: 'pending' })
       try {
-        const data = await client.call(event, payload, { signal: controller.signal })
+        const data = await callable(client).call(event, payload, { signal: controller.signal })
         if (mounted.current && inFlight.current === controller) {
           setState({ status: 'success', data })
         }
@@ -87,5 +106,6 @@ export function useCall<K extends CallableOf<Registered> & string>(
     [client, event],
   )
 
-  return useMemo(() => [invoke, state] as const, [invoke, state])
+  const shown = unavailable ? UNAVAILABLE : state
+  return useMemo(() => [invoke, shown] as const, [invoke, shown])
 }

@@ -1,7 +1,7 @@
 'use client'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { type AnyMap, type Registered, type StreamableOf, TransportError } from 'transport-io'
-import { useClient } from './context.tsx'
+import { callable, useClient } from './context.tsx'
 
 /** `elements` is present in every state after the first, so a render never loses what arrived. */
 export type StreamState<T> =
@@ -13,6 +13,15 @@ export type StreamState<T> =
       readonly elements: readonly T[]
       readonly error: TransportError
     }
+  /**
+   * The session is on a fallback transport, which has no streams. See `CallState`. It carries
+   * `elements` like every state after `idle`, empty, so a render that reads them keeps working.
+   */
+  | { readonly status: 'unavailable'; readonly elements: readonly T[] }
+
+const NOTHING: readonly never[] = Object.freeze([])
+const UNAVAILABLE: { readonly status: 'unavailable'; readonly elements: readonly never[] } =
+  Object.freeze({ status: 'unavailable', elements: NOTHING })
 
 export interface UseStreamOptions<T> {
   /**
@@ -51,6 +60,13 @@ export function useStream<K extends StreamableOf<Registered> & string>(
   type T = Registered[K]['yields']
   const client = useClient()
   const [state, setState] = useState<StreamState<T>>({ status: 'idle' })
+  const subscribe = useCallback((onChange: () => void) => client.subscribe(onChange), [client])
+  const transport = useSyncExternalStore(
+    subscribe,
+    () => client.getSnapshot().transport,
+    () => null,
+  )
+  const unavailable = transport === 'websocket'
 
   const active = useRef<{ cancel: () => void } | null>(null)
   const mounted = useRef(true)
@@ -77,8 +93,9 @@ export function useStream<K extends StreamableOf<Registered> & string>(
 
   const start = useCallback(
     (payload: Registered[K]['payload']): void => {
+      if (client.getSnapshot().transport === 'websocket') return
       active.current?.cancel()
-      const result = client.stream(event, payload)
+      const result = callable(client).stream(event, payload)
       active.current = result
       /**
        * `elements` keeps its identity between renders because it is only ever replaced when
@@ -116,5 +133,6 @@ export function useStream<K extends StreamableOf<Registered> & string>(
     [client, event],
   )
 
-  return useMemo(() => [start, state, stop] as const, [start, state, stop])
+  const shown = unavailable ? UNAVAILABLE : state
+  return useMemo(() => [start, shown, stop] as const, [start, shown, stop])
 }

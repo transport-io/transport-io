@@ -16,15 +16,18 @@
  * `MapOf<typeof contract>` in directly instead of a named interface takes it to 411, which is
  * the alias expansion this project has now measured three times.
  */
-import type { AnyMap, CallableOf, Client, StreamableOf } from 'transport-io'
-import { useClient } from './context.tsx'
+import type { AnyMap, CallableOf, NativeLanes, StreamableOf } from 'transport-io'
+import { type AnyClient, useClient } from './context.tsx'
 import { type UseCallOptions, type UseCallResult, useCall } from './use-call.ts'
 import { type Connection, useConnection } from './use-connection.ts'
 import { useEvent } from './use-event.ts'
+import { useNative } from './use-native.ts'
 import { type UseStreamOptions, type UseStreamResult, useStream } from './use-stream.ts'
 
 export interface Hooks<M extends AnyMap> {
-  useClient(): Client<M>
+  useClient(): AnyClient<M>
+  /** `call` and `stream` as the current session carries them, or `null` on a fallback. */
+  useNative(): NativeLanes<M> | null
   useConnection(): Connection
   useEvent<K extends keyof M & string>(
     event: K,
@@ -53,5 +56,12 @@ export interface Hooks<M extends AnyMap> {
  * parameter changes is which event names and payloads the compiler accepts.
  */
 export function createHooks<M extends AnyMap>(): Hooks<M> {
-  return { useClient, useConnection, useEvent, useCall, useStream } as unknown as Hooks<M>
+  return {
+    useClient,
+    useNative,
+    useConnection,
+    useEvent,
+    useCall,
+    useStream,
+  } as unknown as Hooks<M>
 }

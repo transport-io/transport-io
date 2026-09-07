@@ -5,7 +5,7 @@
 import { describe, expect, test } from 'bun:test'
 import { act, render } from '@testing-library/react'
 import { useState } from 'react'
-import { settle, wire } from './harness.tsx'
+import { settle, wire, wireFallback } from './harness.tsx'
 import { useStream } from './use-stream.ts'
 
 describe('elements identity', () => {
@@ -204,6 +204,36 @@ describe('unmounting mid-generation', () => {
     })
 
     expect(last).toBe('done')
+    client.disconnect()
+  })
+})
+
+describe('on a fallback session', () => {
+  test('the stream is unavailable before anyone asks, and start starts nothing', async () => {
+    const { client, server, wrapper } = await wireFallback()
+    let asked = 0
+    server.handle('ask', async function* () {
+      asked++
+      yield 'never'
+    })
+
+    const seen: string[] = []
+    let start: ((p: { prompt: string }) => void) | undefined
+    function Component(): null {
+      const [begin, state] = useStream('ask')
+      start = begin
+      seen.push(state.status)
+      return null
+    }
+
+    render(<Component />, { wrapper })
+    expect(seen[0]).toBe('unavailable')
+    await act(async () => {
+      start?.({ prompt: 'x' })
+      await settle(10)
+    })
+    expect(asked).toBe(0)
+    expect(seen.every((s) => s === 'unavailable')).toBe(true)
     client.disconnect()
   })
 })

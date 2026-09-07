@@ -10,15 +10,22 @@ import { createContext, type ReactNode, useContext, useEffect } from 'react'
  * than one user, so the documented pattern builds one per browser session inside a client
  * component and the server never shares it.
  */
-import type { AnyMap, Client, Registered } from 'transport-io'
+import type { AnyMap, Client, FallbackClient, NativeLanes, Registered } from 'transport-io'
+
+/**
+ * Either kind of client. `withFallback` returns the same object as `new Client` with `call`
+ * and `stream` typed away, so the two differ in what the compiler lets a component reach,
+ * never in what is there.
+ */
+export type AnyClient<M extends AnyMap = Registered> = Client<M> | FallbackClient<M>
 
 // Stored loosely and narrowed on the way out. The provider is generic so it accepts a client
 // for any map, which is what `createHooks` needs: nothing is registered, so `Client` alone
 // would mean `Client<NoContractRegistered>` and reject every real client.
-const ClientContext = createContext<Client<AnyMap> | null>(null)
+const ClientContext = createContext<AnyClient<AnyMap> | null>(null)
 
 export interface TransportProviderProps<M extends AnyMap = Registered> {
-  readonly client: Client<M>
+  readonly client: AnyClient<M>
   /**
    * Connect while the provider is mounted. On by default: `connect` and `disconnect` are
    * idempotent and refcounted in core, so mounting twice is safe, and every application
@@ -45,7 +52,9 @@ export function TransportProvider<M extends AnyMap = Registered>({
   }, [client, autoConnect])
 
   return (
-    <ClientContext.Provider value={client as Client<AnyMap>}>{children}</ClientContext.Provider>
+    <ClientContext.Provider value={client as unknown as AnyClient<AnyMap>}>
+      {children}
+    </ClientContext.Provider>
   )
 }
 
@@ -55,7 +64,7 @@ export function TransportProvider<M extends AnyMap = Registered>({
  * Throws a plain `Error` rather than a `TransportError`: nothing has gone wrong on the
  * wire, and core must never gain a React-shaped error code.
  */
-export function useClient(): Client<Registered> {
+export function useClient(): AnyClient<Registered> {
   const client = useContext(ClientContext)
   if (client === null) {
     throw new Error(
@@ -64,5 +73,17 @@ export function useClient(): Client<Registered> {
         'of the file that renders it.',
     )
   }
-  return client as Client<Registered>
+  return client as unknown as AnyClient<Registered>
+}
+
+/**
+ * `call` and `stream` as the object has them, whatever its type says.
+ *
+ * The hooks decide availability from the snapshot's transport, not from the type: a
+ * fallback client on a native session carries both lanes, and on a fallback session the hook
+ * reports `unavailable` before this is ever reached. The cast is honest because
+ * `withFallback` hands back the `Client` instance itself.
+ */
+export function callable<M extends AnyMap>(client: AnyClient<M>): NativeLanes<M> {
+  return client as unknown as NativeLanes<M>
 }

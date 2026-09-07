@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { act, render } from '@testing-library/react'
-import { settle, wire } from './harness.tsx'
+import { settle, wire, wireFallback } from './harness.tsx'
 import { useCall } from './use-call.ts'
 
 describe('the state machine', () => {
@@ -142,6 +142,37 @@ describe('unmounting', () => {
 
     expect(aborted).toBe(false)
     expect(completed).toBe(true)
+    client.disconnect()
+  })
+})
+
+describe('on a fallback session', () => {
+  test('the state is unavailable before anyone asks, and invoking asks nothing', async () => {
+    const { client, server, wrapper } = await wireFallback()
+    let asked = 0
+    server.handle('save', async ({ text }) => {
+      asked++
+      return { n: text.length }
+    })
+
+    const seen: string[] = []
+    let invoke: ((p: { text: string }) => Promise<void>) | undefined
+    function Component(): null {
+      const [call, state] = useCall('save')
+      invoke = call
+      seen.push(state.status)
+      return null
+    }
+
+    render(<Component />, { wrapper })
+    expect(seen[0]).toBe('unavailable')
+
+    await act(async () => {
+      await invoke?.({ text: 'hello' })
+      await settle(10)
+    })
+    expect(asked).toBe(0)
+    expect(seen.every((s) => s === 'unavailable')).toBe(true)
     client.disconnect()
   })
 })

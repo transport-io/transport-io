@@ -36,11 +36,12 @@ The named exports below read the globally registered map instead.
 |---|---|
 | `createHooks<AppMap>()` | The hooks, typed for one contract. The documented default. |
 | `<TransportProvider client>` | Holds the client and connects while mounted. Takes a client rather than making one. |
-| `useClient()` | The client itself, for `emit` and anything else. |
+| `useClient()` | The client itself, for `emit`. A `Client` or a `FallbackClient`, so `call` and `stream` are reached through `useNative()`. |
+| `useNative()` | `call` and `stream` as the current session carries them, or `null` on a fallback session. |
 | `useConnection()` | Status, session id, rooms, last error, and the connect and disconnect calls. |
 | `useEvent(name, handler)` | Subscribe for as long as the component is mounted. No memoising required. |
-| `useCall(name)` | Request and response, as a discriminated union. |
-| `useStream(name)` | A streaming response, accumulated. `stop` ends it as `done`; unmount cancels. |
+| `useCall(name)` | Request and response, as a discriminated union. `unavailable` on a fallback session, before anything is asked. |
+| `useStream(name)` | A streaming response, accumulated. `stop` ends it as `done`; unmount cancels. `unavailable` on a fallback session. |
 
 There is deliberately no `useEmit` and no `useRooms`. `emit` is one synchronous method with
 no state and no cleanup, so `useClient().emit(…)` is already the right call. `useRooms` would

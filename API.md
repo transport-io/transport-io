@@ -692,6 +692,7 @@ discovered downstream.
 | `client.getSnapshot()` | The `getSnapshot` half. **Returns a referentially stable frozen object.** |
 | `client.on(event, handler)` | Returns an unsubscribe function, making effect cleanup a one-liner. |
 | `TransportError.code` | Lets a binding branch on a stable code rather than a message. |
+| `client.getSnapshot().transport` | What carries the session, so a binding can report a call as unavailable on a fallback before it is made. `native` on a `FallbackClient` is the same fact as an object. |
 
 Core imports no framework, not even as a type-only import, and holds no module-level
 singleton or global mutable state.

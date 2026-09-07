@@ -32,7 +32,7 @@ Node ≥ 22. TypeScript ≥ 5.0 for consumers.
 | `transport-io/websocket-transport` | `connectWebSocket` | anywhere with a `WebSocket` global |
 | `transport-io/websocket-node-transport` | `listenWebSocket` | Node only, needs the optional peer `ws` |
 | `transport-io/testing` | `HostileAdapter`, `loopbackPair`, `UnreliableConnection` | tests |
-| `@transport-io/react` | `TransportProvider`, `createHooks`, `useClient`, `useConnection`, `useEvent`, `useCall`, `useStream` | React 19.2 or newer |
+| `@transport-io/react` | `TransportProvider`, `createHooks`, `useClient`, `useNative`, `useConnection`, `useEvent`, `useCall`, `useStream` | React 19.2 or newer |
 
 `transport-io/node-transport` loads a native addon that segfaults Bun on exit. Only import
 it from a file named `*.node.ts`.
@@ -351,9 +351,12 @@ Rules:
 ## React
 
 `@transport-io/react` is the binding. `createHooks<AppMap>()` returns `useConnection`,
-`useEvent`, `useCall` and `useStream` typed for one map. `TransportProvider` takes an
-unconnected `Client` and connects it in an effect, so construct the client with `new Client`
-inside a `useState` initialiser, never at module level. React 19.2 or newer. The guide is at
+`useEvent`, `useCall`, `useStream` and `useNative` typed for one map. `TransportProvider`
+takes an unconnected `Client`, or a `FallbackClient` from `withFallback`, and connects it in
+an effect, so construct the client inside a `useState` initialiser, never at module level. On
+a fallback session `useCall` and `useStream` report `unavailable` before anything is asked and
+`useNative()` is `null`; `useClient()` returns either kind, so `call` is reached through
+`useNative()`. React 19.2 or newer. The guide is at
 https://transport-io.github.io/transport-io/guides/react/.
 
 ## Not implemented
