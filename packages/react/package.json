@@ -1,6 +1,6 @@
 {
   "name": "@transport-io/react",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "React bindings for transport-io. Hooks over useSyncExternalStore, correct under StrictMode, SSR and RSC.",
   "license": "MIT",
   "type": "module",
