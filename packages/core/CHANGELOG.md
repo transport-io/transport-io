@@ -1,5 +1,34 @@
 # transport-io
 
+## 0.8.0
+
+### Minor Changes
+
+- 1928065: An unreliable event can declare what it accepts on a transport that carries the reliable lane
+  only: `unreliable(payload, { fallback: 'newest' })`, carried in order with the oldest and the
+  stale dropped at the sender as the datagram ring drops them. `withFallback` on the client and
+  `server.withFallback` on the server accept a fallback connector only when every unreliable
+  event in the contract has declared one; otherwise the line fails to compile and names the
+  event. A `FallbackClient` has no `call()` or `stream()`; they live on `native`, `null` on a
+  fallback session. A session on a fallback transport whose contract has an undeclared
+  unreliable event is refused with `WT_RELIABILITY_REFUSED` before the handshake. `ClientState`
+  gains `transport` and `fallbackReason`, and `ServerPeer` gains `transport`.
+- ad4aa33: A failed handshake now asks whether the same origin answers over HTTPS, and reports
+  `WT_UDP_UNREACHABLE` when it does: the server is up over TCP and only the QUIC path is
+  failing, which is what a firewall, a VPN or a platform with no UDP ingress looks like.
+  `WT_HANDSHAKE_FAILED` is unchanged where nothing answers, and its message says so. The probe
+  runs only after the failure. `connectBrowser` and `connectHttp3` take `probe` to override the
+  target or `false` to skip it; `connectDev` skips it. A failed `connectHttp3` raised
+  `WT_SESSION_CLOSED` before and now raises the same two codes as the browser connector.
+- 6dfe08b: The emit lane over a WebSocket, as the one fallback transport. `connectWebSocket` from
+  `transport-io/websocket-transport` is the connector for `withFallback`, and `listenWebSocket`
+  from `transport-io/websocket-node-transport` is the listener for `server.withFallback`, over
+  `ws`, an optional peer. It carries emits both ways and unreliable events that declare
+  `fallback: 'newest'`, wrapped in a `DATAGRAM` frame on the emit lane; `call()` and
+  `stream()` fail there with `WT_LANE_UNAVAILABLE`, which `FallbackClient` makes unreachable
+  in TypeScript. The sink polls `bufferedAmount` so the emit queue's bound is reachable on a
+  browser socket. The listener answers the probe that reports `WT_UDP_UNREACHABLE`.
+
 ## 0.7.3
 
 ### Patch Changes
