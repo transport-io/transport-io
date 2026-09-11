@@ -56,8 +56,8 @@ Property ''fallback refused'' is missing in type '{ contract: ...; connect: ...;
 
 ## End to end
 
-The client tries WebTransport first, every time, and takes the fallback when the runtime has
-no WebTransport or the WebTransport handshake fails and the WebSocket connects:
+The client tries WebTransport first, every time, and takes the fallback when WebTransport is
+missing, fails to connect, or connects and then stays silent:
 
 ```ts file=client.ts
 import { withFallback } from 'transport-io'
@@ -185,16 +185,25 @@ export function Save(): ReactNode {
 
 ## How the switch is decided
 
-Every connect starts from WebTransport. The fallback engages on two conditions and no other:
-the runtime has no WebTransport, or the WebTransport handshake fails and the WebSocket
-connects. A dead server fails both and reports the WebTransport error. A wrong or expired
-pinned hash fails the handshake as a blocked path does, and falls back the same way. A
-reconnect starts from WebTransport again, so leaving a network that blocks UDP brings the
-other lanes back on the next session, and a session never changes transport in place.
+Every connect starts from WebTransport. The fallback engages on three conditions and no
+other: the runtime has no WebTransport; the WebTransport handshake fails and the WebSocket
+connects; or the WebTransport session connects and then nothing arrives before the
+application handshake, which is `WT_HANDSHAKE_TIMEOUT` after 5 seconds. The third is Safari.
+It establishes a session and never sends, so on Safari the fallback engages 5 seconds after
+each connect, and after each reconnect, since every connect starts from WebTransport. A
+server that accepted the session and is stuck before its first frame produces the same
+signal and falls back the same way, and so does a path that completes the handshake and
+then drops stream data; in both, the WebSocket is dialled and, if it fails too, the
+WebTransport error is reported. A dead server fails both and reports the WebTransport error.
+A wrong or expired pinned hash fails the handshake as a blocked path does, and falls back the
+same way. A reconnect starts from WebTransport again, so leaving a network that blocks UDP
+brings the other lanes back on the next session, and a session never changes transport in
+place.
 
 The snapshot says which. `transport` is `'webtransport'` or `'websocket'`, `null` until
-connected. `fallbackReason` is `'unsupported'` or `'unreachable'` on a fallback session,
-`null` on a native one. `useConnection()` carries both.
+connected. `fallbackReason` is `'unsupported'`, the runtime has no WebTransport it can use
+against this server, or `'unreachable'`, the WebTransport handshake failed and the WebSocket
+connected; `null` on a native session. `useConnection()` carries both.
 
 ## `WT_UDP_UNREACHABLE`
 
@@ -215,8 +224,7 @@ does not depend on it; with a WebSocket configured, the WebSocket handshake is t
 - **A dead path takes up to 45 seconds to notice.** Each side sends a keepalive after 15
   seconds of silence and closes the session after 45 seconds without a message. Keep any
   proxy's idle timeout above 15 seconds, or it closes quiet sessions first.
-- **Safari does not reach it.** Safari establishes a WebTransport session and never sends,
-  which fails as `WT_HANDSHAKE_TIMEOUT` after the transport connected. The fallback engages
-  only when the runtime has no WebTransport or the WebTransport handshake fails, so on Safari
-  it is not tried.
+- **Safari reaches it after 5 seconds.** Safari establishes a WebTransport session and never
+  sends, so the fallback engages when the handshake deadline passes, on every connect and
+  every reconnect. Emits only, as everywhere on the fallback.
 - **One pipe.** A large emit delays every emit behind it, in both directions.

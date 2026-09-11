@@ -109,8 +109,9 @@ Part 2.
 - **npm's `bin` is a symlink, and `process.argv[1]` keeps it while `import.meta.url` is the
   target.** An entry guard comparing the two is a no-op through `npx`. Compare real paths, and
   test a CLI through `node_modules/.bin`, never only through `node` on the file. See D115.
-- **Safari cannot talk to a quiche-backed server** and is unsupported in v1. Chrome and
-  Firefox only.
+- **Safari cannot talk to a quiche-backed server** and is unsupported over WebTransport.
+  Chrome and Firefox only there; the fallback reaches Safari after the handshake deadline,
+  on every connect (D128).
 - **The reference transport applies no write backpressure.** `writer.ready` resolves
   unconditionally, measured: a producer ran 136,523 frames ahead of a consumer that had taken
   40, growing with the run. `stream()` carries its own credit window because of it.

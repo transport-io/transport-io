@@ -233,6 +233,10 @@ We do not merely document it - we detect it. See D16.
 `@fails-components` ships a release built against it. Concretely: `WT_MAX_DATA` appears
 in the shipped binary's strings.
 
+**Note, 2026-09-12.** Detected and now routed: with a fallback configured, the detection is
+what dials the WebSocket, and Safari gets the emit lane after the handshake deadline (D128).
+The trigger above is unchanged; it is what would give Safari the other lanes.
+
 ### D12. Zero-length frames and datagrams are a protocol error
 Stream close is D7's terminator, so no zero-length sentinel was ever needed. A length
 prefix of 0 is a protocol error; the receiver rejects the frame rather than forwarding
@@ -3254,6 +3258,9 @@ once and carries the session, and a fallback that fails leaves the WebTransport 
 `WT_HANDSHAKE_TIMEOUT` from the session after the connector has returned; the fallback does
 not engage on it.
 
+**Note, 2026-09-12.** The paragraph above is closed by D128: the fallback engages on that
+timeout as well.
+
 **Reconsider when:** a fallback session is reported on a network where WebTransport works,
 at which point the WebTransport error that preceded the fallback goes on the snapshot so the
 cause can be read.
@@ -3331,3 +3338,59 @@ is the change.
 **Reconsider when:** a second listener implementation needs the connection class, at which
 point it is exported from an internal entry of its own under the seam's contract (D21)
 rather than from the connector's.
+
+### D128. A WebTransport session that connects and then sends nothing dials the fallback
+Safari establishes a WebTransport session and never sends (F10, D11). `connectBrowser` awaits
+the platform's `session.ready`, which resolves on Safari, so the connector returns and
+`withFallback`'s decision, which lived in the open step, had already passed with no error.
+The session then armed its deadline and awaited the emit stream, the frame 0 write and the
+peer's frame 0 in turn; at 5000 ms it closed as `WT_HANDSHAKE_TIMEOUT` and `connect()`
+rejected with it. The browser the fallback most obviously exists for never reached it.
+
+**Decision.** The fallback decision moves from the open step into the connect step. The
+client starts a session over the native connector, and if that start rejects with
+`WT_HANDSHAKE_TIMEOUT` on a `webtransport` connection and a fallback is configured, the
+timed-out session having already closed itself, the WebSocket is dialled and a new session
+started over it. If that fails too, the WebTransport error is thrown. `unsupported` is
+redefined as the runtime having no WebTransport it can use against this server: none at all,
+or one that connects and cannot send. Safari is a runtime property and `unreachable` is a
+network property, and an application acts on that split. No per-client memory of the reason:
+every connect starts from WebTransport, as before.
+
+The signal is clean. The handshake is frame 0 of the emit stream and both sides send it
+without waiting, so a live peer is never quiet before `ready`; silence there, on a transport
+that connected, means a peer that cannot send. Nothing else in the library produces it.
+Silence after `ready` is normal and is what QUIC's idle timeout and D126's deadline cover;
+this entry does not touch it. Two other causes produce the same signal and are handled the
+same way: a server that accepted the session and is wedged before its first frame, which
+then times out the WebSocket too and reports the WebTransport error; and a path that
+completes the handshake and drops stream data, which falls back, correctly. The guide says
+both.
+
+The session rule holds. `transport` reaches the snapshot only when a session's handshake has
+completed, so the WebTransport session that timed out was never the client's transport; it
+was closed by its own deadline, and the WebSocket session is a different object over a
+different connection. Nothing changes transport in place, and D4 is untouched: all of this
+is inside one `connect()`, before any session exists in the application's eyes.
+
+**Cost.** 5000 ms before the WebSocket is dialled, on Safari, on every connect and every
+reconnect. Chrome and Firefox pay nothing, since the deadline never fires for them. Stated
+as a number wherever the fallback is documented.
+
+**Unmeasured.** Which of the three awaits parks on Safari, the emit stream open, the frame 0
+write or `ready`, is not known: no Safari runs on this machine or in the matrix. F10 gives
+the mechanism, Safari waiting for `WT_MAX_DATA` credit the server never sends, which stalls
+whatever first needs that credit. It does not change the design, since all three end at the
+same deadline with the same code, and the test reproduces the signal rather than the
+mechanism: a loopback peer that never sends frame 0, under a short deadline, and the test's
+name says so.
+
+**Measured.** Before the change, that test rejected with `WT_HANDSHAKE_TIMEOUT` and the
+fallback was never asked. After it: the fallback is asked once and carries the session as
+`unsupported`, the silent session's `closed` reports 1002, and silence on the WebSocket too
+throws the WebTransport error. A silent native connection that is not `webtransport` is
+thrown as it is, so the trigger stays WebTransport's.
+
+**Reconsider when:** someone reports the 5000 ms on reconnect as a real problem, at which
+point a per-client memory for runtime-class reasons is costed against the every-connect rule
+it bends.

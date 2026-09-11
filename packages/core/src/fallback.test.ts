@@ -175,6 +175,76 @@ describe('withFallback on the client', () => {
     expect(client.getSnapshot().lastError?.code).toBe('WT_HANDSHAKE_FAILED')
   })
 
+  /**
+   * The signal, not the mechanism. Safari establishes a WebTransport session and then never
+   * sends, because the server never credits it; no Safari runs here, so what is reproduced
+   * is what the client can see of that: a transport that connected, then silence before the
+   * application handshake. Nothing else in the library produces that (D128).
+   */
+  test('a transport that connected and then went silent before the handshake falls back: the signal reproduced, not Safari', async () => {
+    // Nobody serves the native side, so its handshake never arrives.
+    const [, silentNative] = loopbackPair()
+    const [serverSide, clientSide] = loopbackPair(1024, 'websocket')
+    await serve(serverSide)
+    let asked = 0
+    const client = withFallback<DeclaredMap>({
+      contract: declared,
+      handshakeDeadlineMs: 60,
+      connect: async () => silentNative,
+      fallback: async () => {
+        asked++
+        return clientSide
+      },
+    })
+    await client.connect()
+    expect(asked).toBe(1)
+    const s = client.getSnapshot()
+    expect(s.status).toBe('connected')
+    expect(s.transport).toBe('websocket')
+    expect(s.fallbackReason).toBe('unsupported')
+    expect(s.lastError).toBeNull()
+    // The silent session was closed by its own deadline, with the code that says so.
+    expect((await silentNative.closed).code).toBe(CloseCode.WT_HANDSHAKE_TIMEOUT)
+    client.disconnect()
+  })
+
+  test('silence on the fallback as well throws the WebTransport handshake timeout', async () => {
+    const [, silentNative] = loopbackPair()
+    const [, silentFallback] = loopbackPair(1024, 'websocket')
+    let asked = 0
+    const client = withFallback<DeclaredMap>({
+      contract: declared,
+      handshakeDeadlineMs: 60,
+      connect: async () => silentNative,
+      fallback: async () => {
+        asked++
+        return silentFallback
+      },
+    })
+    const err = await failed(client.connect())
+    expect(asked).toBe(1)
+    expect(err.code).toBe('WT_HANDSHAKE_TIMEOUT')
+    expect(client.getSnapshot().status).toBe('closed')
+    expect(client.getSnapshot().lastError?.code).toBe('WT_HANDSHAKE_TIMEOUT')
+  })
+
+  test('the silence trigger is WebTransport-specific: a silent native connection of another kind is thrown as it is', async () => {
+    const [, silentNative] = loopbackPair(1024, 'websocket')
+    let asked = 0
+    const client = withFallback<DeclaredMap>({
+      contract: declared,
+      handshakeDeadlineMs: 60,
+      connect: async () => silentNative,
+      fallback: async () => {
+        asked++
+        return loopbackPair(1024, 'websocket')[1]
+      },
+    })
+    const err = await failed(client.connect())
+    expect(err.code).toBe('WT_HANDSHAKE_TIMEOUT')
+    expect(asked).toBe(0)
+  })
+
   test('a configuration error is thrown as it is, and the fallback is never asked', async () => {
     let asked = 0
     const client = withFallback<DeclaredMap>({

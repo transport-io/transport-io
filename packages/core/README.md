@@ -25,7 +25,8 @@ before you start.** It lists what this library will not do. Full documentation i
   declares it; calls and streams need WebTransport. The
   [fallback guide](https://transport-io.github.io/transport-io/guides/fallback/) has it end
   to end.
-- **Chrome and Firefox.** Safari cannot talk to a quiche-backed server and is unsupported.
+- **Chrome and Firefox over WebTransport.** Safari cannot talk to a quiche-backed server;
+  the fallback reaches it after 5 seconds.
 - **The server needs a separate native install**, and its Linux prebuild needs glibc 2.38 -
   no default Node `-slim` image has it, and Alpine has no prebuild at all.
   That package, the fourteen-day ECDSA rule for a pinned development certificate, and the

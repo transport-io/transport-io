@@ -21,7 +21,12 @@ import type { Connection, Transport } from './transport/types.ts'
 
 export type Status = 'idle' | 'connecting' | 'connected' | 'closing' | 'closed'
 
-/** Why the current session is on a fallback transport rather than on WebTransport. */
+/**
+ * Why the current session is on a fallback transport rather than on WebTransport.
+ * `unsupported`: the runtime has no WebTransport it can use against this server, either none
+ * at all or one that connects and then never sends, which is Safari (D128). `unreachable`:
+ * the WebTransport handshake failed and the WebSocket connected.
+ */
 export type FallbackReason = 'unsupported' | 'unreachable'
 
 export interface ClientState {
@@ -32,8 +37,8 @@ export interface ClientState {
   /** What carries the current session. `null` until connected. */
   readonly transport: Transport | null
   /**
-   * Why the current session is a fallback: the runtime has no WebTransport, or the
-   * WebTransport handshake failed and the WebSocket connected. `null` on a native session.
+   * Why the current session is a fallback: the runtime has no WebTransport it can use, or
+   * the WebTransport handshake failed and the WebSocket connected. `null` on a native session.
    */
   readonly fallbackReason: FallbackReason | null
 }
@@ -202,69 +207,58 @@ export class Client<M extends AnyMap = Registered> {
     const generation = this.#generation
     try {
       const table = await buildEventTable(this.#opts.contract)
-      const { conn, fallbackReason } = await this.#open()
+      const fallback = fallbacks.get(this)
 
-      // Chrome implements neither `requireUnreliable` nor `reliability`, so `undefined`
-      // must pass or every session on the dominant browser would be refused. Only an
-      // explicit reliable-only would misreport what the unreliable lane does. A fallback
-      // transport is reliable-only by definition and is judged by the session instead,
-      // against the contract's declarations (D121).
-      if (conn.kind() === 'webtransport' && conn.reliability() === 'reliable-only') {
-        // §10.2 code 1006. Throwing without closing left the peer holding a session this
-        // side had already abandoned, with nothing on the wire to say why.
-        conn.close(CloseCode.WT_RELIABILITY_REFUSED, 'reliable-only transport refused')
-        throw new TransportError(
-          'WT_RELIABILITY_REFUSED',
-          'the session negotiated reliable-only transport',
-          'The unreliable lane would silently become reliable and ordered. This library refuses rather than lie about your data.',
-        )
-      }
-
-      const session = new Session(conn, {
-        table,
-        origin: this.#opts.origin ?? 0x80000001,
-        ...(this.#opts.validateInbound === undefined
-          ? {}
-          : { validateInbound: this.#opts.validateInbound }),
-        ...(this.#opts.handshakeDeadlineMs === undefined
-          ? {}
-          : { handshakeDeadlineMs: this.#opts.handshakeDeadlineMs }),
-        ...(this.#opts.scheduleFlush === undefined
-          ? {}
-          : { scheduleFlush: this.#opts.scheduleFlush }),
-        ...(this.#opts.now === undefined ? {} : { now: this.#opts.now }),
-      })
-      // Superseded while the transport was being established. Adopting this session would
-      // register every handler on it alongside the one the newer connect built.
-      if (generation !== this.#generation) {
-        session.dispose()
-        conn.close(CloseCode.WT_NO_ERROR, 'connect superseded')
+      let native: Connection
+      try {
+        native = await this.#opts.connect()
+      } catch (e) {
+        // No WebTransport in this runtime: the fallback carries the session. A WebTransport
+        // handshake that failed: the fallback is dialled, because a connector is a closure
+        // and the WebSocket handshake is the one fact this client can obtain about whether
+        // the server is up over TCP (D125). If that fails too, the WebTransport error is the
+        // one thrown: it names the primary transport, and its message says what its probe
+        // found. Every other failure is thrown as it is, because a certificate past its
+        // validity or a dev connector outside the dev command is configuration, not a path
+        // to route around.
+        if (fallback === undefined) throw e
+        const reason = fallbackReasonFor(e)
+        if (reason === undefined) throw e
+        if (reason === 'unsupported') {
+          await this.#start(await fallback(), reason, generation, table)
+          return
+        }
+        let conn: Connection
+        try {
+          conn = await fallback()
+        } catch {
+          throw e
+        }
+        await this.#start(conn, reason, generation, table)
         return
       }
-      this.#session = session
 
-      for (const [event, handlers] of this.#handlers) {
-        for (const h of handlers) session.on(event, (p) => h(p))
+      try {
+        await this.#start(native, null, generation, table)
+      } catch (e) {
+        // The transport connected and then nothing arrived before the application
+        // handshake. A live peer is never quiet there, since frame 0 is sent without
+        // waiting, so this is a peer that cannot send: Safari against this server (D128).
+        // The session that timed out closed itself; the fallback gets a session of its own.
+        // If that fails too, the WebTransport error is the one thrown.
+        if (
+          fallback === undefined ||
+          native.kind() !== 'webtransport' ||
+          !isHandshakeTimeout(e)
+        ) {
+          throw e
+        }
+        try {
+          await this.#start(await fallback(), 'unsupported', generation, table)
+        } catch {
+          throw e
+        }
       }
-      session.onControl((type, body) => this.#onMembership(type, body))
-
-      await session.start()
-      this.#patch({
-        status: 'connected',
-        sessionId: `s-${session.origin}`,
-        transport: conn.kind(),
-        fallbackReason,
-      })
-
-      void conn.closed.then(() => {
-        this.#patch({
-          status: 'closed',
-          sessionId: null,
-          rooms: [],
-          transport: null,
-          fallbackReason: null,
-        })
-      })
     } catch (e) {
       const err =
         e instanceof TransportError
@@ -275,6 +269,81 @@ export class Client<M extends AnyMap = Registered> {
     }
   }
 
+  /**
+   * One session over one connection: refused if the transport is reliable-only, started,
+   * and adopted unless a newer connect superseded it while the transport was being
+   * established. `transport` reaches the snapshot only here, once the handshake completed,
+   * so a connection whose session never handshook was never the client's transport.
+   */
+  async #start(
+    conn: Connection,
+    fallbackReason: FallbackReason | null,
+    generation: number,
+    table: Awaited<ReturnType<typeof buildEventTable>>,
+  ): Promise<void> {
+    // Chrome implements neither `requireUnreliable` nor `reliability`, so `undefined`
+    // must pass or every session on the dominant browser would be refused. Only an
+    // explicit reliable-only would misreport what the unreliable lane does. A fallback
+    // transport is reliable-only by definition and is judged by the session instead,
+    // against the contract's declarations (D121).
+    if (conn.kind() === 'webtransport' && conn.reliability() === 'reliable-only') {
+      // §10.2 code 1006. Throwing without closing left the peer holding a session this
+      // side had already abandoned, with nothing on the wire to say why.
+      conn.close(CloseCode.WT_RELIABILITY_REFUSED, 'reliable-only transport refused')
+      throw new TransportError(
+        'WT_RELIABILITY_REFUSED',
+        'the session negotiated reliable-only transport',
+        'The unreliable lane would silently become reliable and ordered. This library refuses rather than lie about your data.',
+      )
+    }
+
+    const session = new Session(conn, {
+      table,
+      origin: this.#opts.origin ?? 0x80000001,
+      ...(this.#opts.validateInbound === undefined
+        ? {}
+        : { validateInbound: this.#opts.validateInbound }),
+      ...(this.#opts.handshakeDeadlineMs === undefined
+        ? {}
+        : { handshakeDeadlineMs: this.#opts.handshakeDeadlineMs }),
+      ...(this.#opts.scheduleFlush === undefined
+        ? {}
+        : { scheduleFlush: this.#opts.scheduleFlush }),
+      ...(this.#opts.now === undefined ? {} : { now: this.#opts.now }),
+    })
+    // Superseded while the transport was being established. Adopting this session would
+    // register every handler on it alongside the one the newer connect built.
+    if (generation !== this.#generation) {
+      session.dispose()
+      conn.close(CloseCode.WT_NO_ERROR, 'connect superseded')
+      return
+    }
+    this.#session = session
+
+    for (const [event, handlers] of this.#handlers) {
+      for (const h of handlers) session.on(event, (p) => h(p))
+    }
+    session.onControl((type, body) => this.#onMembership(type, body))
+
+    await session.start()
+    this.#patch({
+      status: 'connected',
+      sessionId: `s-${session.origin}`,
+      transport: conn.kind(),
+      fallbackReason,
+    })
+
+    void conn.closed.then(() => {
+      this.#patch({
+        status: 'closed',
+        sessionId: null,
+        rooms: [],
+        transport: null,
+        fallbackReason: null,
+      })
+    })
+  }
+
   /** Rooms are server-authoritative, so membership only ever arrives as a notification. */
   #onMembership(type: number, body: unknown): void {
     const room = (body as { room?: unknown }).room
@@ -283,35 +352,6 @@ export class Client<M extends AnyMap = Registered> {
     if (type === FrameType.JOIN) rooms.add(room)
     else rooms.delete(room)
     this.#patch({ rooms: [...rooms].sort() })
-  }
-
-  /**
-   * The native connector, then the fallback if one was installed and the failure is one a
-   * fallback answers. No WebTransport in this runtime: the fallback carries the session. A
-   * WebTransport handshake that failed: the fallback is dialled, because a connector is a
-   * closure and the WebSocket handshake is the one fact this client can obtain about whether
-   * the server is up over TCP (D125). If that fails too, the WebTransport error is the one
-   * thrown: it names the primary transport, and its message says what its probe found. Every
-   * other failure is thrown as it is, because a certificate past its validity or a dev
-   * connector outside the dev command is configuration, not a path to route around.
-   */
-  async #open(): Promise<{ conn: Connection; fallbackReason: FallbackReason | null }> {
-    const fallback = fallbacks.get(this)
-    try {
-      return { conn: await this.#opts.connect(), fallbackReason: null }
-    } catch (e) {
-      if (fallback === undefined) throw e
-      const reason = fallbackReasonFor(e)
-      if (reason === undefined) throw e
-      if (reason === 'unsupported') return { conn: await fallback(), fallbackReason: reason }
-      let conn: Connection
-      try {
-        conn = await fallback()
-      } catch {
-        throw e
-      }
-      return { conn, fallbackReason: reason }
-    }
   }
 
   #requireSession(): Session {
@@ -345,6 +385,10 @@ function fallbackReasonFor(e: unknown): FallbackReason | undefined {
   return undefined
 }
 
+function isHandshakeTimeout(e: unknown): boolean {
+  return e instanceof TransportError && e.code === 'WT_HANDSHAKE_TIMEOUT'
+}
+
 /** The lanes only a native session carries. */
 export type NativeLanes<M extends AnyMap> = Pick<Client<M>, 'call' | 'stream'>
 
@@ -362,8 +406,9 @@ export type FallbackClient<M extends AnyMap> = Omit<Client<M>, 'call' | 'stream'
  * A client with a second transport behind the first (D121).
  *
  * The native connector is tried first, every time. The fallback is used when the runtime
- * has no WebTransport, and when the WebTransport handshake fails and the WebSocket connects,
- * and the snapshot says which. The type argument is the gate: `FallbackReady<M>` is `unknown`
+ * has no WebTransport, when the WebTransport handshake fails and the WebSocket connects, and
+ * when the WebTransport session connects and then sends nothing before the application
+ * handshake (D128); the snapshot says which. The type argument is the gate: `FallbackReady<M>` is `unknown`
  * when every unreliable event in the map declares a fallback, and otherwise a required
  * property naming the event that has not, so this call fails to compile rather than an
  * emit failing in production.

@@ -424,11 +424,17 @@ to `useSyncExternalStore`.
 reliable lane only. The native connector is tried first on every connect. The fallback is used
 when the runtime has no WebTransport, `WT_NO_SUPPORT`, and when the WebTransport handshake
 fails, `WT_HANDSHAKE_FAILED` or `WT_UDP_UNREACHABLE`: the WebSocket is dialled, and a session
-on it reports `fallbackReason: 'unreachable'`. If the WebSocket fails as well, the
-WebTransport error is thrown as it was, so a dead server reports the primary transport. Any
-other failure is thrown without asking the fallback: a certificate past its validity, or a dev
-connector outside the dev command, is configuration. A wrong pinned hash fails the handshake
-as a blocked path does, and falls back the same way.
+on it reports `fallbackReason: 'unreachable'`. It is used as well when the WebTransport
+session connects and then nothing arrives before the application handshake,
+`WT_HANDSHAKE_TIMEOUT` after 5 s: the session is closed, the WebSocket is dialled, and a
+session on it reports `'unsupported'`, the runtime having no WebTransport it can use against
+this server. That is Safari, 5 s after every connect and every reconnect; a server stuck
+before its first frame, or a path that drops stream data after the handshake, produce the
+same signal and fall back the same way. If the WebSocket fails as well, the WebTransport
+error is thrown as it was, so a dead server reports the primary transport. Any other failure
+is thrown without asking the fallback: a certificate past its validity, or a dev connector
+outside the dev command, is configuration. A wrong pinned hash fails the handshake as a
+blocked path does, and falls back the same way.
 
 It returns `FallbackClient<M>`: everything `Client<M>` has except `call()` and `stream()`,
 which live on `native`. `native` is `null` while the session is a fallback or not connected,

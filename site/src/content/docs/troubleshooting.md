@@ -52,8 +52,10 @@ See [Certificates](/guides/certificates/).
 ## WT_HANDSHAKE_TIMEOUT
 
 The session opened and no application bytes arrived within 5000 ms. Safari does this: it
-establishes a session and never sends, and a configured fallback is not tried on this
-error. Use Chrome or Firefox. On a server, it is a client that connected and sent nothing.
+establishes a session and never sends. With a fallback configured, the WebSocket is dialled
+when this fires over WebTransport, so a Safari user is connected after 5 seconds and you see
+this error only when the WebSocket failed too. Without one, use Chrome or Firefox. On a
+server, it is a client that connected and sent nothing.
 
 ## WT_PROTOCOL_VERSION_MISMATCH
 

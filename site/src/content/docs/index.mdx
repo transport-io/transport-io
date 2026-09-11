@@ -123,7 +123,8 @@ the others.
 
 These are properties of the library, not things it will grow out of.
 
-- **Chrome and Firefox only.** Safari establishes a session and then never sends.
+- **Chrome and Firefox over WebTransport.** Safari establishes a session and then never
+  sends; the fallback reaches it after 5 seconds.
 - **One fallback, emits only.** A WebSocket carries the emit lane where the contract declares
   it; calls and streams need WebTransport.
 - **It needs raw UDP ingress to your process.** Many managed platforms do not provide it.

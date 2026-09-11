@@ -182,8 +182,8 @@ and the measurements behind each one, and is worth reading before you build on t
 
 - **WebTransport first.** The WebSocket fallback carries emits only, where the contract
   declares it; calls and streams need WebTransport.
-- **Chrome and Firefox.** Safari ships WebTransport and cannot talk to a quiche-backed
-  server. Unsupported until that is fixed upstream.
+- **Chrome and Firefox over WebTransport.** Safari cannot talk to a quiche-backed server;
+  the fallback reaches it after 5 seconds.
 - **UDP has to reach your process.** No proxy in front of it, no CDN, and no load balancer
   that forwards only TCP.
 - **Reconnect is a new session.** Room membership does not survive it and pending calls

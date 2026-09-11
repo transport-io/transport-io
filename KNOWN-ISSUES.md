@@ -9,11 +9,10 @@ Safari ships WebTransport and still cannot talk to a server built on this stack.
 for session-level flow-control SETTINGS that the underlying QUIC library does not send, so
 feature detection reports success, the session establishes, and then no application bytes
 ever flow. That is the worst failure mode available, which is why the client turns it into
-a named error with a deadline rather than hanging. Safari is unsupported until the fix
-lands upstream. The WebSocket fallback does not cover it: the fallback engages when the
-runtime has no WebTransport or the WebTransport handshake fails, and on Safari the transport
-handshake succeeds, so the session times out as `WT_HANDSHAKE_TIMEOUT` and no fallback is
-tried.
+a named error with a deadline rather than hanging. Safari is unsupported over WebTransport
+until the fix lands upstream. With a fallback configured, the WebSocket is dialled once the
+5-second handshake deadline passes, on every connect and every reconnect, and Safari gets
+the emit lane; calls and streams stay out of its reach.
 
 **Firefox does support `serverCertificateHashes`**, so the local-development recipe is not
 Chrome-only. Its first implementation treated the hashes as an extra check on top of Web PKI
@@ -61,9 +60,10 @@ unreliable event that declares nothing cannot be wired to a fallback at all; the
 adds one fails to compile and names the event, and a session that reaches the wire anyway is
 refused with `WT_RELIABILITY_REFUSED` before the handshake.
 
-The fallback engages on two conditions and no other: the runtime has no WebTransport, or the
-WebTransport handshake fails and the WebSocket connects. A dead server fails both and reports
-the WebTransport error. A wrong or expired pinned hash fails the handshake as a blocked path
+The fallback engages on three conditions and no other: the runtime has no WebTransport; the
+WebTransport handshake fails and the WebSocket connects; or the WebTransport session connects
+and then sends nothing before the application handshake, 5 seconds, which is Safari. A dead
+server fails both and reports the WebTransport error. A wrong or expired pinned hash fails the handshake as a blocked path
 does, and falls back the same way. Every reconnect starts from WebTransport again. A
 WebSocket has no idle timeout of its own, so the mapping carries one: a keepalive after 15
 seconds of silence, and a close after 45 seconds without a message. A dead TCP path is

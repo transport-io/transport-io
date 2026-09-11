@@ -160,7 +160,7 @@ client.disconnect()
 | `on(event, handler)` | Returns an unsubscribe function. There is no `off()`. |
 | `subscribe(cb)` / `getSnapshot()` | For `useSyncExternalStore`. `getSnapshot` is referentially stable. |
 | `stats()` | Per-peer drop counters. |
-| `withFallback<M>(opts)` | `ClientOptions` plus `fallback`, a connector for a reliable-only transport: `() => connectWebSocket({ url })`. Native first on every connect; the fallback on `WT_NO_SUPPORT`, and on a failed WebTransport handshake when the WebSocket connects, else the WebTransport error. Returns `FallbackClient<M>`: no `call()` or `stream()`; they live on `native`, which is `null` on a fallback session. Compiles only when every unreliable event declares a fallback, and the error names the event. |
+| `withFallback<M>(opts)` | `ClientOptions` plus `fallback`, a connector for a reliable-only transport: `() => connectWebSocket({ url })`. Native first on every connect; the fallback on `WT_NO_SUPPORT`, on a failed WebTransport handshake when the WebSocket connects, and on `WT_HANDSHAKE_TIMEOUT` over WebTransport (Safari, 5 s), else the WebTransport error. Returns `FallbackClient<M>`: no `call()` or `stream()`; they live on `native`, which is `null` on a fallback session. Compiles only when every unreliable event declares a fallback, and the error names the event. |
 
 `ClientState` is `{ status, sessionId, rooms, lastError, transport, fallbackReason }` where
 `status` is `'idle' | 'connecting' | 'connected' | 'closing' | 'closed'`, `transport` is
@@ -249,11 +249,14 @@ export const lanes = client.native // call() and stream(); null on a fallback se
 
 Rules:
 
-- WebTransport first, every connect. The fallback engages on `WT_NO_SUPPORT`, and on a
-  failed WebTransport handshake when the WebSocket connects; a dead server fails both and
-  reports the WebTransport error. A session never changes transport in place.
+- WebTransport first, every connect. The fallback engages on `WT_NO_SUPPORT`; on a failed
+  WebTransport handshake when the WebSocket connects; and on a WebTransport session that
+  connects and then sends nothing before the application handshake, `WT_HANDSHAKE_TIMEOUT`
+  after 5 s, which is Safari, on every connect and every reconnect. A dead server fails both
+  and reports the WebTransport error. A session never changes transport in place.
 - The snapshot says which: `transport` is `'webtransport' | 'websocket' | null`, and
-  `fallbackReason` is `'unsupported' | 'unreachable' | null`.
+  `fallbackReason` is `'unsupported' | 'unreachable' | null`: no WebTransport the runtime
+  can use, or a WebTransport handshake that failed while the WebSocket connected.
 - The server side is `server.withFallback(await listenWebSocket({ port }))` after
   `listen()`, in a `*.node.ts` file. Without `cert` and `privKey` it is `ws://`, for a
   reverse proxy that terminates TLS, or for loopback in development, where a browser pins
@@ -281,7 +284,7 @@ is never thrown from this library.
 | `WT_TOO_MANY_STREAMS` | over 256 concurrent streams on one session, calls and `stream()` together | reduce concurrency; the session stays up |
 | `WT_PROTOCOL_VERSION_MISMATCH` | peers disagree on protocol major | deploy both sides together |
 | `WT_CONTRACT_MISMATCH` | an event's lane or id differs across peers | align the contract |
-| `WT_HANDSHAKE_TIMEOUT` | no handshake within 5s | usually an unsupported browser |
+| `WT_HANDSHAKE_TIMEOUT` | no handshake within 5s | usually Safari; with a fallback configured the WebSocket is dialled instead |
 | `WT_PEER_TOO_SLOW` | emit queue hit 256 frames | the peer was disconnected |
 | `WT_RELIABILITY_REFUSED` | session negotiated reliable-only, or a fallback session whose contract has an unreliable event with no fallback declared | refused rather than lie about the unreliable lane; declare `fallback` on the event |
 | `WT_UNSUPPORTED_CODEC` | codec other than JSON | send codec `0x01` |
@@ -309,8 +312,9 @@ busy room delays a quiet one to the same peer. Calls and datagrams are isolated.
 **There is no default call timeout.** Peer death is caught by the QUIC idle timeout. Use
 `AbortSignal.timeout(ms)` for a slow but live responder.
 
-**Chrome and Firefox only.** Safari establishes a session and then never sends, which
-surfaces as `WT_HANDSHAKE_TIMEOUT`.
+**Chrome and Firefox over WebTransport.** Safari establishes a session and then never sends,
+which surfaces as `WT_HANDSHAKE_TIMEOUT`; with a fallback configured it gets the emit lane
+over the WebSocket, 5 s after each connect.
 
 ## Writing an adapter
 

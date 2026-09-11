@@ -118,6 +118,15 @@ const RETIRED: readonly Retired[] = [
     why: 'as above',
   },
   {
+    pattern:
+      /\bfallback (does not|doesn't) (reach|cover) (it|safari)\b|\bno fallback is tried\b|\bfallback is not tried\b|\bnot tried on safari\b/i,
+    lastSeen:
+      'The WebSocket fallback does not cover it: the fallback engages when the runtime has no WebTransport or the WebTransport handshake fails, and on Safari the transport handshake succeeds, so the session times out as `WT_HANDSHAKE_TIMEOUT` and no fallback is tried.',
+    where:
+      'KNOWN-ISSUES.md, guides/fallback.md, troubleshooting.md, 2026-09-12, for one commit',
+    why: 'a WebTransport session that connects and then sends nothing dials the fallback after the handshake deadline (D128)',
+  },
+  {
     pattern: /not (implemented|in this version)[^.]{0,200}\bframework bindings\b/i,
     lastSeen:
       '## Not implemented Namespaces, presence, middleware chains, binary codecs, framework bindings, the Redis adapter.',
