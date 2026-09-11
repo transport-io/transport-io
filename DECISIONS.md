@@ -202,6 +202,26 @@ would refuse **every Chrome session**.
 **Revisit when:** Chrome ships `reliability`, at which point the client check tightens to
 strict equality.
 
+**Note, 2026-09-12.** Two findings against this entry, resolved here and not in code.
+
+The seam carries two capability methods for one question: `reliability()`, which exists for
+the check above and is consulted in one place, behind `kind()`; and `kind()` itself (D121),
+which every transport implements, and which the loopback answers while inventing a constant
+for the other. Both stay until this entry's trigger fires. `reliability()` is the defence in
+depth against the reference binding's own HTTP/2 fallback, and removing it would leave that
+defence to `kind()`, which a listener sets by construction and no browser can contradict.
+When Chrome ships `reliability` and the check tightens, `reliability()` leaves the seam and
+the loopback's constant goes with it.
+
+This entry and PROTOCOL §2 refuse a reliable-only WebTransport session absolutely, while
+D121 makes reliable-only a question the contract answers on a WebSocket, and the two are the
+same thing to the unreliable lane. The refusal stands: no browser produces a reliable-only
+WebTransport session, since Chrome and Firefox do not implement the HTTP/2 mapping, so the
+contradiction is observed by nothing, and a `kind` designed for a session that cannot exist
+would be a decision with no test behind it. **Reconsider when:** a browser ships WebTransport
+over HTTP/2, at which point that session is a kind of its own under D121's gate rather than
+a refusal under this entry, and §2 changes with it.
+
 ### D11. Safari is unsupported in v1, and the failure is detected rather than silent
 Given F10, README states Chrome and Firefox only, with the reason. The e2e matrix drops
 Safari. Known issues gets a "detection lies" entry: Safari reports WebTransport support
@@ -3063,6 +3083,21 @@ written down before its name.
 
 **Note, 2026-09-12.** The orchestration rule is amended by D125: a failed WebTransport
 handshake dials the fallback, and the WebSocket handshake decides.
+
+**Note, 2026-09-12.** Two findings against this entry, resolved here and not in code.
+
+`fallback` is a policy on an unreliable event, `{ fallback: 'newest' }`, and the connector
+on the client, `withFallback({ fallback })`, and the two meet in one sentence of the guide.
+The word stays. The policy says what the event accepts on the fallback and the connector is
+the fallback, so it is one noun seen from the contract and from the client, and a second
+word would be a synonym the reader has to map back to the first.
+
+`WT_NO_SUPPORT` means a runtime with no WebTransport and, with a fallback configured, a
+runtime with no WebSocket either. It stays one code. Both mean this runtime cannot carry
+this client, the caller's move is the same in both, another runtime, and the message says
+which is missing. A second code would split a decision nobody makes differently.
+
+The reliable-only contradiction with D10 is resolved in D10's note of the same date.
 
 ### D122. The one fallback is the emit lane over a WebSocket
 Of every candidate costed on 2026-09-07, this is the one that carries a lane without
