@@ -1,5 +1,13 @@
 # @transport-io/react
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [634fdbc]
+- Updated dependencies [133596d]
+  - transport-io@0.9.0
+
 ## 0.3.0
 
 ### Minor Changes

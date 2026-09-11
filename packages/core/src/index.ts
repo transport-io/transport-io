@@ -81,4 +81,4 @@ export type { Transport } from './transport/types.ts'
  * `changeset version` moves the manifest, so this moves in the same commit - which the test
  * enforces rather than trusting anyone to remember.
  */
-export const VERSION: string = '0.8.1'
+export const VERSION: string = '0.9.0'
