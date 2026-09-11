@@ -16,7 +16,7 @@
     "@transport-io/react": "^0.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "transport-io": "^0.8.0",
+    "transport-io": "^0.8.1",
     "zod": "^4.5.4"
   }
 }

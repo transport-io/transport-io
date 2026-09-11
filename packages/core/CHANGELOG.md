@@ -1,5 +1,16 @@
 # transport-io
 
+## 0.8.1
+
+### Patch Changes
+
+- 8d614b8: `withFallback` dials the WebSocket when the WebTransport handshake fails, not only when the
+  WebTransport origin answers a probe over HTTPS. WebTransport on one port and the WebSocket on
+  another behind a proxy, the deployment the guide documents, now falls back with no `probe` set
+  by hand. If the WebSocket fails too, the WebTransport error is thrown as before.
+- 27386a4: `ws` is a dependency of `transport-io`, so `listenWebSocket` needs no separate install. A
+  browser bundle that imports only the browser subpaths does not pull it in.
+
 ## 0.8.0
 
 ### Minor Changes
