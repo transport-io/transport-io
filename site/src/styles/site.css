@@ -234,6 +234,11 @@ body {
   display: none;
 }
 
+/* A terminal block with no title has no header: no strip of panel above the command. */
+.expressive-code .frame.is-terminal:not(.has-title) > .header {
+  display: none;
+}
+
 /* ---- chrome --------------------------------------------------------------------------- */
 
 .tio-site-title {
@@ -279,14 +284,134 @@ header.header {
 
 /* Starlight's own buttons and pills, squared. */
 .sl-link-button,
-button,
-.pagination-links > a {
+button {
   border-radius: 0;
 }
 
+/* Search: a bordered field in the code face, no pill. The dialog is the ground with a hairline. */
+site-search > button[data-open-modal] {
+  border-radius: 0;
+  border: 1px solid var(--tio-line);
+  background: var(--tio-panel);
+  color: var(--tio-dim);
+  font-family: var(--tio-mono);
+  font-size: var(--tio-14);
+  box-shadow: none;
+}
+
+site-search > button[data-open-modal]:hover {
+  border-color: var(--tio-ink);
+  color: var(--tio-ink);
+}
+
+site-search kbd {
+  border-radius: 0;
+  border: 1px solid var(--tio-line);
+  background: var(--tio-ground);
+  font-family: var(--tio-mono);
+  box-shadow: none;
+}
+
+site-search dialog {
+  border-radius: 0;
+  border: 1px solid var(--tio-line);
+  background: var(--tio-ground);
+  box-shadow: none;
+  --pagefind-ui-border-radius: 0;
+  --pagefind-ui-image-border-radius: 0;
+  --pagefind-ui-font: var(--tio-sans);
+}
+
+/* Theme select: a label in the code face, dim until hovered. */
+starlight-theme-select label,
+starlight-theme-select select {
+  font-family: var(--tio-mono);
+  font-size: var(--tio-14);
+  color: var(--tio-dim);
+}
+
+starlight-theme-select label:hover {
+  color: var(--tio-ink);
+}
+
+starlight-theme-select select {
+  border-radius: 0;
+}
+
+/* Pagination: the direction in the code face, the title in the text face, the arrow in the accent. */
 .pagination-links > a {
   border: 1px solid var(--tio-line);
+  border-radius: 0;
   box-shadow: none;
+  background: var(--tio-panel);
+}
+
+.pagination-links > a:hover {
+  border-color: var(--tio-ink);
+}
+
+.pagination-links > a > span {
+  font-family: var(--tio-mono);
+  font-size: var(--tio-14);
+  color: var(--tio-dim);
+}
+
+.pagination-links .link-title {
+  font-family: var(--tio-sans);
+  font-size: var(--tio-17);
+  font-weight: 600;
+  color: var(--tio-ink);
+}
+
+.pagination-links svg {
+  color: var(--tio-accent);
+}
+
+/* ---- narrow screens ------------------------------------------------------------------- */
+
+/* The on-this-page dropdown is a hairline strip on the ground, not a pill. */
+mobile-starlight-toc nav {
+  border-bottom: 1px solid var(--tio-line);
+  background: var(--tio-ground);
+}
+
+mobile-starlight-toc summary {
+  font-family: var(--tio-mono);
+  font-size: var(--tio-14);
+  color: var(--tio-dim);
+}
+
+mobile-starlight-toc .toggle {
+  border-radius: 0;
+  border: 1px solid var(--tio-line);
+  background: var(--tio-panel);
+  color: var(--tio-ink);
+}
+
+mobile-starlight-toc .dropdown {
+  border-radius: 0;
+  border: 1px solid var(--tio-line);
+  background: var(--tio-ground);
+}
+
+@media (max-width: 50rem) {
+  .tio-lockup {
+    font-size: var(--tio-24);
+  }
+
+  .tio-pitch {
+    font-size: var(--tio-24);
+  }
+
+  .tio-actions {
+    gap: 1.25rem;
+  }
+
+  /* A table is wider than a phone; it scrolls inside its own box rather than the page. */
+  .sl-markdown-content table:not(:where(.not-content *)) {
+    display: block;
+    overflow-x: auto;
+  }
 }
 
 /* A claim with a number in it, used where a figure needs its denominator beside it. */
