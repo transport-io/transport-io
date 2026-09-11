@@ -39,6 +39,8 @@ export function Chat() {
         <span className="meta">
           you are <span id="me">{name ?? '…'}</span>
         </span>
+        <Received />
+        <Loss />
         {lastError !== null && (
           <span className="meta" id="error">
             {lastError.code}: {lastError.remedy}
@@ -56,11 +58,49 @@ export function Chat() {
         <section>
           <div className="label">
             cursors, <strong>unreliable</strong>. Move your pointer; the other window sees it.
+            The slider makes the server drop that share of your frames, so the other window
+            watches the loss.
           </div>
           <Surface name={name} />
         </section>
       </main>
     </>
+  )
+}
+
+function Received() {
+  const [chat, setChat] = useState(0)
+  const [cursor, setCursor] = useState(0)
+  api.useEvent('chat', () => setChat((n) => n + 1))
+  api.useEvent('cursor', () => setCursor((n) => n + 1))
+
+  return (
+    <span className="meta">
+      received <span id="rx-chat">{chat}</span> chat · <span id="rx-cursor">{cursor}</span>{' '}
+      cursor
+    </span>
+  )
+}
+
+function Loss() {
+  const [setLoss, loss] = api.useCall('setLoss')
+  // The label shows what the server set, not what the slider asked for.
+  const percent = loss.status === 'success' ? loss.data.percent : 0
+
+  return (
+    <label className="meta" htmlFor="loss">
+      drop <strong id="loss-value">{percent}%</strong> of my cursor frames{' '}
+      <input
+        id="loss"
+        type="range"
+        min={0}
+        max={100}
+        step={10}
+        defaultValue={0}
+        style={{ verticalAlign: 'middle', width: 110 }}
+        onChange={(e) => void setLoss({ percent: Number(e.target.value) })}
+      />
+    </label>
   )
 }
 

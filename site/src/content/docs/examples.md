@@ -43,7 +43,9 @@ Open the printed URL in two windows.
 [`examples/react`](https://github.com/transport-io/transport-io/tree/main/examples/react).
 The same chat on `@transport-io/react`, under Vite: the provider, `useConnection`,
 `useEvent`, `useCall` and `useStream`, with no state library. The contract's payloads are zod
-schemas, so every inbound message is validated on arrival.
+schemas, so every inbound message is validated on arrival. It has the loss slider too: the
+server drops a share of your cursor frames, and the other window watches the unreliable lane
+lose them while chat arrives one for one.
 
 Two terminals:
 
@@ -64,5 +66,5 @@ the server's port, which is how the page finds the certificate hash. `npm run bu
 - `server.node.ts` is the server, under the dev command.
 - `src/api.ts` binds the hooks to the map with `createHooks<ChatMap>()`.
 - `src/App.tsx` builds the client inside `useState` and hands it to `TransportProvider`.
-- `src/Chat.tsx` is the connection state, the log, the composer with its stream, and the
-  cursor surface.
+- `src/Chat.tsx` is the connection state, the log, the composer with its stream, the received
+  counts, the loss slider, and the cursor surface.

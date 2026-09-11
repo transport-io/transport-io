@@ -10,6 +10,8 @@ export const contract = defineContract({
     z.object({ name: z.string() }),
     z.object({ accepted: z.boolean(), name: z.string() }),
   ),
+  // The server drops this share of the caller's cursor frames before broadcasting.
+  setLoss: rpc(z.object({ percent: z.number() }), z.object({ percent: z.number() })),
 })
 
 export interface ChatMap extends MapOf<typeof contract> {}

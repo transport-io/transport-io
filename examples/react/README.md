@@ -11,7 +11,7 @@ The chat from [`../chat`](../chat) on `@transport-io/react`: the provider, `useC
 - [`src/App.tsx`](src/App.tsx) - the client, built inside `useState` and handed to
   `TransportProvider`.
 - [`src/Chat.tsx`](src/Chat.tsx) - connection state, the log, the composer with its stream,
-  and the cursor surface.
+  the received counts, the loss slider, and the cursor surface.
 
 ## Running it
 
@@ -27,7 +27,10 @@ npm run dev      # vite, on http://localhost:5173
 
 Open `http://localhost:5173` in two windows, Chrome or Firefox. Type in one; it appears in
 both. `/say some words` streams the reply a word at a time, with a stop button while it runs.
-Move the pointer over the right pane; the other window sees it.
+Move the pointer over the right pane; the other window sees it. Drag the loss slider up in
+one window and keep moving: the other window's cursor count stalls while its chat count does
+not. The server drops that share of your cursor frames before broadcasting them, and the
+label shows what it set.
 
 `npm run build && npm start` serves the built page from `transport-io dev` on :3000 instead,
 which is what the e2e suite runs against.

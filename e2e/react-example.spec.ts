@@ -46,6 +46,50 @@ test('two windows: a chat line reaches both, and a cursor crosses', async ({ bro
   await bob.context().close()
 })
 
+test('dialling up loss drops cursors and never a chat message', async ({ browser }) => {
+  const alice = await (await browser.newContext()).newPage()
+  const bob = await (await browser.newContext()).newPage()
+  await ready(alice)
+  await ready(bob)
+
+  const box = await alice.locator('#surface').boundingBox()
+  expect(box).not.toBeNull()
+  if (box === null) return
+
+  // 100% is the only setting that is deterministic, which is what makes it assertable.
+  await alice.locator('#loss').fill('100')
+  await alice.locator('#loss').dispatchEvent('input')
+  await expect(alice.locator('#loss-value')).toHaveText('100%')
+
+  for (let i = 0; i < 12; i++) {
+    await alice.mouse.move(box.x + 40 + i * 10, box.y + 40 + i * 5)
+    await alice.waitForTimeout(25)
+  }
+  // The reliable lane is untouched. Sending the chat after the moves also gives every
+  // dropped cursor frame time to have arrived, if the slider were not working.
+  await alice.fill('#body', 'still arrives')
+  await alice.press('#body', 'Enter')
+  await expect(lines(bob).filter({ hasText: 'still arrives' })).toHaveCount(1, {
+    timeout: 10_000,
+  })
+  await expect(bob.locator('#rx-chat')).toHaveText('1')
+  await expect(bob.locator('#surface .cursor')).toHaveCount(0)
+  await expect(bob.locator('#rx-cursor')).toHaveText('0')
+
+  // Back to zero, and the same moves land.
+  await alice.locator('#loss').fill('0')
+  await alice.locator('#loss').dispatchEvent('input')
+  await expect(alice.locator('#loss-value')).toHaveText('0%')
+  for (let i = 0; i < 12; i++) {
+    await alice.mouse.move(box.x + 60 + i * 10, box.y + 60 + i * 5)
+    await alice.waitForTimeout(25)
+  }
+  await expect(bob.locator('#surface .cursor')).toHaveCount(1, { timeout: 10_000 })
+
+  await alice.context().close()
+  await bob.context().close()
+})
+
 test('useStream grows a word at a time, and the stop button ends it', async ({ page }) => {
   await ready(page)
   const stream = page.locator('#stream')
