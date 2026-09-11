@@ -63,7 +63,7 @@ Write the `AppMap` interface line. Without it, every hover shows the whole contr
 your validator's internals in it. `AppMap` is what each end is given,
 `browserClient<AppMap>` and `createServer<AppMap>` below, and never inferred from
 `contract`. Registering the map globally instead is opt-in; see
-[Registering the map](https://transport-io.github.io/transport-io/getting-started/#registering-the-map-optional).
+[Registering the map](https://transport-io.github.io/transport-io/guides/register/).
 
 ### A type, or a schema
 

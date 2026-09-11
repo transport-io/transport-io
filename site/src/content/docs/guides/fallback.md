@@ -30,7 +30,6 @@ drops nothing, so it cannot carry an unreliable event as declared. One crosses t
 only when the contract says what it accepts there:
 
 ```ts file=contract.ts
-// contract.ts
 import { defineContract, type MapOf, reliable, rpc, unreliable } from 'transport-io'
 
 export const contract = defineContract({
@@ -61,7 +60,6 @@ The client tries WebTransport first, every time, and takes the fallback only whe
 has no WebTransport or the server answers over HTTPS and not over QUIC:
 
 ```ts file=client.ts
-// client.ts
 import { withFallback } from 'transport-io'
 import { connectBrowser } from 'transport-io/browser-transport'
 import { connectWebSocket } from 'transport-io/websocket-transport'
@@ -79,7 +77,6 @@ export const client = withFallback<AppMap>({
 makes the check unavoidable:
 
 ```ts file=save.ts
-// save.ts
 import { client } from './client.ts'
 
 export async function save(text: string): Promise<number | null> {
@@ -95,7 +92,6 @@ This is the shape behind a reverse proxy, which terminates `wss://` and forwards
 local port:
 
 ```ts file=server.node.ts
-// server.node.ts
 import { createServer } from 'transport-io'
 import { listenHttp3 } from 'transport-io/node-transport'
 import { listenWebSocket } from 'transport-io/websocket-node-transport'
@@ -120,8 +116,7 @@ export async function main(): Promise<void> {
 
 With nothing in front of the process, the listener terminates TLS itself:
 
-```ts file=tls.node.ts
-// server.node.ts, with nothing in front of the process
+```ts file=tls.node.ts title="server.node.ts, with nothing in front of the process"
 import type { Server } from 'transport-io'
 import { listenWebSocket } from 'transport-io/websocket-node-transport'
 import type { AppMap } from './contract.ts'
@@ -142,7 +137,8 @@ undeclared unreliable event is refused before the handshake with `WT_RELIABILITY
 
 ### Certificates
 
-What is in front of the process decides the shape.
+The WebTransport listener's certificate is covered in [Certificates](/guides/certificates/).
+For the WebSocket listener, what is in front of the process decides the shape.
 
 **Behind a reverse proxy**, which is most deployments: nginx, Caddy, a load balancer, a
 platform ingress. Start the listener on a local port with no `cert` or `privKey`; the proxy
@@ -166,7 +162,6 @@ nothing. `useNative()` is the client on a WebTransport session and `null` otherw
 anything the hooks do not cover.
 
 ```ts file=api.ts
-// api.ts
 import { createHooks } from '@transport-io/react'
 import type { AppMap } from './contract.ts'
 
@@ -174,7 +169,6 @@ export const api = createHooks<AppMap>()
 ```
 
 ```tsx file=Save.tsx
-// Save.tsx
 import type { ReactNode } from 'react'
 import { api } from './api.ts'
 

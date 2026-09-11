@@ -140,6 +140,9 @@ const COMPILED_DOCS = [
   'site/src/content/docs/index.mdx',
   'site/src/content/docs/getting-started.md',
   'site/src/content/docs/guides/lanes.md',
+  'site/src/content/docs/guides/schema.md',
+  'site/src/content/docs/guides/certificates.md',
+  'site/src/content/docs/guides/register.md',
   'site/src/content/docs/guides/rooms.md',
   'site/src/content/docs/guides/call-and-stream.md',
   'site/src/content/docs/guides/backpressure.md',
@@ -568,6 +571,9 @@ if (fileCount > 0) {
           'bundler',
           '--target',
           'es2023',
+          // Node's types, so a server snippet can read its certificate the way a server does.
+          '--types',
+          'node',
           '--ignoreConfig',
           // A .tsx snippet is a React example. JSX in a .ts file fails at parse, so the
           // extension and the flag move together.

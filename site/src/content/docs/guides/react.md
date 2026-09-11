@@ -22,7 +22,6 @@ chat with live cursors on these hooks, under Vite, with nothing else in the way.
 `createHooks<AppMap>()` returns the hooks typed for one contract. That is the whole setup.
 
 ```ts file=api.ts
-// api.ts
 import { defineContract, type MapOf, reliable, rpc, streaming } from 'transport-io'
 import { createHooks } from '@transport-io/react'
 
@@ -43,7 +42,7 @@ Write the `MapOf` line. Without it, every hook's hover shows the whole contract 
 validator's internals in it.
 
 The named exports (`useEvent`, `useCall`, …) read the globally registered map instead; see
-[Registering the map](/getting-started/#registering-the-map-optional).
+[Registering the map](/guides/register/).
 
 ## The provider takes a client
 

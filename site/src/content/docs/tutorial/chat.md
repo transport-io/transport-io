@@ -1560,4 +1560,6 @@ the stopped stream cost the running one a token.
 
 - [The fallback](/guides/fallback/), for browsers without WebTransport and networks that
   block UDP.
+- [Certificates](/guides/certificates/), for deploying this with a real certificate.
 - [React](/guides/react/), for the same chat on `@transport-io/react`.
+- [Troubleshooting](/troubleshooting/), for what a failed connection looks like.
