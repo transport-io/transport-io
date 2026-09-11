@@ -5,6 +5,26 @@ import { remarkBaseLinks } from './src/remark/base-links.ts'
 /** Served under the repository name, because this is a project page. */
 const BASE = '/transport-io'
 
+/**
+ * A block tagged `file=name`, which is what the docs gates assemble into a file of that
+ * name, shows the name as its label. The name is written once, in the tag.
+ */
+const fileAsTitle = {
+  name: 'file-as-title',
+  hooks: {
+    preprocessMetadata: ({
+      codeBlock,
+    }: {
+      codeBlock: { meta: string; props: { title?: string | undefined } }
+    }) => {
+      const m = /(?:^|\s)file=([\w./-]+)/.exec(codeBlock.meta)
+      if (m?.[1] !== undefined && codeBlock.props.title === undefined) {
+        codeBlock.props.title = m[1]
+      }
+    },
+  },
+}
+
 export default defineConfig({
   // The default GitHub Pages URL for a project page, which is where this deploys. There is
   // no custom domain and no CNAME: a project page is served under a path, so `base` has to
@@ -39,6 +59,7 @@ export default defineConfig({
        * from the brand notes rather than one derived from the other.
        */
       expressiveCode: {
+        plugins: [fileAsTitle],
         themes: ['vitesse-dark', 'vitesse-light'],
         styleOverrides: {
           borderRadius: '0',
@@ -90,6 +111,7 @@ export default defineConfig({
       },
       sidebar: [
         { label: 'Getting started', slug: 'getting-started' },
+        { label: 'Tutorial', slug: 'tutorial/chat' },
         {
           label: 'Guides',
           items: [

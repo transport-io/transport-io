@@ -3127,3 +3127,39 @@ itself as a WebSocket: `useCall` and `useStream` render `unavailable` first and 
 
 **Reconsider when:** a second binding needs the same split, at which point the branch and the
 narrowed handle move to core as the client's own surface.
+
+### D124. Tutorials show a file in full at every step, and a gate diffs the tutorial against the example
+The reader-facing rule (three questions, no repetition, every figure changes a decision) was
+written for documents a reader consults: a reference, a guide, a README. A tutorial is read
+once, top to bottom, by someone who has not used the library, and it has to show each file
+complete at every step, so the same file appears as many times as it changes. Under the rule
+as written, Getting started tried to be both and was a survey: eleven sections, a production
+client and a development client in one block, `declare const` standing in for a certificate.
+Nobody could type it in and end up with anything.
+
+**Decision.** Pages under `site/src/content/docs/tutorial/` are exempt from the
+three-questions test and from the no-repetition test. The no-rationale rule still applies to
+them: a tutorial says what to do and what happens next, never why the library is shaped as it
+is. Long is allowed; arguing with an imagined skeptic is not. The README ceiling is unchanged
+and measures the README only. The tutorial's correctness is a gate rather than a review:
+`scripts/check-tutorial.ts` collects every fenced block carrying `file=`, last block per file
+wins, writes them into one directory with the reader's own `tsconfig.json`, compiles that
+directory as one project, and diffs each of the example's source files against
+`examples/chat` byte for byte. The gate was written before the page and failed on the page's
+absence, so the page was written against a check rather than checked afterwards.
+
+`examples/chat` runs under `transport-io dev` with `listenDev` and `connectDev`, so the
+tutorial and the example share one path and the example's own certificate script is gone.
+The command's static directory search prefers `web/dist` to `web`, so the example passes
+`--static web` explicitly; without it, `/` is a 404 after the first build. The docs gate
+compiles each document's `file=` blocks in a directory of its own, because two guides both
+writing `contract.ts` had been landing in one flat directory where the second replaced the
+first.
+
+**Measured.** 24 named blocks assemble into 10 files, compile, and the 8 that are the
+example's match it. Both browser specs against the example pass under the dev command, six
+tests. The example from its own directory without `--static`: `/` 404, `/dist/main.js` 404,
+`/main.js` 200; with `--static web`: all three pages 200.
+
+**Reconsider when:** a second tutorial exists, at which point the gate takes the page and
+the example it builds as arguments rather than constants.

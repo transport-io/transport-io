@@ -196,6 +196,14 @@ defending a decision to an imagined skeptic. `README.md` therefore has a prose-w
 in `scripts/check-prose-budget.ts`, enforced in CI, that may only go down. A budget is the
 mechanism because rationale is what gets cut when something has to go.
 
+**Tutorials are the one exemption**, under `site/src/content/docs/tutorial/`. A tutorial shows
+a file complete at every step, so the same file appears as many times as it changes, and the
+three-questions test and the no-repetition test do not apply there. The no-rationale rule
+still does: long is allowed, arguing with an imagined skeptic is not. Each tutorial is gated by
+`scripts/check-tutorial.ts`, which assembles its `file=` blocks, compiles them as one project
+and diffs them against the example it builds, so the tutorial cannot drift from the example.
+See D124.
+
 The same rule covers comments in `examples/`. A comment says what the next line does when
 that is not obvious, and never why it was chosen over something else; an example is copied,
 and the defence travels with it. Where the reader needs the consequence, it is one line:

@@ -160,6 +160,8 @@ const UNCOMPILED_DOCS: Readonly<Record<string, string>> = {
   'CLAUDE.md': 'instructions to an agent, quoting the pattern rather than demonstrating it',
   'DECISIONS.md': 'a ledger, whose snippets are historical and may not compile today',
   'ADR/0012-streaming-responses.md': 'a record, quoting the API as it was decided',
+  'site/src/content/docs/tutorial/chat.md':
+    'assembled, compiled as one project and diffed against examples/chat by check-tutorial.ts',
 }
 
 /**

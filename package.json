@@ -44,6 +44,7 @@
     "typecheck": "tsc --build && tsc -p tsconfig.test.json && tsc -p tsconfig.register.json && tsc -p examples/chat && tsc -p examples/react",
     "verify:pack": "bun run scripts/check-gate-inputs.ts && npm run build && npm -w packages/core pack --pack-destination /tmp && attw --pack packages/core --profile esm-only && publint packages/core && ./scripts/check-ts-floor.sh",
     "check:tags": "bun run scripts/check-tags.ts",
+    "check:tutorial": "bun run scripts/check-tutorial.ts",
     "build:e2e-app": "bun build packages/react/e2e-app/app.tsx --outdir packages/react/e2e-app/dist --target browser && cp packages/react/e2e-app/index.html packages/react/e2e-app/dist/"
   },
   "devDependencies": {

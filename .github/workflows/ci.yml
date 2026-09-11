@@ -72,6 +72,8 @@ jobs:
         run: npx knip
       - name: documentation
         run: bun run scripts/check-docs.ts
+      - name: the tutorial builds the example
+        run: bun run scripts/check-tutorial.ts
       - name: README prose budget
         run: bun run scripts/check-prose-budget.ts
       - name: retired claims stay retired
