@@ -40,8 +40,8 @@ cursors follow on the unreliable one.
 
 ## Where next
 
-[The tutorial](/tutorial/chat/) builds that page from an empty directory, one file at a
-time, and ends at the chat example in the repository.
+[The tutorial](/tutorial/chat/) builds that page in React from an empty directory, one
+change at a time, and ends at the React example in the repository.
 
 [The two lanes](/guides/lanes/) covers choosing between them, and
 [`call()` and `stream()`](/guides/call-and-stream/) the request shapes.

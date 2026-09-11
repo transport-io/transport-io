@@ -9,8 +9,7 @@ which mints the certificate. Chrome or Firefox for both.
 ## chat
 
 [`examples/chat`](https://github.com/transport-io/transport-io/tree/main/examples/chat).
-Two pages against one server, with no framework. [The tutorial](/tutorial/chat/) builds it
-from an empty directory.
+Two pages against one server, with no framework: the library with nothing in front of it.
 
 `/` puts both lanes on one screen: chat on the reliable lane, cursors on the unreliable one,
 a name assigned by a call, `/say some words` streaming the reply a word at a time, and a
@@ -42,7 +41,8 @@ Open the printed URL in two windows.
 
 [`examples/react`](https://github.com/transport-io/transport-io/tree/main/examples/react).
 The same chat on `@transport-io/react`, under Vite: the provider, `useConnection`,
-`useEvent`, `useCall` and `useStream`, with no state library. The contract's payloads are zod
+`useEvent`, `useCall` and `useStream`, with no state library. [The tutorial](/tutorial/chat/)
+builds it from an empty directory. The contract's payloads are zod
 schemas, so every inbound message is validated on arrival. It has the loss slider too: the
 server drops a share of your cursor frames, and the other window watches the unreliable lane
 lose them while chat arrives one for one.

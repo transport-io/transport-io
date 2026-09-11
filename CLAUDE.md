@@ -201,10 +201,12 @@ mechanism because rationale is what gets cut when something has to go.
 **Tutorials are the one exemption**, under `site/src/content/docs/tutorial/`. A tutorial shows
 a file complete at every step, so the same file appears as many times as it changes, and the
 three-questions test and the no-repetition test do not apply there. The no-rationale rule
-still does: long is allowed, arguing with an imagined skeptic is not. Each tutorial is gated by
-`scripts/check-tutorial.ts`, which assembles its `file=` blocks, compiles them as one project
-and diffs them against the example it builds, so the tutorial cannot drift from the example.
-See D124.
+still does: long is allowed, arguing with an imagined skeptic is not. A file appears complete
+once; after that a step shows a hunk, with the whole file folded beneath it. Each tutorial is
+gated by `scripts/check-tutorial.ts`, which rebuilds every file from its first appearance plus
+each hunk, checks the folded copies against that, compiles the result as one project and
+diffs it against the example it builds, so the tutorial cannot drift from the example. See
+D124 and D129.
 
 The same rule covers comments in `examples/`. A comment says what the next line does when
 that is not obvious, and never why it was chosen over something else; an example is copied,

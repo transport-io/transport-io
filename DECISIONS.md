@@ -3216,6 +3216,10 @@ tests. The example from its own directory without `--static`: `/` 404, `/dist/ma
 **Reconsider when:** a second tutorial exists, at which point the gate takes the page and
 the example it builds as arguments rather than constants.
 
+**Note, 2026-09-12.** The gate's grammar changed in D129: a file appears complete once, and
+every later change is a hunk the gate applies. The exemption and the rest of this entry
+stand. The tutorial now ends at `examples/react`.
+
 ### D125. A failed WebTransport handshake dials the fallback; the WebSocket handshake is the probe
 D121 engaged the fallback on `WT_UDP_UNREACHABLE`, which D120 raises when the WebTransport
 origin answers a `HEAD` over HTTPS. In the deployment the fallback guide documents,
@@ -3394,3 +3398,45 @@ thrown as it is, so the trigger stays WebTransport's.
 **Reconsider when:** someone reports the 5000 ms on reconnect as a real problem, at which
 point a per-client memory for runtime-class reasons is costed against the every-connect rule
 it bends.
+
+### D129. A tutorial shows a file once, then hunks, and the gate rebuilds the file from them
+D124's gate took complete files, so the page showed complete files: `web/main.ts` four
+times, `app.ts` three, `contract.ts` four, the page with its stylesheet twice. A reader
+scrolled past a hundred identical lines to find the three that changed. The gate caused the
+shape, so the gate changed and not the page.
+
+**Decision.** Four block kinds, in `scripts/tutorial-blocks.ts`, pure and tested on fixtures.
+A complete block, `file=X`, is allowed once per file outside a collapsed block; a second one
+fails, so a file cannot be reprinted. A change block is a `diff` fence with the file's
+language and `file=X`, holding one unified hunk in plus, minus and space form; its pre-image,
+the context and removed lines in order, must occur exactly once in the file as rebuilt so
+far, and no match and two matches both fail, naming the page line and the line that could
+not be placed or the two places it was. A reference block, `file=X ref` inside a `details`
+element, is compared with the reconstruction at that point and never adopted: one that
+disagrees fails at the differing line rather than quietly winning, and one outside a
+collapsed block fails because it would print the file in full. An excerpt block,
+`excerpt=<path>`, must be a verbatim contiguous run of that repository file, which is how the
+`generate` handler is shown while the agent scripts are linked. The final reconstruction is
+written out, compiled as one project with the reader's `tsconfig.json`, and diffed byte for
+byte against the example, as before. A page with no change block fails, so the old shape
+cannot come back. Expressive Code renders the change blocks as inserted and removed lines
+over the file's own highlighting, prefixes stripped, so the reader sees the diff the gate
+applies.
+
+The tutorial's browser half is React, on `createHooks`, `TransportProvider` and the hooks,
+and it ends at `examples/react`, which gained the loss slider for it: the step that puts
+both lanes on screen could not be the one a tutorial about two lanes lost. `examples/chat`
+stays vanilla and stays the reference for the library with nothing in front of it, and its
+two-streams page is linked from the tutorial's last step with the handler as an excerpt. The
+stylesheet appears in the one step that creates the page and is not printed again.
+
+**Measured.** Fifteen fixture tests: a hunk matching nothing fails naming the page line and
+the first line it could not place, and nothing is applied; one matching twice fails naming
+both places; a reference that disagrees fails at the differing line and the reconstruction
+stands; the rest each fail with their own message. Against the old vanilla page the gate
+reported 30 problems, and with no page it fails on absence; the page was then written
+against it. The written page: 10 complete, 20 change, 9 reference and 1 excerpt block
+rebuild 10 files, compile as one project, and the 8 that are the example's match it.
+
+**Reconsider when:** a second tutorial exists, at which point the gate takes the page, the
+example and its file list as arguments rather than constants.

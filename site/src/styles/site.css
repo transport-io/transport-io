@@ -218,9 +218,10 @@ body {
   margin-block: 1.5rem;
 }
 
-/* Exactly the pane's own padding, so the block reaches the pane's edge and not past it. */
+/* Exactly the pane's own padding, so the block reaches the pane's edge and not past it. A
+   block folded inside a details element stays inside its border. */
 @media (min-width: 72rem) {
-  .sl-markdown-content .expressive-code:not(:where(.tio-panel *)) {
+  .sl-markdown-content .expressive-code:not(:where(.tio-panel *, details *)) {
     margin-inline: calc(-1 * var(--sl-content-pad-x, 1.5rem));
   }
 }
@@ -412,6 +413,26 @@ mobile-starlight-toc .dropdown {
     display: block;
     overflow-x: auto;
   }
+}
+
+/* A folded copy of a file: a hairline strip that opens, the summary in the code face. */
+.sl-markdown-content details:not(:where(.not-content *)) {
+  border: 1px solid var(--tio-line);
+  padding: 0 1rem;
+  margin-block: 1rem 1.5rem;
+}
+
+.sl-markdown-content details > summary:not(:where(.not-content *)) {
+  font-family: var(--tio-mono);
+  font-size: var(--tio-14);
+  color: var(--tio-dim);
+  padding-block: 0.6rem;
+  cursor: pointer;
+}
+
+.sl-markdown-content details[open] > summary:not(:where(.not-content *)) {
+  color: var(--tio-ink);
+  border-bottom: 1px solid var(--tio-line);
 }
 
 /* A claim with a number in it, used where a figure needs its denominator beside it. */
