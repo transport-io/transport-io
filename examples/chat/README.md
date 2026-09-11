@@ -32,12 +32,14 @@ certificate.
 ## Running it
 
 ```bash
-bun run cert       # mint a 14-day ECDSA P-256 certificate
-bun run build:web  # bundle the browser clients
-bun run start      # http://localhost:8080
+bun run build:web             # bundle the browser pages into web/dist
+npx transport-io dev server.node.ts --static web
 ```
 
-Or `bun run dev`, which does all three.
+Or `bun run dev`, which does both. The command mints the certificate, serves `web/` with the
+hash the pages pin, and prints the URL. `--static web` is required: without it the command
+serves the first of `public`, `web/dist`, `web` and `dist` that exists, and after the build
+that is `web/dist`, which has no page in it.
 
 Open **two** windows on `/`. Type in one; it appears in both. Move the pointer in
 one; the dot moves in the other, and the drop counters in the header climb under load.
@@ -77,15 +79,15 @@ QUIC library does not send. Feature detection will report support and the connec
 establish before failing, which is why the client raises `WT_HANDSHAKE_TIMEOUT` with an
 explanation rather than hanging.
 
-**The certificate expires in 14 days.** That is not our choice - a pinned certificate is
-capped at 14 days total validity, must be ECDSA (P-256, P-384 or Ed25519), and must be
-hashed with SHA-256. Re-run `bun run cert` when it lapses.
+**The certificate expires in 14 days.** A pinned certificate is capped at 14 days total
+validity. `transport-io dev` mints a new one on the next start after it lapses; reload the
+page so it picks up the new hash.
 
 **The page is served over plain HTTP on purpose.** `http://localhost` is a trustworthy
 origin, so it gets a secure context for free; only the WebTransport endpoint on 4433 needs
 a certificate.
 
-**Two ports, two servers.** 8080 is an ordinary HTTP server for the page. 4433 is QUIC over
+**Two ports, two servers.** 3000 is an ordinary HTTP server for the page. 4433 is QUIC over
 UDP. If you are running this somewhere that does not route UDP to your process, nothing
 will connect - that requirement is in the root README and it is the first thing to check.
 

@@ -4,10 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "cert": "bun run scripts/gen-cert.ts",
     "build:web": "bun build web/main.ts web/agents.ts --outdir web/dist --target browser",
-    "dev": "bun run cert && bun run build:web && node server.node.ts",
-    "start": "node server.node.ts"
+    "dev": "bun run build:web && transport-io dev server.node.ts --static web",
+    "start": "transport-io dev server.node.ts --static web"
   },
   "dependencies": {
     "transport-io": "*"

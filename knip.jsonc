@@ -49,9 +49,9 @@
     },
     "examples/chat": {
       "entry": [
+        "server.node.ts",
         "web/main.ts",
         "web/agents.ts",
-        "scripts/*.ts",
         "deploy/*.node.ts"
       ],
       "project": [

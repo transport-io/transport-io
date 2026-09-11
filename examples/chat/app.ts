@@ -1,4 +1,4 @@
-/** The handlers, shared by server.node.ts and deploy/server.node.ts. */
+/** The handlers, attached to whichever server hosts the contract. */
 import type { Server, ServerPeer } from 'transport-io'
 import { AGENTS, paceOf } from './agents.ts'
 import type { ChatMap } from './contract.ts'

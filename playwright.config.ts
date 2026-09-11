@@ -12,6 +12,7 @@ import { defineConfig, devices } from '@playwright/test'
  */
 /** Overridable, because 8080 is the most contended port on any developer's machine. */
 const E2E_PORT = process.env.E2E_PORT ?? '8080'
+const E2E_WT_PORT = process.env.E2E_WT_PORT ?? '4433'
 const E2E_ORIGIN = `http://localhost:${E2E_PORT}`
 /**
  * `transport-io dev --demo` runs alongside the example, on its own ports.
@@ -78,8 +79,11 @@ export default defineConfig({
       stderr: 'pipe',
     },
     {
-      command: 'npm run e2e:server',
-      url: `${E2E_ORIGIN}/cert-hash`,
+      command:
+        `npm run build:web -w examples/chat && node packages/core/dist/cli/main.node.js dev ` +
+        `examples/chat/server.node.ts --static examples/chat/web ` +
+        `--port ${E2E_PORT} --wt-port ${E2E_WT_PORT}`,
+      url: `${E2E_ORIGIN}/.well-known/transport-io-dev`,
       // Never reuse. With reuse on, any dev server already holding this port was accepted -
       // Playwright's readiness probe passes on any status from 200 to 403 - and the suite
       // then ran against an unrelated application, failing on selectors that never mention

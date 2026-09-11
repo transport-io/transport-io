@@ -1,5 +1,5 @@
 import { Client, type TransportError } from 'transport-io'
-import { connectBrowser } from 'transport-io/browser-transport'
+import { connectDev } from 'transport-io/dev-transport'
 import { type ChatMap, contract } from '../contract.ts'
 
 function byId(id: string) {
@@ -46,20 +46,8 @@ function moveCursor(from: string, x: number, y: number) {
   dot.style.transform = `translate(${x}px, ${y}px)`
 }
 
-const { sha256, port } = (await (await fetch('/cert-hash')).json()) as {
-  sha256: number[]
-  port: number
-}
-
 // new Client, so the page can show "connecting"
-const client = new Client<ChatMap>({
-  contract,
-  connect: () =>
-    connectBrowser({
-      url: `https://127.0.0.1:${port}/`,
-      certificateHash: Uint8Array.from(sha256),
-    }),
-})
+const client = new Client<ChatMap>({ contract, connect: () => connectDev() })
 
 client.subscribe(() => {
   const s = client.getSnapshot()

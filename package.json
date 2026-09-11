@@ -30,7 +30,6 @@
     "deadcode": "knip",
     "docs:check": "bun run scripts/check-docs.ts",
     "e2e": "npm run build && playwright test",
-    "e2e:server": "npm run check:node && cd examples/chat && bun run cert && bun run build:web && node server.node.ts",
     "gates": "./scripts/gates.sh",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
