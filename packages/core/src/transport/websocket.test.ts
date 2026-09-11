@@ -31,7 +31,7 @@ import {
   toWebSocketCloseCode,
   truncateCloseReason,
   WebSocketConnection,
-} from './websocket.ts'
+} from './websocket-connection.ts'
 
 type Listener = (ev: never) => void
 type Event = { data?: unknown; code?: number; reason?: string }

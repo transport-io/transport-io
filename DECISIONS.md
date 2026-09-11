@@ -101,6 +101,9 @@ message string.
 
 *2026-09-06. `streamErrorCode` does not appear anywhere in 1.6.8's sources, and `fails.node.test.ts` still asserts it undefined. Holds. D119.*
 
+*2026-09-12. The parser that test pinned had no caller and is deleted with the test (D127).
+The fact stands: the session learns of a reset from the stream erroring, never from a code.*
+
 ### F6. Stream reads do not preserve write boundaries
 50 x 10B writes plus one 200,000B write arrived as **217 reads, largest chunk 1220 bytes**.
 Small writes coincidentally survived as discrete reads; the large one shattered. This is
@@ -3269,3 +3272,27 @@ the pass-through needs a range of its own.
 **Reconsider when:** a deployment reports fallback sessions dropping on a quiet network, at
 which point the interval and the deadline become listener and connector options rather than
 constants.
+
+### D127. A transport entry exports its connector or listener, and nothing else
+`transport-io/websocket-transport` was the module that implemented the mapping, so it
+exported the connection class, the socket interface, the close-code helpers and the sink's
+low-water mark beside `connectWebSocket`; `transport-io/node-transport` exported
+`resetCodeFromError`, a parser for the reference binding's error text that nothing in the
+package had called since the commit that wrote it, with a test as its only caller. D21
+keeps the transport seam private, and an entry that ships the class behind the seam is the
+seam leaking under another name. Shipped surface is the hardest kind to remove.
+
+**Decision.** An entry exports the function a user calls and the options it takes:
+`connectWebSocket` and `WebSocketConnectOptions` on `websocket-transport`, `listenWebSocket`
+with its options and listener type on `websocket-node-transport`, and `node-transport`
+without `resetCodeFromError`, which is deleted with its test rather than moved: dead code
+with a test is still dead. The mapping lives in `transport/websocket-connection.ts`, not an
+entry, tested directly, and listed as unreachable by design in the floor gate, which is how
+a shipped declaration nothing can import stays a decision rather than a gap. The
+environment fact in `CLAUDE.md` that said the parsing lives in one function now says nothing
+parses it. Minor bump: an import of the class from the entry no longer resolves, and that
+is the change.
+
+**Reconsider when:** a second listener implementation needs the connection class, at which
+point it is exported from an internal entry of its own under the seam's contract (D21)
+rather than from the connector's.

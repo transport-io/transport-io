@@ -101,7 +101,8 @@ Part 2.
 - **Oversized and blocked datagrams are silently swallowed** by the transport. We own both
   size checking and backpressure accounting.
 - **`WebTransportError` has no `streamErrorCode`.** The reset code is recoverable only by
-  parsing the message string, and that parsing lives in exactly one function.
+  parsing the message string, and nothing in the package parses it: the session learns of a
+  reset from the stream erroring, never from the code. See D127.
 - **Stream reads do not preserve write boundaries.** 50 small writes plus one large write
   arrived as 217 reads. Length-prefix everything.
 - **Bun segfaults on exit** when the native addon is loaded, 3/3 runs. Node, 0/3.

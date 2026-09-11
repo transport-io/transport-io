@@ -20,7 +20,7 @@ import { createServer as createHttpsServer } from 'node:https'
 import { WebSocketServer } from 'ws'
 import { PROBE_PATH } from './probe.ts'
 import type { Connection } from './types.ts'
-import { type SocketLike, WebSocketConnection } from './websocket.ts'
+import { type SocketLike, WebSocketConnection } from './websocket-connection.ts'
 
 export interface WebSocketServerOptions {
   readonly port: number

@@ -241,6 +241,7 @@ const UNREACHABLE = {
   "timers.d.ts": "the timer registry a teardown owns, reachable only through private fields",
   "transport/parity-suite.d.ts": "test infrastructure for transport implementers",
   "transport/probe.d.ts": "the probe after a failed handshake, reachable only through a connector option",
+  "transport/websocket-connection.d.ts": "the WebSocket mapping, reachable only through connectWebSocket and listenWebSocket",
 }
 const missing = shipped
   .filter((f) => !listed.includes(f))

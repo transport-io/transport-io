@@ -37,17 +37,6 @@ type AnySession = {
   close: (info: { closeCode: number; reason: string }) => void
 }
 
-/**
- * The reset code is only recoverable from the message text, because the error type omits
- * the field the specification defines. Parsing lives in exactly this one function, with a
- * test pinning the observed format, so the upstream defect stays contained.
- */
-export function resetCodeFromError(error: unknown): number | undefined {
-  const message = error instanceof Error ? error.message : String(error)
-  const m = /code:\s*(\d+)/i.exec(message)
-  return m?.[1] === undefined ? undefined : Number(m[1])
-}
-
 class FailsConnection implements Connection {
   readonly #session: AnySession
   readonly closed: Promise<CloseInfo>

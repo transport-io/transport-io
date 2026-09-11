@@ -28,7 +28,8 @@ import { createServer } from '../server.ts'
 import { Session } from '../session.ts'
 import { PROBE_PATH } from './probe.ts'
 import { listenWebSocket } from './websocket.node.ts'
-import { connectWebSocket, type SocketLike, WebSocketConnection } from './websocket.ts'
+import { connectWebSocket } from './websocket.ts'
+import { type SocketLike, WebSocketConnection } from './websocket-connection.ts'
 
 const contract = defineContract({
   chat: reliable<{ body: string }>(),

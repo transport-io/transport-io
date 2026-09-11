@@ -28,7 +28,7 @@ Node ≥ 22. TypeScript ≥ 5.0 for consumers.
 | `transport-io` | contract, `Client`, `createServer`, errors, `MemoryAdapter` | anywhere |
 | `transport-io/browser-transport` | `browserClient`, `connectBrowser` | browser |
 | `transport-io/dev-transport` | `devClient`, `connectDev`, `DEV_ENDPOINT` | browser, loopback only |
-| `transport-io/node-transport` | `listenHttp3`, `listenDev`, `http3Client`, `connectHttp3`, `resetCodeFromError` | Node only |
+| `transport-io/node-transport` | `listenHttp3`, `listenDev`, `http3Client`, `connectHttp3` | Node only |
 | `transport-io/websocket-transport` | `connectWebSocket` | anywhere with a `WebSocket` global |
 | `transport-io/websocket-node-transport` | `listenWebSocket` | Node only |
 | `transport-io/testing` | `HostileAdapter`, `loopbackPair`, `UnreliableConnection` | tests |
