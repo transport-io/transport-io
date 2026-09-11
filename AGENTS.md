@@ -160,7 +160,7 @@ client.disconnect()
 | `on(event, handler)` | Returns an unsubscribe function. There is no `off()`. |
 | `subscribe(cb)` / `getSnapshot()` | For `useSyncExternalStore`. `getSnapshot` is referentially stable. |
 | `stats()` | Per-peer drop counters. |
-| `withFallback<M>(opts)` | `ClientOptions` plus `fallback`, a connector for a reliable-only transport: `() => connectWebSocket({ url })`. Native first on every connect; the fallback only on `WT_NO_SUPPORT` or `WT_UDP_UNREACHABLE`. Returns `FallbackClient<M>`: no `call()` or `stream()`; they live on `native`, which is `null` on a fallback session. Compiles only when every unreliable event declares a fallback, and the error names the event. |
+| `withFallback<M>(opts)` | `ClientOptions` plus `fallback`, a connector for a reliable-only transport: `() => connectWebSocket({ url })`. Native first on every connect; the fallback on `WT_NO_SUPPORT`, and on a failed WebTransport handshake when the WebSocket connects, else the WebTransport error. Returns `FallbackClient<M>`: no `call()` or `stream()`; they live on `native`, which is `null` on a fallback session. Compiles only when every unreliable event declares a fallback, and the error names the event. |
 
 `ClientState` is `{ status, sessionId, rooms, lastError, transport, fallbackReason }` where
 `status` is `'idle' | 'connecting' | 'connected' | 'closing' | 'closed'`, `transport` is
@@ -249,9 +249,9 @@ export const lanes = client.native // call() and stream(); null on a fallback se
 
 Rules:
 
-- WebTransport first, every connect. The fallback engages only on `WT_NO_SUPPORT` and
-  `WT_UDP_UNREACHABLE`; a dead server or a wrong hash does not fall back. A session never
-  changes transport in place.
+- WebTransport first, every connect. The fallback engages on `WT_NO_SUPPORT`, and on a
+  failed WebTransport handshake when the WebSocket connects; a dead server fails both and
+  reports the WebTransport error. A session never changes transport in place.
 - The snapshot says which: `transport` is `'webtransport' | 'websocket' | null`, and
   `fallbackReason` is `'unsupported' | 'unreachable' | null`.
 - The server side is `server.withFallback(await listenWebSocket({ port }))` after

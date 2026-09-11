@@ -3054,6 +3054,9 @@ that an undeclared one fails there.
 **Reconsider when:** a second policy is asked for by name, with the guarantee it preserves
 written down before its name.
 
+**Note, 2026-09-12.** The orchestration rule is amended by D125: a failed WebTransport
+handshake dials the fallback, and the WebSocket handshake decides.
+
 ### D122. The one fallback is the emit lane over a WebSocket
 Of every candidate costed on 2026-09-07, this is the one that carries a lane without
 rebuilding the session: a WebSocket is one ordered, reliable pipe per direction, which is the
@@ -3163,3 +3166,49 @@ tests. The example from its own directory without `--static`: `/` 404, `/dist/ma
 
 **Reconsider when:** a second tutorial exists, at which point the gate takes the page and
 the example it builds as arguments rather than constants.
+
+### D125. A failed WebTransport handshake dials the fallback; the WebSocket handshake is the probe
+D121 engaged the fallback on `WT_UDP_UNREACHABLE`, which D120 raises when the WebTransport
+origin answers a `HEAD` over HTTPS. In the deployment the fallback guide documents,
+WebTransport is on one port, bound to UDP only, and the WebSocket is on another behind a
+proxy that terminates TLS. Nothing answers the probe at the WebTransport origin, the error
+stays `WT_HANDSHAKE_FAILED`, and the fallback never engages: the shipped 0.8.0 falls back
+only when both listeners share an origin, or when `probe` is pointed at the WebSocket's port
+by hand. The e2e passed because it did exactly that, which is the setting a reader would not
+know to make.
+
+**Decision.** `withFallback` dials the fallback on `WT_HANDSHAKE_FAILED` as well as
+`WT_UDP_UNREACHABLE`. If the WebSocket connects, the session is on it with
+`fallbackReason: 'unreachable'`. If it fails too, the WebTransport error is thrown as it was,
+with the message its probe produced, so a dead server reports the primary transport.
+`WT_NO_SUPPORT` is unchanged. Every other failure is thrown without asking the fallback:
+`WT_CERT_EXPIRED` and `WT_DEV_ONLY` are configuration.
+
+Why the probe is not pointed at the fallback's origin by default: a connector is a closure.
+`withFallback` receives `() => connectBrowser(...)` and `() => connectWebSocket(...)`, and can
+read no URL out of the second or pass a probe target into the first. Why not an explicit
+`probe` option on `withFallback`: it would be a required option whose omission reproduces
+this bug, it would probe twice in series, and a `HEAD` at the WebSocket's origin proves less
+than the WebSocket handshake that has to run anyway. The connector's own probe stays, for
+the client without a fallback that needs the code, and for the message a dead server reports.
+
+What this admits: a wrong or expired pinned hash fails the WebTransport handshake exactly as
+a blocked path does, so it falls back too, and the snapshot reads `unreachable`. D120's
+remedy already said the two are indistinguishable, and the probe design already fell back on
+a wrong hash whenever the origin answered. This entry removes a false negative and adds no
+class of false positive.
+
+**Measured.** The e2e that reproduces the guide's deployment, WebTransport on a port dead over
+UDP and TCP, the WebSocket on another, no `probe`: on 0.8.0 `connect()` rejects with
+`WT_HANDSHAKE_FAILED`; with the change the session is on the WebSocket, `unreachable`, and an
+emit echoes. Two unit tests fail on 0.8.0 and pass with the change: the fallback is asked
+once and carries the session, and a fallback that fails leaves the WebTransport error as
+`lastError`. The earlier e2e, with `probe` pointed at the WebSocket port, still passes.
+
+**Not in this entry.** Safari establishes a WebTransport session and never sends, which is
+`WT_HANDSHAKE_TIMEOUT` from the session after the connector has returned; the fallback does
+not engage on it.
+
+**Reconsider when:** a fallback session is reported on a network where WebTransport works,
+at which point the WebTransport error that preceded the fallback goes on the snapshot so the
+cause can be read.

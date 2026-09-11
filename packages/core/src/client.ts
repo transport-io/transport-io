@@ -32,8 +32,8 @@ export interface ClientState {
   /** What carries the current session. `null` until connected. */
   readonly transport: Transport | null
   /**
-   * Why the current session is a fallback: the runtime has no WebTransport, or the server
-   * answered over HTTPS and not over QUIC. `null` on a native session.
+   * Why the current session is a fallback: the runtime has no WebTransport, or the
+   * WebTransport handshake failed and the WebSocket connected. `null` on a native session.
    */
   readonly fallbackReason: FallbackReason | null
 }
@@ -287,9 +287,13 @@ export class Client<M extends AnyMap = Registered> {
 
   /**
    * The native connector, then the fallback if one was installed and the failure is one a
-   * fallback answers: no WebTransport in this runtime, or a server that answers over HTTPS
-   * and not over QUIC. Every other failure is thrown as it is, because a dead server or a
-   * wrong hash is not a reason to change transport.
+   * fallback answers. No WebTransport in this runtime: the fallback carries the session. A
+   * WebTransport handshake that failed: the fallback is dialled, because a connector is a
+   * closure and the WebSocket handshake is the one fact this client can obtain about whether
+   * the server is up over TCP (D125). If that fails too, the WebTransport error is the one
+   * thrown: it names the primary transport, and its message says what its probe found. Every
+   * other failure is thrown as it is, because a certificate past its validity or a dev
+   * connector outside the dev command is configuration, not a path to route around.
    */
   async #open(): Promise<{ conn: Connection; fallbackReason: FallbackReason | null }> {
     const fallback = fallbacks.get(this)
@@ -299,7 +303,14 @@ export class Client<M extends AnyMap = Registered> {
       if (fallback === undefined) throw e
       const reason = fallbackReasonFor(e)
       if (reason === undefined) throw e
-      return { conn: await fallback(), fallbackReason: reason }
+      if (reason === 'unsupported') return { conn: await fallback(), fallbackReason: reason }
+      let conn: Connection
+      try {
+        conn = await fallback()
+      } catch {
+        throw e
+      }
+      return { conn, fallbackReason: reason }
     }
   }
 
@@ -330,7 +341,7 @@ const fallbacks = new WeakMap<object, () => Promise<Connection>>()
 function fallbackReasonFor(e: unknown): FallbackReason | undefined {
   if (!(e instanceof TransportError)) return undefined
   if (e.code === 'WT_NO_SUPPORT') return 'unsupported'
-  if (e.code === 'WT_UDP_UNREACHABLE') return 'unreachable'
+  if (e.code === 'WT_UDP_UNREACHABLE' || e.code === 'WT_HANDSHAKE_FAILED') return 'unreachable'
   return undefined
 }
 
@@ -350,9 +361,9 @@ export type FallbackClient<M extends AnyMap> = Omit<Client<M>, 'call' | 'stream'
 /**
  * A client with a second transport behind the first (D121).
  *
- * The native connector is tried first, every time. The fallback is used only when the
- * runtime has no WebTransport or when the server answers over HTTPS and not over QUIC, and
- * the snapshot says which. The type argument is the gate: `FallbackReady<M>` is `unknown`
+ * The native connector is tried first, every time. The fallback is used when the runtime
+ * has no WebTransport, and when the WebTransport handshake fails and the WebSocket connects,
+ * and the snapshot says which. The type argument is the gate: `FallbackReady<M>` is `unknown`
  * when every unreliable event in the map declares a fallback, and otherwise a required
  * property naming the event that has not, so this call fails to compile rather than an
  * emit failing in production.

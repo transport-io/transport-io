@@ -22,15 +22,17 @@ port that is unreachable, a wrong pinned hash and an expired certificate alike, 
 this order: the server is running and its UDP port is reachable; a pinned certificate is
 inside its 14 days; the hash is SHA-256 over the certificate's DER bytes, not over `cert.pem`.
 `npx transport-io dev` handles all three locally. The message says whether the origin
-answered over HTTPS. One that listens only on UDP never does, and is healthy.
+answered over HTTPS. One that listens only on UDP never does, and is healthy. With a fallback
+configured, the WebSocket was dialled after this and failed too.
 
 ## WT_UDP_UNREACHABLE
 
 The handshake failed and the same origin answered over HTTPS, so the server is up and only
 the QUIC path is failing: a firewall or VPN on this network, or a platform in front of the
-server with no UDP ingress. Nothing in the library routes around it. This is the signal the
-fallback acts on. Without one, the network is the fix. On a network where it worked before,
-rule out a wrong or expired pinned hash, which fails the same way.
+server with no UDP ingress. Nothing in the library routes around it. With a fallback
+configured the WebSocket is dialled, so this surfaces only when it failed too; without one,
+the network is the fix. On a network where it worked before, rule out a wrong or expired
+pinned hash, which fails the same way.
 
 ## WT_CERT_EXPIRED
 

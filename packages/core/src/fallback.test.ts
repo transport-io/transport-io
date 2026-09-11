@@ -4,7 +4,8 @@
  * The compiler is the first line; `fallback.test-d.ts` holds that. This file is the second:
  * a JavaScript caller with no compiler meets the same refusal from the session, before frame
  * 0, on both sides. And the orchestration: the native connector first every time, the
- * fallback only for the two failures a fallback answers, and a snapshot that says which.
+ * fallback when the runtime has no WebTransport or the WebTransport handshake failed and the
+ * WebSocket connects (D125), and a snapshot that says which.
  */
 import { describe, expect, test } from 'bun:test'
 import { Client, withFallback } from './client.ts'
@@ -135,20 +136,59 @@ describe('withFallback on the client', () => {
     client.disconnect()
   })
 
-  test('any other failure is thrown as it is, and the fallback is never asked', async () => {
+  test('a failed WebTransport handshake dials the fallback, and a WebSocket that connects carries the session as unreachable', async () => {
+    const [serverSide, clientSide] = loopbackPair(1024, 'websocket')
+    await serve(serverSide)
+    let asked = 0
+    const client = withFallback<DeclaredMap>({
+      contract: declared,
+      // What a UDP-only WebTransport port produces: the probe at its origin is unanswered.
+      connect: failing('WT_HANDSHAKE_FAILED'),
+      fallback: async () => {
+        asked++
+        return clientSide
+      },
+    })
+    await client.connect()
+    expect(asked).toBe(1)
+    const s = client.getSnapshot()
+    expect(s.status).toBe('connected')
+    expect(s.transport).toBe('websocket')
+    expect(s.fallbackReason).toBe('unreachable')
+    expect(s.lastError).toBeNull()
+    client.disconnect()
+  })
+
+  test('a failed WebTransport handshake whose fallback fails too throws the WebTransport error', async () => {
     let asked = 0
     const client = withFallback<DeclaredMap>({
       contract: declared,
       connect: failing('WT_HANDSHAKE_FAILED'),
       fallback: async () => {
         asked++
+        throw new TransportError('WT_SESSION_CLOSED', 'the socket closed', 'stub')
+      },
+    })
+    const err = await failed(client.connect())
+    expect(asked).toBe(1)
+    expect(err.code).toBe('WT_HANDSHAKE_FAILED')
+    expect(client.getSnapshot().lastError?.code).toBe('WT_HANDSHAKE_FAILED')
+  })
+
+  test('a configuration error is thrown as it is, and the fallback is never asked', async () => {
+    let asked = 0
+    const client = withFallback<DeclaredMap>({
+      contract: declared,
+      connect: failing('WT_CERT_EXPIRED'),
+      fallback: async () => {
+        asked++
         return loopbackPair()[0]
       },
     })
     const err = await failed(client.connect())
-    expect(err.code).toBe('WT_HANDSHAKE_FAILED')
+    expect(err.code).toBe('WT_CERT_EXPIRED')
     expect(asked).toBe(0)
-    expect(client.getSnapshot().lastError?.code).toBe('WT_HANDSHAKE_FAILED')
+    expect(client.getSnapshot().lastError?.code).toBe('WT_CERT_EXPIRED')
   })
 
   test('when the native connector succeeds, native is the client and call() runs through it', async () => {

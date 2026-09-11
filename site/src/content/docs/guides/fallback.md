@@ -56,8 +56,8 @@ Property ''fallback refused'' is missing in type '{ contract: ...; connect: ...;
 
 ## End to end
 
-The client tries WebTransport first, every time, and takes the fallback only when the runtime
-has no WebTransport or the server answers over HTTPS and not over QUIC:
+The client tries WebTransport first, every time, and takes the fallback when the runtime has
+no WebTransport or the WebTransport handshake fails and the WebSocket connects:
 
 ```ts file=client.ts
 import { withFallback } from 'transport-io'
@@ -186,10 +186,11 @@ export function Save(): ReactNode {
 ## How the switch is decided
 
 Every connect starts from WebTransport. The fallback engages on two conditions and no other:
-the runtime has no WebTransport, or the server answers over HTTPS and not over QUIC. A dead
-server, a wrong certificate hash or an expired one does not fall back. A reconnect starts
-from WebTransport again, so leaving a network that blocks UDP brings the other lanes back on
-the next session, and a session never changes transport in place.
+the runtime has no WebTransport, or the WebTransport handshake fails and the WebSocket
+connects. A dead server fails both and reports the WebTransport error. A wrong or expired
+pinned hash fails the handshake as a blocked path does, and falls back the same way. A
+reconnect starts from WebTransport again, so leaving a network that blocks UDP brings the
+other lanes back on the next session, and a session never changes transport in place.
 
 The snapshot says which. `transport` is `'webtransport'` or `'websocket'`, `null` until
 connected. `fallbackReason` is `'unsupported'` or `'unreachable'` on a fallback session,
@@ -201,13 +202,13 @@ When a WebTransport handshake fails, the browser reports one error for every cau
 failure, the client asks whether the same origin answers over HTTPS: one `HEAD` to
 `/.well-known/transport-io`, any status counts, two seconds at most. An answer means the
 server is up and only the QUIC path is failing, which is what a firewall, a VPN or a platform
-with no UDP ingress looks like, and the error is `WT_UDP_UNREACHABLE`. That is the signal the
-fallback acts on.
+with no UDP ingress looks like, and the error is `WT_UDP_UNREACHABLE`.
 
 It claims no more. It does not say what blocks UDP, and it never fires for an origin that
-listens only on UDP: nothing answers, and the error stays `WT_HANDSHAKE_FAILED`. The
-WebSocket listener answers the probe on its port, so pointing `probe` at it, or serving both
-on one host, makes the signal exact. `probe: false` disables it.
+listens only on UDP: nothing answers, and the error stays `WT_HANDSHAKE_FAILED`. The fallback
+does not depend on it; with a WebSocket configured, the WebSocket handshake is the test.
+`probe` points it at another origin, such as the WebSocket listener's, which answers it, and
+`probe: false` disables it.
 
 ## What will bite
 

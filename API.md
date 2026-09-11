@@ -422,9 +422,13 @@ to `useSyncExternalStore`.
 `withFallback<M>(options)` builds a client with a second transport behind the first.
 `options` is `ClientOptions` plus `fallback`, a connector for a transport that carries the
 reliable lane only. The native connector is tried first on every connect. The fallback is used
-when the runtime has no WebTransport or when the server answers over HTTPS and not over QUIC,
-which are `WT_NO_SUPPORT` and `WT_UDP_UNREACHABLE`; any other failure is thrown as it is,
-because a dead server or a wrong hash is not a reason to change transport.
+when the runtime has no WebTransport, `WT_NO_SUPPORT`, and when the WebTransport handshake
+fails, `WT_HANDSHAKE_FAILED` or `WT_UDP_UNREACHABLE`: the WebSocket is dialled, and a session
+on it reports `fallbackReason: 'unreachable'`. If the WebSocket fails as well, the
+WebTransport error is thrown as it was, so a dead server reports the primary transport. Any
+other failure is thrown without asking the fallback: a certificate past its validity, or a dev
+connector outside the dev command, is configuration. A wrong pinned hash fails the handshake
+as a blocked path does, and falls back the same way.
 
 It returns `FallbackClient<M>`: everything `Client<M>` has except `call()` and `stream()`,
 which live on `native`. `native` is `null` while the session is a fallback or not connected,

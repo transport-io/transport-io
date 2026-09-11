@@ -59,8 +59,9 @@ adds one fails to compile and names the event, and a session that reaches the wi
 refused with `WT_RELIABILITY_REFUSED` before the handshake.
 
 The fallback engages on two conditions and no other: the runtime has no WebTransport, or the
-server answers over HTTPS and not over QUIC, which is `WT_UDP_UNREACHABLE`. A dead server does
-not fall back. Every reconnect starts from WebTransport again. There is no idle timeout on a
+WebTransport handshake fails and the WebSocket connects. A dead server fails both and reports
+the WebTransport error. A wrong or expired pinned hash fails the handshake as a blocked path
+does, and falls back the same way. Every reconnect starts from WebTransport again. There is no idle timeout on a
 WebSocket, so a dead TCP path is noticed when the platform reports it, not before.
 
 ## Reconnect creates a new session
