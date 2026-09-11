@@ -27,6 +27,10 @@ export const FALLBACK_UNRELIABLE_LOW_WATER = 32
 export const WS_CLOSE_NORMAL = 1000
 export const WS_CLOSE_OFFSET = 3000
 export const WS_CLOSE_REASON_MAX_BYTES = 123
+/** PROTOCOL.md §3.3 - a peer that has sent nothing for this long sends an empty message. */
+export const WS_KEEPALIVE_INTERVAL_MS = 15_000
+/** PROTOCOL.md §3.3 - a peer that has received nothing for this long closes as WT_IDLE_TIMEOUT. */
+export const WS_IDLE_TIMEOUT_MS = 45_000
 
 /** PROTOCOL.md §5.2 */
 export const FrameType = {
@@ -123,6 +127,7 @@ export const CloseCode = {
   WT_HANDSHAKE_TIMEOUT: 1002,
   WT_PEER_TOO_SLOW: 1003,
   WT_PROTOCOL_ERROR: 1004,
+  WT_IDLE_TIMEOUT: 1005,
   WT_RELIABILITY_REFUSED: 1006,
 } as const
 export type CloseCode = (typeof CloseCode)[keyof typeof CloseCode]

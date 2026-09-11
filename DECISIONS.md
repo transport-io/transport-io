@@ -357,6 +357,10 @@ pending-map bookkeeping D2 exists to delete. Ship `AbortSignal.timeout(ms)` as t
 documented idiom, plus a server-side cap of 256 concurrent streams per session rejecting
 further opens with `WT_TOO_MANY_STREAMS`, so a leaking handler cannot exhaust the session.
 
+**Note, 2026-09-12.** The first sentence is about QUIC. On the WebSocket mapping nothing
+notices a dead path, so the mapping carries its own deadline (D126). The conclusion about
+call timeouts is unchanged: a fallback session carries no calls.
+
 ### D19. Datagram sequence numbers live in the protocol, scoped to the ORIGIN
 A `uint32` monotonic sequence per **(origin, event)** on the datagram lane, where origin is
 a `uint32` identifying the producing peer (first four bytes of SHA-256 of its `PeerId`),
@@ -3101,6 +3105,9 @@ to notice.
 **Reconsider when:** a user needs calls over the fallback, at which point the multiplexed
 variant is costed again against what that user actually does with them.
 
+**Note, 2026-09-12.** The mapping has a keepalive and an idle deadline, D126, so the gap the
+paragraph above records is closed.
+
 **Note, 2026-09-07.** `ws` is a plain dependency of core, no longer an optional peer. It is
 151 KB unpacked with no dependencies of its own, beside a required native QUIC binding that
 is 7.1 MB on disk, so optional bought nothing but an install step and a runtime error that
@@ -3212,3 +3219,53 @@ not engage on it.
 **Reconsider when:** a fallback session is reported on a network where WebTransport works,
 at which point the WebTransport error that preceded the fallback goes on the snapshot so the
 cause can be read.
+
+### D126. The WebSocket mapping has a keepalive and an idle deadline
+D18 declined a default call timeout because QUIC's idle timeout notices a dead path and
+rejects `session.closed`. That reasoning is about QUIC. TCP reports a dead path when a
+retransmission finally gives up, minutes later, or never on a connection that is idle, and a
+WebSocket adds nothing: a browser cannot send a ping, and a ping the server sends is answered
+by the browser without the page learning of it. So a fallback session whose peer vanished
+stayed open on both sides for as long as nothing was sent, holding its rooms on the server
+and reporting `connected` on the client. D122 shipped the mapping with this recorded as its
+one known gap.
+
+**Decision.** The mapping carries its own liveness, in `WebSocketConnection`, on both ends
+alike. A peer that has sent nothing for `WS_KEEPALIVE_INTERVAL_MS`, 15000, sends an empty
+binary message. An empty message carries no bytes of the stream: the receiver counts it as
+proof of life and hands nothing to the framer, so §5 is untouched and no frame type is added.
+A peer that has received nothing for `WS_IDLE_TIMEOUT_MS`, 45000, closes the session as
+`WT_IDLE_TIMEOUT`, a new §10.2 code, 1005, carried as 4005 on the socket. The interval is
+checked on a timer of its own period, so the longest silence before a keepalive is two
+intervals against a deadline of three. Both timers are `OwnedTimers`, released by `close()`
+and by the socket's close event, and unreferenced so the socket alone decides whether a
+process stays up. The interval is short enough that a proxy with an idle timeout measured in
+minutes never closes a quiet session; one set below it will, and the documents say so.
+
+Why an application-level message rather than the protocol's ping: a browser exposes neither
+direction of it to a page. Why the connection rather than the session: the deadline is a
+property of the mapping, and a QUIC session must not gain a timer it does not need. Why a
+close code rather than a local error: the peer that is alive and silent, which is a peer on
+a build without keepalives, is told why it was closed.
+
+Compatibility: an 0.8 peer on the fallback never sends a keepalive, so a peer on this
+release closes it after 45 s of silence; an 0.8 peer receiving an empty message hands zero
+bytes to its framer, which changes nothing. Minor bump.
+
+**Measured.** Fake sockets: a silent sender emits an empty message within 70 ms at a 20 ms
+interval and a sender writing every 5 ms emits none; a receiver fed only keepalives stays
+open for 300 ms against a 90 ms deadline and its emit stream sees no chunk; a silent peer is
+closed at a 60 ms deadline as 1005 and its socket receives 4005; a peer writing every 15 ms
+against the same deadline is never closed. Real sockets, a `ws` server end and Node's client:
+a bare client that never sends is closed by the mapped server end at a 120 ms deadline,
+receives close 4005, and had received keepalives; two mapped ends that only keep alive stay
+open for 600 ms against the same deadline.
+
+**Also noted.** In the socket's own vocabulary a lost connection is 1006, and
+`fromWebSocketCloseCode` passes it through, where it equals `WT_RELIABILITY_REFUSED`'s 1006.
+Nothing reads `closed.code` as an error today, so nothing misreports; when something does,
+the pass-through needs a range of its own.
+
+**Reconsider when:** a deployment reports fallback sessions dropping on a quiet network, at
+which point the interval and the deadline become listener and connector options rather than
+constants.

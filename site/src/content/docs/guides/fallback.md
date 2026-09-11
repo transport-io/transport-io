@@ -212,6 +212,7 @@ does not depend on it; with a WebSocket configured, the WebSocket handshake is t
 
 ## What will bite
 
-- **No idle timeout.** QUIC notices a dead path on its own; a WebSocket does not. A dead TCP
-  path is noticed when the platform reports it.
+- **A dead path takes up to 45 seconds to notice.** Each side sends a keepalive after 15
+  seconds of silence and closes the session after 45 seconds without a message. Keep any
+  proxy's idle timeout above 15 seconds, or it closes quiet sessions first.
 - **One pipe.** A large emit delays every emit behind it, in both directions.

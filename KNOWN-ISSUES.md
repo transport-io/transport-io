@@ -61,8 +61,11 @@ refused with `WT_RELIABILITY_REFUSED` before the handshake.
 The fallback engages on two conditions and no other: the runtime has no WebTransport, or the
 WebTransport handshake fails and the WebSocket connects. A dead server fails both and reports
 the WebTransport error. A wrong or expired pinned hash fails the handshake as a blocked path
-does, and falls back the same way. Every reconnect starts from WebTransport again. There is no idle timeout on a
-WebSocket, so a dead TCP path is noticed when the platform reports it, not before.
+does, and falls back the same way. Every reconnect starts from WebTransport again. A
+WebSocket has no idle timeout of its own, so the mapping carries one: a keepalive after 15
+seconds of silence, and a close after 45 seconds without a message. A dead TCP path is
+noticed within that, and a proxy whose idle timeout is under 15 seconds closes a quiet
+session first.
 
 ## Reconnect creates a new session
 

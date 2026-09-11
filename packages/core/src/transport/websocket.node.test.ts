@@ -150,6 +150,75 @@ async function produce(session: Session, frames: number): Promise<void> {
   }
 }
 
+/** A raw `ws` server and Node's client, joined, with both sockets handed back. */
+async function rawPair(): Promise<{
+  clientSocket: WebSocket
+  serverSocket: WebSocket
+  stop: () => void
+}> {
+  const wss = new WebSocketServer({ port: 0, host: '127.0.0.1' })
+  await once(wss, 'listening')
+  const port = (wss.address() as AddressInfo).port
+  const serverSide = new Promise<WebSocket>((resolve) => wss.once('connection', resolve))
+  const clientSocket = new WebSocket(`ws://127.0.0.1:${port}/`)
+  await once(clientSocket, 'open')
+  const serverSocket = await serverSide
+  return {
+    clientSocket,
+    serverSocket,
+    stop: () => {
+      serverSocket.terminate()
+      clientSocket.terminate()
+      wss.close()
+    },
+  }
+}
+
+test('a real peer that never sends is closed at the deadline, told why, and had received keepalives', async () => {
+  const { clientSocket, serverSocket, stop } = await rawPair()
+  try {
+    // The server end runs the mapping with a short deadline; the client is a bare socket.
+    const conn = new WebSocketConnection(serverSocket as unknown as SocketLike, {
+      keepaliveIntervalMs: 30,
+      idleTimeoutMs: 120,
+    })
+    let empties = 0
+    clientSocket.on('message', (data: Buffer) => {
+      if (data.byteLength === 0) empties++
+    })
+    const told = once(clientSocket, 'close')
+    const info = await Promise.race([conn.closed, settle(2_000).then(() => undefined)])
+    assert.equal(info?.code, CloseCode.WT_IDLE_TIMEOUT)
+    const [code] = (await told) as [number, Buffer]
+    assert.equal(code, 3000 + CloseCode.WT_IDLE_TIMEOUT)
+    assert.ok(empties >= 1, `keepalives received: ${empties}`)
+  } finally {
+    stop()
+  }
+})
+
+test('two mapped ends that only keep alive stay open past the deadline', async () => {
+  const { clientSocket, serverSocket, stop } = await rawPair()
+  try {
+    const a = new WebSocketConnection(clientSocket as unknown as SocketLike, {
+      keepaliveIntervalMs: 30,
+      idleTimeoutMs: 120,
+    })
+    const b = new WebSocketConnection(serverSocket as unknown as SocketLike, {
+      keepaliveIntervalMs: 30,
+      idleTimeoutMs: 120,
+    })
+    const outcome = await Promise.race([
+      a.closed.then(() => 'a closed'),
+      b.closed.then(() => 'b closed'),
+      settle(600).then(() => 'both open'),
+    ])
+    assert.equal(outcome, 'both open')
+  } finally {
+    stop()
+  }
+})
+
 test('the emit queue bound is reachable on a real socket whose peer stopped reading', {
   timeout: 30_000,
 }, async () => {

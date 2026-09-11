@@ -15,6 +15,11 @@
  * bound would measure nothing: `writer.ready` on the reference binding in a new costume
  * (D93). `websocket.node.test.ts` reaches the bound on a real socket with the peer paused,
  * and shows it unreachable with the polling off.
+ *
+ * Nor does it give liveness. TCP reports a dead path late or never, and a WebSocket has no
+ * idle timeout of its own, so the mapping carries one (D126): an empty message after
+ * `WS_KEEPALIVE_INTERVAL_MS` with nothing sent, consumed by the receiver as no bytes at all,
+ * and a close as `WT_IDLE_TIMEOUT` after `WS_IDLE_TIMEOUT_MS` with nothing received.
  */
 import { TransportError } from '../errors.ts'
 import {
@@ -23,7 +28,10 @@ import {
   WS_CLOSE_NORMAL,
   WS_CLOSE_OFFSET,
   WS_CLOSE_REASON_MAX_BYTES,
+  WS_IDLE_TIMEOUT_MS,
+  WS_KEEPALIVE_INTERVAL_MS,
 } from '../protocol.ts'
+import { type OwnedTimer, OwnedTimers } from '../timers.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
 
 /**
@@ -54,15 +62,25 @@ const OPEN = 1
 export const WS_SEND_LOW_WATER_BYTES = 65_536
 /** How long a parked write waits between looks at `bufferedAmount`. */
 const POLL_MS = 4
+/** §3.3: the keepalive is an empty message, which carries no bytes of the stream. */
+const KEEPALIVE = new Uint8Array(0)
 
 export interface WebSocketConnectionOptions {
   /** For the test that proves the bound; production never sets it. */
   readonly lowWaterBytes?: number
+  /** For the tests that prove the deadline; production never sets them. */
+  readonly keepaliveIntervalMs?: number
+  readonly idleTimeoutMs?: number
 }
 
 export class WebSocketConnection implements Connection {
   readonly #socket: SocketLike
   readonly #lowWater: number
+  readonly #keepaliveMs: number
+  readonly #idleMs: number
+  readonly #timers = new OwnedTimers()
+  #idleTimer: OwnedTimer | undefined
+  #sentAt = Date.now()
   readonly #readable: ReadableStream<Uint8Array>
   #inbound: ReadableStreamDefaultController<Uint8Array> | undefined
   #closing = false
@@ -72,6 +90,8 @@ export class WebSocketConnection implements Connection {
   constructor(socket: SocketLike, opts: WebSocketConnectionOptions = {}) {
     this.#socket = socket
     this.#lowWater = opts.lowWaterBytes ?? WS_SEND_LOW_WATER_BYTES
+    this.#keepaliveMs = opts.keepaliveIntervalMs ?? WS_KEEPALIVE_INTERVAL_MS
+    this.#idleMs = opts.idleTimeoutMs ?? WS_IDLE_TIMEOUT_MS
     socket.binaryType = 'arraybuffer'
     this.#readable = new ReadableStream<Uint8Array>({
       start: (controller) => {
@@ -83,6 +103,7 @@ export class WebSocketConnection implements Connection {
     })
     socket.addEventListener('close', (ev) => {
       this.#closing = true
+      this.#timers.clearAll()
       this.#endInbound()
       this.#settleClosed({ code: fromWebSocketCloseCode(ev.code), reason: ev.reason })
     })
@@ -97,8 +118,15 @@ export class WebSocketConnection implements Connection {
         this.close(CloseCode.WT_PROTOCOL_ERROR, 'a text message on the emit lane')
         return
       }
+      // Anything from the peer, a keepalive included, is proof of life.
+      this.#armIdle()
+      // §3.3: an empty message is the keepalive, and carries no bytes of the stream.
+      if (bytes.byteLength === 0) return
       this.#inbound?.enqueue(bytes)
     })
+    // Neither timer holds a process open: the socket does that, for as long as it is open.
+    this.#timers.every(this.#keepaliveMs, () => this.#keepalive()).unref()
+    this.#armIdle()
   }
 
   async openEmitStream(): Promise<WritableStream<Uint8Array>> {
@@ -114,6 +142,7 @@ export class WebSocketConnection implements Connection {
       write: async (chunk) => {
         if (socket.readyState !== OPEN) throw gone()
         socket.send(chunk)
+        this.#sentAt = Date.now()
         // The bound above this sink counts frames whose write has not completed. A socket
         // reports completion through `bufferedAmount` alone, so this is where a write waits
         // while the peer is slow, and where a resolve-at-once would hide the whole backlog.
@@ -171,6 +200,7 @@ export class WebSocketConnection implements Connection {
   close(code: number, reason: string): void {
     if (this.#closing) return
     this.#closing = true
+    this.#timers.clearAll()
     try {
       this.#socket.close(toWebSocketCloseCode(code), truncateCloseReason(reason))
     } catch {
@@ -190,6 +220,31 @@ export class WebSocketConnection implements Connection {
     } catch {
       // Closed twice, which is the peer and the socket both saying the same thing.
     }
+  }
+
+  /**
+   * Sent when nothing else has been for an interval. The check runs on a timer of the same
+   * period, so the longest silence before a keepalive is two intervals, well inside the
+   * peer's deadline.
+   */
+  #keepalive(): void {
+    if (this.#closing || this.#socket.readyState !== OPEN) return
+    if (Date.now() - this.#sentAt < this.#keepaliveMs) return
+    try {
+      this.#socket.send(KEEPALIVE)
+      this.#sentAt = Date.now()
+    } catch {
+      // Closing underneath us; the close event releases the timer.
+    }
+  }
+
+  /** Re-armed by every message. When it fires, the path is dead or the peer sends no keepalive. */
+  #armIdle(): void {
+    this.#idleTimer?.cancel()
+    this.#idleTimer = this.#timers.after(this.#idleMs, () => {
+      this.close(CloseCode.WT_IDLE_TIMEOUT, `no message from the peer for ${this.#idleMs} ms`)
+    })
+    this.#idleTimer.unref()
   }
 }
 

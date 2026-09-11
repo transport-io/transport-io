@@ -133,6 +133,8 @@ the server's. Frame 0 is the handshake (§4), unchanged.
 | datagrams | none on the socket; a declared unreliable event travels as a `DATAGRAM` frame (§5.2) whose payload is a §7.1 datagram, unchanged |
 | unreliable frames on the lane | queued in the §9 ring, and moved onto the emit lane only while it holds fewer than 32 frames |
 | close | `WT_NO_ERROR` as WebSocket code 1000, every other §10.2 code as 3000 plus the code, and the reason cut to 123 bytes on a character boundary |
+| keepalive | an empty binary message, sent by a peer that has sent nothing for 15000 ms; it carries no bytes of the stream and counts as a message received |
+| idle deadline | a peer that has received nothing for 45000 ms closes the session as `WT_IDLE_TIMEOUT` (§10.2) |
 
 A peer MUST send binary messages only and MUST treat a text message as a protocol error.
 <!-- norm: websocket-binary-only -> packages/core/src/transport/websocket.test.ts -->
@@ -154,8 +156,13 @@ Session close codes MUST be carried as the table says. A peer that closes treats
 as closed at once rather than waiting for the closing handshake, which a peer that has stopped
 reading may never complete.
 
-There is no idle timeout on this mapping: a dead TCP path is noticed when the platform reports
-it, not before.
+TCP reports a dead path late or never, so the mapping carries its own liveness. A peer MUST
+send an empty binary message once the keepalive interval has passed with nothing sent, and
+MUST treat an empty message it receives as carrying no bytes of the stream.
+<!-- norm: websocket-keepalive -> packages/core/src/transport/websocket.test.ts -->
+A peer MUST close the session as `WT_IDLE_TIMEOUT` once the idle deadline has passed with
+nothing received, a keepalive counting as something received.
+<!-- norm: websocket-idle-timeout -> packages/core/src/transport/websocket.test.ts -->
 
 ---
 
@@ -829,6 +836,7 @@ exceed **1024 bytes**, per the HTTP/3 WebTransport draft.
 | `1002` | `WT_HANDSHAKE_TIMEOUT` | No handshake within 5000 ms. |
 | `1003` | `WT_PEER_TOO_SLOW` | Emit queue exceeded 256 frames. Consume faster. |
 | `1004` | `WT_PROTOCOL_ERROR` | Unrecoverable framing violation. |
+| `1005` | `WT_IDLE_TIMEOUT` | Nothing received for 45000 ms on a mapping with an idle deadline (§3.3). The path is dead, or the peer sends no keepalive. |
 | `1006` | `WT_RELIABILITY_REFUSED` | Session was reliable-only, or on a fallback transport with an undeclared unreliable event in the contract. See §2. |
 
 On the WebSocket mapping these are carried as WebSocket close codes: 1000 for `WT_NO_ERROR`,

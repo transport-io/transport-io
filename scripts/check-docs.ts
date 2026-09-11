@@ -38,6 +38,8 @@ import {
   STREAM_FRAME_OVERHEAD_BYTES,
   STREAM_INITIAL_CREDIT,
   WS_CLOSE_REASON_MAX_BYTES,
+  WS_IDLE_TIMEOUT_MS,
+  WS_KEEPALIVE_INTERVAL_MS,
 } from '../packages/core/src/protocol.ts'
 import { PROBE_BUDGET_MS } from '../packages/core/src/transport/probe.ts'
 
@@ -420,6 +422,12 @@ const TABLE_CONSTANTS: readonly TableConstant[] = [
     expect: WS_CLOSE_REASON_MAX_BYTES,
     name: 'WS_CLOSE_REASON_MAX_BYTES',
   },
+  {
+    row: /^\|\s*keepalive/,
+    expect: WS_KEEPALIVE_INTERVAL_MS,
+    name: 'WS_KEEPALIVE_INTERVAL_MS',
+  },
+  { row: /WT_IDLE_TIMEOUT/, expect: WS_IDLE_TIMEOUT_MS, name: 'WS_IDLE_TIMEOUT_MS' },
 ]
 
 const withoutFences = proto.replace(/```[\s\S]*?```/g, '')

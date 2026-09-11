@@ -5,9 +5,10 @@
  * Every claim the mapping makes has a case here that fails without it: the close-code
  * offset, the reason cap, binary only, the write that parks on `bufferedAmount`, the emit
  * queue's bound being reachable at all, the DATAGRAM frame that carries a declared
- * unreliable event, the low-water rule that keeps those frames out of a backed-up lane, and
- * the refusal of a DATAGRAM frame on a session that has real datagrams. The real socket, and
- * the paused peer that fills a real kernel buffer, are in `websocket.node.test.ts`.
+ * unreliable event, the low-water rule that keeps those frames out of a backed-up lane, the
+ * refusal of a DATAGRAM frame on a session that has real datagrams, the keepalive a silent
+ * sender emits and a busy one does not, and the deadline that closes a silent peer. The real
+ * socket, and the paused peer that fills a real kernel buffer, are in `websocket.node.test.ts`.
  */
 import { describe, expect, test } from 'bun:test'
 import { buildEventTable, defineContract, reliable, unreliable } from '../contract.ts'
@@ -347,6 +348,80 @@ describe('a session pair over two sockets', () => {
 })
 
 // norm: datagram-frame-websocket-only
+// norm: websocket-keepalive
+// norm: websocket-idle-timeout
+describe('liveness on the mapping', () => {
+  const quick = { keepaliveIntervalMs: 20, idleTimeoutMs: 90 }
+
+  test('a peer that has sent nothing for the interval sends an empty message, and one that keeps sending does not', async () => {
+    const [sa, sb] = pair()
+    const conn = new WebSocketConnection(sa, quick)
+    new WebSocketConnection(sb, quick)
+    await wait(70)
+    expect(sa.sent.filter((m) => m.byteLength === 0).length).toBeGreaterThanOrEqual(1)
+
+    const writer = (await conn.openEmitStream()).getWriter()
+    const before = sa.sent.length
+    for (let i = 0; i < 12; i++) {
+      await writer.write(new Uint8Array([1]))
+      await wait(5)
+    }
+    expect(sa.sent.slice(before).filter((m) => m.byteLength === 0)).toHaveLength(0)
+    conn.close(CloseCode.WT_NO_ERROR, '')
+  })
+
+  test('an empty message is proof of life and never reaches the emit stream', async () => {
+    const [sa, sb] = pair()
+    // `sa` sends keepalives and nothing else; `sb` would close after 90 ms of silence.
+    new WebSocketConnection(sa, { keepaliveIntervalMs: 20, idleTimeoutMs: 10_000 })
+    const conn = new WebSocketConnection(sb, quick)
+    const chunks: Uint8Array[] = []
+    conn.onEmitStream((readable) => {
+      void (async () => {
+        for await (const chunk of readable) chunks.push(chunk)
+      })()
+    })
+    let settled = false
+    void conn.closed.then(() => {
+      settled = true
+    })
+    await wait(300)
+    expect(settled).toBe(false)
+    expect(sb.sent.filter((m) => m.byteLength === 0).length).toBeGreaterThanOrEqual(1)
+    expect(chunks).toHaveLength(0)
+    conn.close(CloseCode.WT_NO_ERROR, '')
+  })
+
+  test('a peer silent for the deadline is closed as WT_IDLE_TIMEOUT, and told so on the socket', async () => {
+    const [sa, sb] = pair()
+    const conn = new WebSocketConnection(sa, { keepaliveIntervalMs: 10_000, idleTimeoutMs: 60 })
+    // `sb` is a bare socket that never sends.
+    let told: { code: number; reason: string } | undefined
+    sb.addEventListener('close', (ev) => {
+      told = ev
+    })
+    const info = await Promise.race([conn.closed, wait(1_000).then(() => 'never closed')])
+    expect(info).toMatchObject({ code: CloseCode.WT_IDLE_TIMEOUT })
+    expect((info as { reason: string }).reason).toContain('60 ms')
+    await wait(0)
+    expect(told?.code).toBe(toWebSocketCloseCode(CloseCode.WT_IDLE_TIMEOUT))
+  })
+
+  test('the deadline is re-armed by every message, so a peer that keeps sending is never closed', async () => {
+    const [sa, sb] = pair()
+    const conn = new WebSocketConnection(sa, { keepaliveIntervalMs: 10_000, idleTimeoutMs: 60 })
+    const ticker = setInterval(() => sb.send(new Uint8Array([1])), 15)
+    let settled = false
+    void conn.closed.then(() => {
+      settled = true
+    })
+    await wait(250)
+    clearInterval(ticker)
+    expect(settled).toBe(false)
+    conn.close(CloseCode.WT_NO_ERROR, '')
+  })
+})
+
 describe('a DATAGRAM frame on a session with real datagrams', () => {
   test('is a protocol error, because it would route around the lane', async () => {
     const table = await buildEventTable(contract)

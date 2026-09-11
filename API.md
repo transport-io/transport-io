@@ -470,7 +470,9 @@ export const client = withFallback<AppMap>({
 
 A `wss://` origin needs a certificate the platform trusts; a browser pins no hash for a
 WebSocket, so in local development the listener is `ws://` on loopback. A session on the
-fallback has no idle timeout: a dead TCP path is noticed when the platform reports it.
+fallback sends a keepalive after 15 s with nothing sent and closes after 45 s with nothing
+received, so a dead TCP path is noticed within that; keep any proxy's idle timeout above
+15 s.
 
 ---
 

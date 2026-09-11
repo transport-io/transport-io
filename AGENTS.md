@@ -258,7 +258,9 @@ Rules:
   `listen()`, in a `*.node.ts` file. Without `cert` and `privKey` it is `ws://`, for a
   reverse proxy that terminates TLS, or for loopback in development, where a browser pins
   no hash for a WebSocket; with them it terminates `wss://` itself.
-- No idle timeout on the fallback: a dead TCP path is noticed when the platform reports it.
+- A fallback session sends a keepalive after 15 s of silence and closes after 45 s without a
+  message, so a dead TCP path is noticed within that. Keep any proxy's idle timeout above
+  15 s.
 
 ## Errors
 
