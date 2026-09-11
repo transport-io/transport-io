@@ -5,12 +5,14 @@
   "scripts": {
     "build": "astro build",
     "dev": "astro dev",
-    "prebuild": "mkdir -p public && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg",
-    "predev": "mkdir -p public && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg",
+    "prebuild": "mkdir -p public src/assets && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg && cp ../assets/demo/two-streams.png src/assets/",
+    "predev": "mkdir -p public src/assets && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg && cp ../assets/demo/two-streams.png src/assets/",
     "preview": "astro preview"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.9",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
     "astro": "^7.2.9"
   }
 }

@@ -1,59 +1,431 @@
 /*
- * The brand's ink and bone, and one accent. Code samples are the most important element on
- * every page, so everything here exists to keep them legible: a wider content column than
- * Starlight's default, and no decoration competing with a fenced block.
+ * One direction, held on every page: the brand's ink and bone, one accent, IBM Plex Sans for
+ * prose and IBM Plex Mono for code and labels, hairline rules, square corners. Nothing here
+ * is a gradient, a shadow or a rounded card, because assets/brand/USAGE.txt forbids all
+ * three on the mark and a site that contradicts its own mark reads as borrowed.
+ *
+ * Code is the strongest element on every page. It sits on a panel one step lighter than the
+ * ground in both themes, in the larger of the two faces' effective sizes, and on wide screens
+ * it runs wider than the prose column.
+ *
+ * The scale, in pixels at the default root size: 14 labels and captions, 15 code, 17 prose,
+ * 19 h3, 24 h2, 28 the landing pitch, 32 h1. Prose 1.6, code 1.6, headings 1.2.
  */
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-600.css';
+
 :root {
-  --tio-ink: #16130f;
-  --tio-bone: #e7e2d6;
-  --tio-accent: #c2551d;
-  --sl-content-width: 50rem;
+  --tio-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --tio-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --tio-14: 0.875rem;
+  --tio-15: 0.9375rem;
+  --tio-17: 1.0625rem;
+  --tio-19: 1.1875rem;
+  --tio-24: 1.5rem;
+  --tio-28: 1.75rem;
+  --tio-32: 2rem;
+
+  --sl-font: var(--tio-sans);
+  --sl-font-mono: var(--tio-mono);
+  --sl-text-body: var(--tio-17);
+  --sl-text-body-sm: var(--tio-14);
+  --sl-text-code: var(--tio-15);
+  --sl-text-code-sm: var(--tio-14);
+  --sl-text-sm: var(--tio-14);
+  --sl-text-xs: var(--tio-14);
+  --sl-text-h1: var(--tio-32);
+  --sl-text-h2: var(--tio-24);
+  --sl-text-h3: var(--tio-19);
+  --sl-text-h4: var(--tio-17);
+  --sl-text-h5: var(--tio-17);
+  --sl-line-height: 1.6;
+  --sl-line-height-headings: 1.2;
+  --sl-content-width: 46rem;
+  --sl-sidebar-width: 17rem;
 }
 
+/*
+ * Light, from the brand notes: ground E4E0D6, panel F3F1EA, ink 16130F, accent C2551D. The
+ * dim and the line are the social preview's. Every Starlight token is set here rather than
+ * left to its defaults, so nothing on the page is a blue that arrived with the template.
+ */
+:root[data-theme='light'] {
+  --tio-ground: #e4e0d6;
+  --tio-panel: #f3f1ea;
+  --tio-ink: #16130f;
+  --tio-dim: #6b655b;
+  --tio-line: #cfc9bb;
+  --tio-accent: #c2551d;
+
+  --sl-color-white: var(--tio-ink);
+  --sl-color-gray-1: #2a2620;
+  --sl-color-gray-2: #4a453d;
+  --sl-color-gray-3: var(--tio-dim);
+  --sl-color-gray-4: #a9a295;
+  --sl-color-gray-5: var(--tio-line);
+  --sl-color-gray-6: var(--tio-panel);
+  --sl-color-gray-7: var(--tio-panel);
+  --sl-color-black: var(--tio-ground);
+  --sl-color-accent-low: #f3dccd;
+  --sl-color-accent: var(--tio-accent);
+  --sl-color-accent-high: #8e3a10;
+  --sl-color-text: var(--tio-ink);
+  --sl-color-text-accent: var(--tio-accent);
+  --sl-color-bg: var(--tio-ground);
+  --sl-color-bg-nav: var(--tio-ground);
+  --sl-color-bg-sidebar: var(--tio-ground);
+  --sl-color-bg-inline-code: var(--tio-panel);
+  --sl-color-hairline: var(--tio-line);
+  --sl-color-hairline-light: var(--tio-line);
+  --sl-color-hairline-shade: var(--tio-line);
+}
+
+/*
+ * Dark, from the same notes: ground 141210, panel 1D1A16, ink E7E2D6, accent D9692C. The
+ * notes give no dim or line for dark; these are set, not derived from light by inversion:
+ * a dim that still reads as text on the panel, and a line that separates without glowing.
+ */
 :root[data-theme='dark'] {
+  --tio-ground: #141210;
+  --tio-panel: #1d1a16;
+  --tio-ink: #e7e2d6;
+  --tio-dim: #9c9588;
+  --tio-line: #33302a;
+  --tio-accent: #d9692c;
+
+  --sl-color-white: var(--tio-ink);
+  --sl-color-gray-1: #d3cec2;
+  --sl-color-gray-2: #b5afa2;
+  --sl-color-gray-3: var(--tio-dim);
+  --sl-color-gray-4: #5f5a51;
+  --sl-color-gray-5: var(--tio-line);
+  --sl-color-gray-6: var(--tio-panel);
+  --sl-color-gray-7: var(--tio-panel);
+  --sl-color-black: var(--tio-ground);
+  --sl-color-accent-low: #3a2114;
   --sl-color-accent: var(--tio-accent);
   --sl-color-accent-high: #f0a077;
-  --sl-color-bg: var(--tio-ink);
+  --sl-color-text: var(--tio-ink);
+  --sl-color-text-accent: var(--tio-accent);
+  --sl-color-bg: var(--tio-ground);
+  --sl-color-bg-nav: var(--tio-ground);
+  --sl-color-bg-sidebar: var(--tio-ground);
+  --sl-color-bg-inline-code: var(--tio-panel);
+  --sl-color-hairline: var(--tio-line);
+  --sl-color-hairline-light: var(--tio-line);
+  --sl-color-hairline-shade: var(--tio-line);
 }
 
-:root[data-theme='light'] {
-  --sl-color-accent: var(--tio-accent);
-  --sl-color-accent-low: #f5e3d8;
-  --sl-color-bg: #faf8f4;
+/* ---- prose ---------------------------------------------------------------------------- */
+
+body {
+  font-family: var(--tio-sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
+.sl-markdown-content {
+  font-size: var(--tio-17);
+  line-height: 1.6;
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4, h5) {
+  font-family: var(--tio-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tio-ink);
+}
+
+.sl-markdown-content h2:not(:where(.not-content *)) {
+  margin-top: 2.75rem;
+}
+
+.sl-markdown-content hr:not(:where(.not-content *)) {
+  border: 0;
+  border-top: 1px solid var(--tio-line);
+  margin-block: 2.5rem;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--tio-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.14em;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  color: var(--sl-color-accent-high);
+}
+
+/* Inline code: the code face, on the panel, square. */
+.sl-markdown-content code:not(:where(.expressive-code *)) {
+  font-family: var(--tio-mono);
+  font-size: 0.92em;
+  background: var(--tio-panel);
+  border: 1px solid var(--tio-line);
+  border-radius: 0;
+  padding: 0.05em 0.35em;
+}
+
+.sl-markdown-content :is(h1, h2, h3) code:not(:where(.expressive-code *)) {
+  font-size: 0.9em;
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+/* Tables read like the reference they are: hairlines, tabular figures, mono in cells that hold code. */
+.sl-markdown-content table:not(:where(.not-content *)) {
+  font-size: var(--tio-15);
+  font-variant-numeric: tabular-nums;
+  border-collapse: collapse;
+}
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  border: 0;
+  border-bottom: 1px solid var(--tio-line);
+  padding: 0.55rem 0.75rem 0.55rem 0;
+  vertical-align: top;
+  text-align: start;
+}
+
+.sl-markdown-content th:not(:where(.not-content *)) {
+  font-family: var(--tio-mono);
+  font-size: var(--tio-14);
+  font-weight: 400;
+  color: var(--tio-dim);
+  border-bottom-color: var(--tio-ink);
+}
+
+.sl-markdown-content blockquote:not(:where(.not-content *)) {
+  border-inline-start: 2px solid var(--tio-ink);
+  color: var(--sl-color-gray-2);
+}
+
+/* ---- code ----------------------------------------------------------------------------- */
+
+/*
+ * The frame is a panel with a hairline and, when the block has a title, a dim mono label. No
+ * tabs, no dots, no shadow; the colours are set in astro.config.ts so both themes get their
+ * own rather than one derived from the other. On a wide screen the block runs past the prose
+ * column on both sides, which is the one place the layout says what matters most.
+ */
 .expressive-code {
-  margin-block: 1.25rem;
+  margin-block: 1.5rem;
+}
+
+/* Exactly the pane's own padding, so the block reaches the pane's edge and not past it. */
+@media (min-width: 72rem) {
+  .sl-markdown-content .expressive-code:not(:where(.tio-panel *)) {
+    margin-inline: calc(-1 * var(--sl-content-pad-x, 1.5rem));
+  }
+}
+
+.expressive-code .frame .header {
+  font-family: var(--tio-mono);
+  font-size: var(--tio-14);
+}
+
+.expressive-code .frame.is-terminal .header::before {
+  display: none;
+}
+
+/* ---- chrome --------------------------------------------------------------------------- */
+
+.tio-site-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--tio-ink);
+  text-decoration: none;
+  font-family: var(--tio-mono);
+  font-weight: 600;
+  font-size: var(--tio-17);
+  letter-spacing: -0.01em;
+}
+
+header.header {
+  border-bottom: 1px solid var(--tio-line);
+  background: var(--tio-ground);
+}
+
+.sidebar-content,
+.right-sidebar {
+  font-size: var(--tio-15);
+}
+
+.sidebar-content a[aria-current='page'] {
+  background: var(--tio-panel);
+  color: var(--tio-ink);
+  border-radius: 0;
+  border-inline-start: 2px solid var(--tio-accent);
+}
+
+.sidebar-content .large {
+  font-size: var(--tio-15);
+  font-weight: 600;
+}
+
+.right-sidebar-panel h2 {
+  font-family: var(--tio-mono);
+  font-size: var(--tio-14);
+  font-weight: 400;
+  color: var(--tio-dim);
+}
+
+/* Starlight's own buttons and pills, squared. */
+.sl-link-button,
+button,
+.pagination-links > a {
+  border-radius: 0;
+}
+
+.pagination-links > a {
+  border: 1px solid var(--tio-line);
+  box-shadow: none;
 }
 
 /* A claim with a number in it, used where a figure needs its denominator beside it. */
 .tio-figure {
-  border-inline-start: 3px solid var(--tio-accent);
+  border-inline-start: 2px solid var(--tio-accent);
   padding-inline-start: 1rem;
   margin-block: 1.5rem;
 }
 
-/*
- * The recording slot. The aspect ratio is locked so the page does not shift when the video
- * is dropped in, and it is deliberately obvious that nothing is running here yet: a
- * plausible-looking placeholder on a landing page is a fake demo with extra steps.
- */
-.tio-demo-slot {
-  aspect-ratio: 16 / 9;
-  width: 100%;
-  max-width: 60rem;
-  margin-inline: auto;
+/* ---- the landing page ----------------------------------------------------------------- */
+
+[data-has-hero] {
+  --sl-content-width: 64rem;
+}
+
+/* The front door has no section anchors and no edit link; it is not a wiki page. */
+[data-has-hero] .sl-anchor-link {
+  display: none;
+}
+
+.tio-hero {
   display: grid;
-  place-items: center;
-  padding: 2rem;
-  text-align: center;
-  border: 2px dashed var(--sl-color-gray-4);
-  border-radius: 0.5rem;
+  gap: 1.25rem;
+  padding-block: 2rem 1rem;
+  max-width: 64rem;
+}
+
+.tio-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0;
+  font-family: var(--tio-mono);
+  font-weight: 600;
+  font-size: var(--tio-32);
+  letter-spacing: -0.02em;
+  color: var(--tio-ink);
+}
+
+.tio-pitch {
+  margin: 0;
+  max-width: 44rem;
+  font-family: var(--tio-mono);
+  font-weight: 600;
+  font-size: var(--tio-28);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--tio-ink);
+}
+
+.tio-actions {
+  margin: 0;
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  font-family: var(--tio-mono);
+  font-size: var(--tio-15);
+}
+
+.tio-action {
+  color: var(--tio-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.tio-action.minimal {
   color: var(--sl-color-gray-2);
 }
 
-.tio-demo-slot video {
+.tio-shot {
+  margin: 1rem 0 0;
+}
+
+.tio-shot img {
+  display: block;
   width: 100%;
-  height: 100%;
-  border-radius: 0.5rem;
+  height: auto;
+  border: 1px solid var(--tio-line);
+  background: #fff;
+}
+
+.tio-shot figcaption {
+  margin-top: 0.75rem;
+  font-size: var(--tio-15);
+  color: var(--sl-color-gray-2);
+  max-width: 46rem;
+}
+
+.tio-shot figcaption code {
+  font-family: var(--tio-mono);
+  font-size: 0.92em;
+}
+
+[data-has-hero] .sl-markdown-content > :is(p, ul, ol) {
+  max-width: 46rem;
+}
+
+[data-has-hero] .sl-markdown-content h2 {
+  margin-top: 3rem;
+}
+
+.tio-panels {
+  display: grid;
+  gap: 1.5rem;
+  margin-block: 1.5rem;
+}
+
+@media (min-width: 56rem) {
+  .tio-panels {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.tio-panel {
+  min-width: 0;
+}
+
+.tio-panel-label {
+  font-family: var(--tio-mono);
+  font-size: var(--tio-14);
+  color: var(--tio-dim);
+  margin-bottom: -1rem;
+}
+
+.tio-panel .expressive-code {
+  margin-block: 1.25rem 0;
+}
+
+.tio-panel .expressive-code pre {
+  min-height: 100%;
+}
+
+/* A statement about what is not on this page, set as a note rather than a dashed frame. */
+.tio-demo-slot {
+  border-inline-start: 2px solid var(--tio-ink);
+  padding-inline-start: 1rem;
+  margin-block: 2rem;
+  max-width: 46rem;
+  color: var(--sl-color-gray-2);
+  font-size: var(--tio-15);
 }

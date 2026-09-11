@@ -1,0 +1,15 @@
+---
+/**
+ * The header lockup as live text. The brand's lockup SVG sets the wordmark in IBM Plex
+ * Mono, and an image cannot reach the page's webfont, so the mark is inlined and the
+ * wordmark is text set by the stylesheet, which is what the brand notes ask for.
+ */
+import Mark from './Mark.astro'
+
+const { siteTitleHref } = Astro.locals.starlightRoute
+---
+
+<a href={siteTitleHref} class="tio-site-title">
+  <Mark size={24} />
+  <span>transport-io</span>
+</a>

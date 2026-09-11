@@ -2,6 +2,7 @@
 title: transport-io
 description: Real-time apps over WebTransport. One connection, independent streams and unreliable datagrams, reliability chosen per message.
 template: splash
+editUrl: false
 hero:
   tagline: One connection. Independent streams and unreliable datagrams. Choose reliability per message.
   # Base-prefixed by hand: hero actions are frontmatter, so the remark plugin that
@@ -16,7 +17,8 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components'
+import Panel from '../../components/Panel.astro'
+import Panels from '../../components/Panels.astro'
 
 ## The whole thing
 
@@ -34,8 +36,8 @@ export const contract = defineContract({
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-<CardGrid>
-<Card title="Server">
+<Panels>
+<Panel label="server.ts">
 ```ts
 import { createServer } from 'transport-io'
 import { listenDev } from 'transport-io/node-transport'
@@ -49,8 +51,8 @@ server.onSession((peer) => {
 
 await server.listen(await listenDev())
 ```
-</Card>
-<Card title="Client">
+</Panel>
+<Panel label="client.ts">
 ```ts
 import { devClient } from 'transport-io/dev-transport'
 
@@ -61,8 +63,8 @@ client.on('chat', (m) => console.log(m.from, m.body))
 client.emit('chat', { from: 'me', body: 'hi' }) // arrives
 client.emit('cursor', { x: 12, y: 40 })         // may not
 ```
-</Card>
-</CardGrid>
+</Panel>
+</Panels>
 
 `chat` arrives. `cursor` may not. The contract is the only place that says so, and both
 sides infer from it: a wrong event name or payload does not compile.
@@ -74,8 +76,8 @@ sides infer from it: a wrong event name or payload does not compile.
 The server yields, the client consumes, and the loop ends when the server stops. Stopping
 early is a QUIC stream reset: the handler's `ctx.signal` fires and its `finally` runs.
 
-<CardGrid>
-<Card title="Client">
+<Panels>
+<Panel label="client.ts">
 ```ts
 import { type Client, defineContract, type MapOf, streaming } from 'transport-io'
 
@@ -91,8 +93,8 @@ for await (const token of gpt.stream('ask', { prompt })) {
   console.log(token)
 }
 ```
-</Card>
-<Card title="Server">
+</Panel>
+<Panel label="server.ts">
 ```ts
 import type { Server } from 'transport-io'
 
@@ -105,8 +107,8 @@ gptServer.handle('ask', async function* ({ prompt }) {
   }
 })
 ```
-</Card>
-</CardGrid>
+</Panel>
+</Panels>
 
 Each `stream()` and each `call()` owns its own QUIC stream, so a stalled one does not block
 the others.

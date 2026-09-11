@@ -1,0 +1,24 @@
+---
+/**
+ * The mark, inline so it takes the page's colour: ink on light grounds, bone on dark, and
+ * never the accent. Geometry from assets/brand; the rules there forbid stroke, shadow,
+ * rounding and gradient, so it is two filled paths and nothing else.
+ */
+interface Props {
+  readonly size?: number
+}
+const { size = 28 } = Astro.props
+const height = Math.round((size * 56) / 62)
+---
+
+<svg
+  viewBox="0 0 62 56"
+  width={size}
+  height={height}
+  aria-hidden="true"
+  fill="currentColor"
+  class="tio-mark"
+>
+  <path d="M4 8 H42 V23 L27 32 L42 41 V56 H4 Z"></path>
+  <path d="M45 46 L62 40 L62 57 H45 Z"></path>
+</svg>

@@ -1,0 +1,47 @@
+---
+/**
+ * The landing page's first screen: the lockup, the tagline from frontmatter, the two links,
+ * and the thing itself. The screenshot is the most persuasive object in the project, so it
+ * is the first screen rather than an illustration beside it.
+ */
+import shot from '../assets/two-streams.png'
+import Mark from './Mark.astro'
+
+const { data } = Astro.locals.starlightRoute.entry
+const { tagline, actions = [] } = data.hero ?? {}
+---
+
+<div class="tio-hero">
+  <h1 id="_top" data-page-title class="tio-lockup">
+    <Mark size={52} />
+    <span>transport-io</span>
+  </h1>
+  {tagline && <p class="tio-pitch" set:html={tagline} />}
+  {
+    actions.length > 0 && (
+      <p class="tio-actions">
+        {actions.map(({ link, text, variant }) => (
+          <a href={link} class:list={['tio-action', variant]}>
+            {text}
+          </a>
+        ))}
+      </p>
+    )
+  }
+  <figure class="tio-shot">
+    <img
+      src={shot.src}
+      width={shot.width}
+      height={shot.height}
+      loading="eager"
+      decoding="async"
+      alt="Two panels streaming tokens over one session. The left panel is stopped at 61 tokens; the right is still streaming at 93 tokens and shows +41 since agent-a stopped. The header reads open streams 1."
+    />
+    <figcaption>
+      Two streams on one session, one of them stopped, the other not noticing. Each <code
+        >stream()</code
+      > is its own QUIC stream, so the stop is a reset on one of them and costs the other
+      nothing.
+    </figcaption>
+  </figure>
+</div>

@@ -3,7 +3,10 @@
   "ignoreDependencies": [
     "@fails-components/webtransport-transport-http3-quiche",
     "zod",
-    "@moq/web-transport"
+    "@moq/web-transport",
+    // Loaded by the site's stylesheet through CSS imports, which knip does not follow.
+    "@fontsource/ibm-plex-mono",
+    "@fontsource/ibm-plex-sans"
   ],
   "ignoreBinaries": [
     "openssl",

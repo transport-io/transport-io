@@ -1,0 +1,12 @@
+---
+/** One labelled panel. The label is what a file name is in the preview: dim, mono, above. */
+interface Props {
+  readonly label: string
+}
+const { label } = Astro.props
+---
+
+<section class="tio-panel">
+  <div class="tio-panel-label">{label}</div>
+  <slot />
+</section>

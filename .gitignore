@@ -10,6 +10,7 @@ playwright-report/
 site/.astro/
 site/dist/
 site/public/favicon.svg
+site/src/assets/
 .docs-check/
 .hover-check/
 
