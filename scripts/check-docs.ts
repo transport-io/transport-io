@@ -18,7 +18,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   CLOSE_REASON_MAX_BYTES,
   CloseCode,
@@ -91,7 +91,8 @@ function extractBlocks(file: string): Block[] {
       body: m[3] ?? '',
       standalone: info.includes('standalone'),
       jsx: m[1] === 'tsx',
-      fileName: /(?:^|\s)file=([\w.-]+)/.exec(info)?.[1],
+      // A path, so a tutorial can write `web/main.ts` beside `contract.ts` and import across.
+      fileName: /(?:^|\s)file=([\w./-]+)/.exec(info)?.[1],
     })
   }
   return out
@@ -170,6 +171,11 @@ const UNCOMPILED_DOCS: Readonly<Record<string, string>> = {
 for (const doc of COMPILED_DOCS) {
   const blocks = extractBlocks(doc)
   if (blocks.length === 0) continue
+  // One directory per document. Two guides both writing `contract.ts` used to land in the
+  // same flat directory, where the second silently replaced the first and every block that
+  // imported it compiled against the wrong contract.
+  const dir = join(OUT, doc.replace(/\W/g, '_'))
+  mkdirSync(dir, { recursive: true })
 
   /**
    * Block N compiles against blocks 1..N, in source order - a *prefix*, not the whole
@@ -199,7 +205,8 @@ for (const doc of COMPILED_DOCS) {
       // Written under its own name so later blocks can import it, and compiled on its own
       // rather than joining the prefix: it is a module they import, not a step in the page's
       // running program.
-      writeFileSync(join(OUT, b.fileName), own)
+      mkdirSync(dirname(join(dir, b.fileName)), { recursive: true })
+      writeFileSync(join(dir, b.fileName), own)
       fileCount++
       continue
     }
@@ -237,10 +244,10 @@ for (const doc of COMPILED_DOCS) {
       })
       .join('\n')
     const name =
-      `${doc.replace(/\W/g, '_')}__${String(b.line).padStart(4, '0')}` +
+      `block-${String(b.line).padStart(4, '0')}` +
       (b.jsx || prefix.some((_, i) => blocks[i]?.jsx === true) ? '.tsx' : '.ts')
     writeFileSync(
-      join(OUT, name),
+      join(dir, name),
       `// generated from ${doc}, blocks up to line ${b.line}\n${source}`,
     )
     fileCount++
@@ -538,7 +545,11 @@ if (fileCount > 0) {
    * thing the shared program contributed was that collision.
    */
   let broken = 0
-  for (const f of readdirSync(OUT)) {
+  const walk = (d: string): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(join(d, e.name)) : /\.tsx?$/.test(e.name) ? [join(d, e.name)] : [],
+    )
+  for (const f of walk(OUT)) {
     try {
       execFileSync(
         './node_modules/typescript/bin/tsc',
@@ -559,7 +570,7 @@ if (fileCount > 0) {
           // A .tsx snippet is a React example. JSX in a .ts file fails at parse, so the
           // extension and the flag move together.
           ...(f.endsWith('.tsx') ? ['--jsx', 'react-jsx'] : []),
-          join(OUT, f),
+          f,
         ],
         { stdio: 'inherit' },
       )
