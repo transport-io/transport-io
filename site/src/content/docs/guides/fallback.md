@@ -215,4 +215,8 @@ does not depend on it; with a WebSocket configured, the WebSocket handshake is t
 - **A dead path takes up to 45 seconds to notice.** Each side sends a keepalive after 15
   seconds of silence and closes the session after 45 seconds without a message. Keep any
   proxy's idle timeout above 15 seconds, or it closes quiet sessions first.
+- **Safari does not reach it.** Safari establishes a WebTransport session and never sends,
+  which fails as `WT_HANDSHAKE_TIMEOUT` after the transport connected. The fallback engages
+  only when the runtime has no WebTransport or the WebTransport handshake fails, so on Safari
+  it is not tried.
 - **One pipe.** A large emit delays every emit behind it, in both directions.

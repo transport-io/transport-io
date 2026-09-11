@@ -10,7 +10,10 @@ for session-level flow-control SETTINGS that the underlying QUIC library does no
 feature detection reports success, the session establishes, and then no application bytes
 ever flow. That is the worst failure mode available, which is why the client turns it into
 a named error with a deadline rather than hanging. Safari is unsupported until the fix
-lands upstream.
+lands upstream. The WebSocket fallback does not cover it: the fallback engages when the
+runtime has no WebTransport or the WebTransport handshake fails, and on Safari the transport
+handshake succeeds, so the session times out as `WT_HANDSHAKE_TIMEOUT` and no fallback is
+tried.
 
 **Firefox does support `serverCertificateHashes`**, so the local-development recipe is not
 Chrome-only. Its first implementation treated the hashes as an extra check on top of Web PKI
