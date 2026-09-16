@@ -9,7 +9,6 @@ persisted.
 ```ts
 import {
   type Client,
-  type ClientState,
   defineContract,
   type MapOf,
   reliable,
@@ -89,26 +88,15 @@ example.
 
 Room membership does not survive a reconnect. Pending calls reject.
 
-Rejoining is your code, not the library's (D4).
-
-The hook you need:
+Rejoining is your code, not the library's (D4). `onSession` runs once for every session
+the client gets, the first and each reconnect, and returns its own unsubscribe:
 
 ```ts
-let previous: ClientState['status'] = client.getSnapshot().status
-
-const stopWatching = client.subscribe(() => {
-  const { status } = client.getSnapshot()
-  // The edge into `connected`, not the level. `subscribe` fires on every state change, and
-  // several of those happen while the status is already `connected`, so comparing against
-  // the previous status is what makes this run once per session.
-  if (status === 'connected' && previous !== 'connected') void resubscribe()
-  previous = status
-})
+const stopWatching = client.onSession(() => void resubscribe())
 ```
 
-`subscribe` returns its own unsubscribe, and dropping it leaks the listener for the lifetime
-of the client. Call `stopWatching()` when the component or process that installed it goes
-away.
+Dropping the unsubscribe leaks the listener for the lifetime of the client. Call
+`stopWatching()` when the component or process that installed it goes away.
 
 [Reconnecting](/guides/reconnect/) has the whole recipe: authorising the rejoin, catching up
 on what was missed, and the guard that stops two catch-ups overlapping.

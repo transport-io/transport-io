@@ -3569,3 +3569,39 @@ element as `(payload) => Promise<returns>` and `createHooks<M>({ fallback: false
 
 **Reconsider when:** `useStream`'s function is asked for the same, at which point it
 returns the `StreamResult` so a caller can `cancel()` it, and the state stays as it is.
+
+### D133. The client reconnects when asked, and says when a session begins
+The reconnect guide asked every application to write the same two things: the edge into
+`connected`, detected by comparing against the previous status because `subscribe` fires on
+every change, and the guard against two catch-ups overlapping. The first outside application
+did not write them and told the user to reload instead. Its notes proposed
+`client.onSession(callback)` and `new Client({ reconnect: { minMs, maxMs } })`, off unless
+opted into, and observed that neither conflicts with D4: a reconnect is still a new session.
+Approved as proposed.
+
+**Decision.** `onSession(cb)` runs once per session with the snapshot as it connected, the
+first and each one a reconnect produces, and returns the unsubscribe. `reconnect` makes the
+client come back after a connected session closes: the wait is `minMs`, doubled on each
+failed attempt up to `maxMs`, randomised between half of that and all of it so a fleet that
+lost a server does not return as one wave, and reset by a session that connects. Every
+attempt starts from the native connector, so a session may land on the fallback or come off
+it. The first `connect()` is not retried and settles as it always did, because the caller is
+awaiting it and a promise that never settles is the hang D117 exists to forbid; the retrying
+starts once a session has been had. `disconnect()` cancels a waiting attempt. The overlap
+guard is the one `connect()` already had, the in-flight promise; the stop guard is the one a
+superseded connect already had, the generation. Timers go through `OwnedTimers`, and are not
+unreferenced: a Node client waiting to reconnect is a process with work to do.
+
+The snapshot gains no `reconnecting` status. `closed` with `reconnect` set is a client that
+will try again, and the option says so; a fourth status would be read by every consumer of
+the union for the benefit of a label.
+
+**Measured.** A dropped session comes back within the window and runs `onSession` a second
+time with a second server-side peer; with four failures in a row the gaps between attempts
+are at least half of 20, 40, 80 and 80 ms and none exceeds the ceiling; `disconnect()`
+during the wait ends it with one connect in total; the first `connect()` against a dead
+connector rejects and is not followed by another; a `connect()` by hand during the wait is
+the one that runs and the timer's attempt yields to it.
+
+**Reconsider when:** an application needs the attempt count or the next wait on the
+snapshot, at which point they are added as fields rather than as a status.

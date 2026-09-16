@@ -7,9 +7,10 @@ A reconnect is a new session. The peer gets a new id, a new origin, and no rooms
 the server knew about the old session carries over, because the old session is gone and the
 server cannot tell a returning client from a new one without asking.
 
-This is deliberate (D4). What the library does not decide is what re-joining should cost. That is your
-authorisation, your catch-up window and your idempotency. What follows is the recipe. Copy
-it.
+This is deliberate (D4). What the library does not decide is what re-joining should cost.
+That is your authorisation, your catch-up window and your idempotency. What follows is the
+recipe. The library reconnects when asked and tells you when a session begins; the rest is
+yours.
 
 ## The contract
 
@@ -17,8 +18,8 @@ Two callable events. One authorises and joins, one catches up on what was missed
 
 ```ts
 import {
-  type Client,
-  type ClientState,
+  Client,
+  type ClientOptions,
   defineContract,
   type MapOf,
   reliable,
@@ -109,65 +110,52 @@ millisecond. An id is cheaper than being careful.
 
 ## The client half
 
-`subscribe` and `getSnapshot` are the two methods a React binding hands to
-`useSyncExternalStore`, and they are enough on their own. Watch for the transition into
-`connected` and do the work there.
+Two things on the client. `reconnect` makes it come back on its own after a session drops,
+with a wait that starts at `minMs`, doubles on each failed attempt up to `maxMs`, and is
+randomised between half of that and all of it. `onSession` runs once for every session the
+client gets, the first and each one a reconnect produces, which is where the catch-up goes.
 
 ```ts
-export function keepUp(client: Client<AppMap>, token: string, room: string): () => void {
-  let previous: ClientState['status'] = client.getSnapshot().status
-  let inFlight: Promise<void> | null = null
+declare const connect: ClientOptions['connect']
 
-  const catchUp = async (): Promise<void> => {
+export const client = new Client<AppMap>({
+  contract,
+  connect,
+  reconnect: { minMs: 500, maxMs: 30_000 },
+})
+
+export function keepUp(token: string, room: string): () => void {
+  const stop = client.onSession(async () => {
     const { joined } = await client.call('resume', { token, room })
     if (!joined) return
     const { missed } = await client.call('since', { room, after: watermark })
     for (const m of missed) apply(m)
-  }
-
-  const unsubscribe = client.subscribe(() => {
-    const { status } = client.getSnapshot()
-    const arrived = status === 'connected' && previous !== 'connected'
-    previous = status
-    if (arrived && inFlight === null) {
-      inFlight = catchUp()
-        .catch(() => undefined)
-        .finally(() => {
-          inFlight = null
-        })
-    }
   })
-
   client.on('message', (m) => apply(m))
-
-  return unsubscribe
+  return stop
 }
 ```
 
-Three things in there are not obvious, and each one is a bug if you leave it out.
-
-**The edge, not the level.** `subscribe` fires on every state change, and several of them
-happen while `status` is already `connected`. Comparing against the previous status makes
-this run once per session rather than once per notification.
-
-**The guard.** A connection that drops during catch-up fires `connected` again while the
-first catch-up is still awaiting. Without `inFlight`, the two interleave and the watermark
-moves backwards.
+`onSession` runs once per session, never once per state change, and a session that drops
+during the catch-up is a new session with its own run: the earlier run's calls reject with
+`WT_SESSION_CLOSED`, since they were on the session that is gone.
 
 **The watermark advances inside `apply`, from live messages as well as caught-up ones.**
 Between `resume` returning and `since` returning, live messages arrive on the emit stream.
 Advancing in one place means the next catch-up asks for the right window rather than
 replaying what already arrived.
 
+The first `connect()` is not retried: it resolves or rejects as it always did, and the
+retrying starts once a session has been had. `disconnect()` stops a reconnect that is
+waiting. With no `reconnect` given, a dropped session stays closed and the snapshot says so.
+
 ## What this does not do
 
 It does not survive a server restart, because `history` is your storage and the recipe says
 nothing about what that is. It does not handle a token that expires mid-session: `resume`
 returns `joined: false` and the client is left connected but out of the room, which is the
-right shape, and what to do about it is a product decision.
-
-It does not retry. `client.connect()` is idempotent and refcounted, so a retry loop around
-it is safe to write, and the library does not write one for you.
+right shape, and what to do about it is a product decision. With [`authorize`](/guides/authorize/)
+at the door, an expired token is refused on the next connect instead, and `lastError` says so.
 
 It does not keep a transport. A reconnect starts from WebTransport every time, so it may
 land on [the fallback](/guides/fallback/) or come back off it, and `transport` in the

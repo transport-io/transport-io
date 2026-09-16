@@ -17,6 +17,7 @@ import {
 import { TransportError } from './errors.ts'
 import { CloseCode, FrameType } from './protocol.ts'
 import { Session, type SessionStats, type StreamResult } from './session.ts'
+import { OwnedTimers } from './timers.ts'
 import type { Connection, Transport } from './transport/types.ts'
 
 export type Status = 'idle' | 'connecting' | 'connected' | 'closing' | 'closed'
@@ -43,6 +44,16 @@ export interface ClientState {
   readonly fallbackReason: FallbackReason | null
 }
 
+/**
+ * The waits between attempts, when a client reconnects on its own. The wait after a session
+ * closes is `minMs`, doubled on each failed attempt up to `maxMs`, and randomised between
+ * half of that and all of it, so a fleet that lost one server does not return as one wave.
+ */
+export interface ReconnectOptions {
+  readonly minMs: number
+  readonly maxMs: number
+}
+
 export interface ClientOptions<C extends Contract = Contract> {
   /**
    * How long to wait for the peer's handshake before giving up. The deadline covers
@@ -50,6 +61,14 @@ export interface ClientOptions<C extends Contract = Contract> {
    * fails here rather than hanging.
    */
   readonly handshakeDeadlineMs?: number
+
+  /**
+   * Reconnect on its own after a connected session closes. Off unless given. Every attempt
+   * starts from the native connector again, and every session it produces runs `onSession`.
+   * The first `connect()` is not retried: it resolves or rejects as it always did, and the
+   * retrying starts once a session has been had. `disconnect()` stops it.
+   */
+  readonly reconnect?: ReconnectOptions
 
   readonly contract: C
   /** Supplied by the transport seam, so this class never imports a transport. */
@@ -88,9 +107,25 @@ export class Client<M extends AnyMap = Registered> {
   })
   #refs = 0
   #connecting: Promise<void> | undefined
+  readonly #timers = new OwnedTimers()
+  /** Failed attempts since the last connected session, which sets the next wait. */
+  #attempt = 0
+  readonly #onSession = new Set<(state: ClientState) => void>()
 
   constructor(opts: ClientOptions) {
     this.#opts = opts
+  }
+
+  /**
+   * Runs once for every session this client gets, with the snapshot as it connected: the
+   * first, and each one a reconnect produces. A reconnect is a new session (D4), so this is
+   * where rooms are rejoined and what was missed is fetched. Returns the unsubscribe.
+   */
+  onSession(cb: (state: ClientState) => void): () => void {
+    this.#onSession.add(cb)
+    return () => {
+      this.#onSession.delete(cb)
+    }
   }
 
   /**
@@ -126,6 +161,9 @@ export class Client<M extends AnyMap = Registered> {
     this.#refs = Math.max(0, this.#refs - 1)
     if (this.#refs > 0) return
     this.#generation++
+    // A reconnect that was waiting is off: the application said stop.
+    this.#timers.clearAll()
+    this.#attempt = 0
     this.#patch({ status: 'closing' })
     const closing = this.#session
     closing?.close(CloseCode.WT_NO_ERROR, 'client disconnect')
@@ -326,20 +364,52 @@ export class Client<M extends AnyMap = Registered> {
     session.onControl((type, body) => this.#onMembership(type, body))
 
     await session.start()
+    this.#attempt = 0
     this.#patch({
       status: 'connected',
       sessionId: `s-${session.origin}`,
       transport: conn.kind(),
       fallbackReason,
     })
+    for (const cb of this.#onSession) cb(this.#snapshot)
 
     void conn.closed.then(() => {
+      // Superseded by a disconnect or a newer connect: that path patched its own state.
+      if (generation !== this.#generation) return
+      this.#session = undefined
+      this.#connecting = undefined
       this.#patch({
         status: 'closed',
         sessionId: null,
         rooms: [],
         transport: null,
         fallbackReason: null,
+      })
+      if (this.#opts.reconnect !== undefined && this.#refs > 0) this.#scheduleReconnect()
+    })
+  }
+
+  /**
+   * One attempt after a wait, and another wait after a failed one. The guard against two
+   * attempts overlapping is `#connecting`, the same one `connect()` uses, and the guard
+   * against reconnecting after `disconnect()` is the generation, the same one a superseded
+   * connect uses.
+   */
+  #scheduleReconnect(): void {
+    const reconnect = this.#opts.reconnect
+    if (reconnect === undefined) return
+    const base = Math.min(reconnect.maxMs, reconnect.minMs * 2 ** this.#attempt)
+    const delay = Math.round(base * (0.5 + Math.random() * 0.5))
+    this.#attempt++
+    const generation = this.#generation
+    this.#timers.after(delay, () => {
+      if (generation !== this.#generation || this.#refs === 0) return
+      if (this.#connecting !== undefined) return
+      const attempt = this.#doConnect()
+      this.#connecting = attempt
+      attempt.catch(() => {
+        if (this.#connecting === attempt) this.#connecting = undefined
+        if (generation === this.#generation && this.#refs > 0) this.#scheduleReconnect()
       })
     })
   }

@@ -322,6 +322,10 @@ them **our** counters, never the network's.
 busy room delays a quiet one to the same peer. Calls and datagrams are isolated.
 
 **Reconnect is a new session.** Membership does not survive; pending calls reject.
+`client.onSession(cb)` runs once per session, the first and each reconnect, which is where
+the rejoin goes. `new Client({ reconnect: { minMs, maxMs } })` reconnects on its own after a
+connected session closes, with a randomised doubling wait; off unless given, and the first
+`connect()` is not retried.
 
 **There is no default call timeout.** Peer death is caught by the QUIC idle timeout. Use
 `AbortSignal.timeout(ms)` for a slow but live responder.

@@ -19,6 +19,7 @@ export {
   type FallbackClient,
   type FallbackReason,
   type NativeLanes,
+  type ReconnectOptions,
   type Status,
   withFallback,
 } from './client.ts'

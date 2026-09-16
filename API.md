@@ -438,6 +438,25 @@ says why that session is on a fallback transport, and is `null` on a native one.
 **`getSnapshot()` returns the same reference until something changes**, so it is safe to hand
 to `useSyncExternalStore`.
 
+`client.onSession(cb)` runs `cb` once for every session the client gets, with the snapshot
+as it connected: the first, and each one a reconnect produces. It returns the unsubscribe.
+A reconnect is a new session, so this is where rooms are rejoined and what was missed is
+fetched.
+
+`reconnect: { minMs, maxMs }` in `ClientOptions` makes the client come back on its own after
+a connected session closes: a wait of `minMs`, doubled on each failed attempt up to `maxMs`
+and randomised between half of that and all of it, then an attempt from the native connector
+again. Off unless given. The first `connect()` is not retried and settles as it always did;
+`disconnect()` stops a reconnect that is waiting.
+
+```ts
+export function resilient(connect: ClientOptions['connect']): Client<AppMap> {
+  const client = new Client<AppMap>({ contract, connect, reconnect: { minMs: 500, maxMs: 30_000 } })
+  client.onSession((state) => console.log(`session ${state.sessionId} on ${state.transport}`))
+  return client
+}
+```
+
 ### 2.5 A fallback transport
 
 `withFallback<M>(options)` builds a client with a second transport behind the first.

@@ -72,6 +72,10 @@ session first.
 
 ## Reconnect creates a new session
 
+The client reconnects on its own only when asked, `reconnect: { minMs, maxMs }`, and what it
+produces is a new session every time: `onSession` runs for each, and nothing from the old
+one carries over.
+
 A reconnection is a new session with a new identity. Room membership does not survive it,
 and pending calls reject. Re-establishing authentication and resubscribing is your job -
 the library gives you the primitive and the hook, because whether a call was executed
