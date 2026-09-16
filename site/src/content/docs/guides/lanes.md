@@ -50,3 +50,22 @@ other and from emits. Emits are not isolated from each other.
 
 Reliability is declared once, in the contract, and cannot be set at a call site. `returns`
 and `yields` are valid only on `reliable`, since an unreliable event has no response path.
+
+## Direction is per event too
+
+Most events travel both ways under one name. One that only one side sends can say so:
+
+```ts
+import { defineContract, fromClient, fromServer, reliable, unreliable } from 'transport-io'
+
+export const directed = defineContract({
+  chat: reliable<{ from: string; body: string }>(),
+  users: fromServer(reliable<{ names: readonly string[] }>()),
+  cursor: fromClient(unreliable<{ x: number; y: number }>()),
+})
+```
+
+The client's `emit` then refuses `users` and its `on` refuses `cursor`; the server's `emit`
+and broadcasts refuse `cursor`, and a peer that sends the wrong way anyway is dropped and
+counted in `stats().directionDropped`. A call or a stream takes no direction. An event both
+sides send is still one payload shape for both directions.

@@ -11,7 +11,9 @@ import {
   type CallableOf,
   type Contract,
   type FallbackReady,
+  type ReceivedBy,
   type Registered,
+  type SentBy,
   type StreamableOf,
 } from './contract.ts'
 import { TransportError } from './errors.ts'
@@ -190,11 +192,11 @@ export class Client<M extends AnyMap = Registered> {
   }
 
   /** The lane comes from the contract, never from this call site. */
-  emit<K extends keyof M & string>(event: K, payload: M[K]['payload']): void {
+  emit<K extends SentBy<M, 'client'> & string>(event: K, payload: M[K]['payload']): void {
     this.#requireSession().emit(event, payload)
   }
 
-  on<K extends keyof M & string>(
+  on<K extends ReceivedBy<M, 'client'> & string>(
     event: K,
     handler: (payload: M[K]['payload']) => void,
   ): () => void {
@@ -338,6 +340,7 @@ export class Client<M extends AnyMap = Registered> {
     const session = new Session(conn, {
       table,
       origin: this.#opts.origin ?? 0x80000001,
+      side: 'client',
       ...(this.#opts.validateInbound === undefined
         ? {}
         : { validateInbound: this.#opts.validateInbound }),

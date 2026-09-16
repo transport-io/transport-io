@@ -11,7 +11,7 @@ import {
   slotCodec,
   validate,
 } from './codec.ts'
-import type { EventEntry, EventTable } from './contract.ts'
+import type { Direction, EventEntry, EventTable } from './contract.ts'
 import { decodeDatagram, encodeDatagram, SequenceGate } from './datagram.ts'
 import { TransportError } from './errors.ts'
 import { encodeFrame, type Frame, FrameDecoder } from './framer.ts'
@@ -36,6 +36,8 @@ import type { BidiStream, CloseInfo, Connection } from './transport/types.ts'
 
 export interface SessionStats extends QueueStats {
   readonly staleReceived: number
+  /** Inbound events declared as sent by this side, dropped as the contract says (D134). */
+  readonly directionDropped: number
 }
 
 export type EventHandler = (payload: unknown, meta: { readonly from: number }) => void
@@ -83,6 +85,8 @@ export interface StreamResult<T> extends AsyncIterable<T> {
 export interface SessionOptions {
   readonly table: EventTable
   readonly origin: number
+  /** Which side this is, so a directed event is refused outbound and dropped inbound. */
+  readonly side?: Direction
   readonly validateInbound?: boolean
   readonly now?: () => number
   readonly handshakeDeadlineMs?: number
@@ -247,6 +251,8 @@ export class Session {
   #disposed = false
   /** What the transport reported when it closed, so a refusal keeps its code and reason. */
   #closeInfo: CloseInfo | undefined
+  readonly #side: Direction | undefined
+  #directionDropped = 0
 
   /** Resolves when both sides have exchanged a valid handshake. */
   readonly ready: Promise<Negotiated>
@@ -255,6 +261,7 @@ export class Session {
     this.#conn = conn
     this.#table = opts.table
     this.#origin = opts.origin
+    this.#side = opts.side
     this.#validateInbound = opts.validateInbound ?? true
     this.#now = opts.now ?? (() => Date.now())
     this.#deadlineMs = opts.handshakeDeadlineMs ?? HANDSHAKE_DEADLINE_MS
@@ -418,6 +425,17 @@ export class Session {
     }
   }
 
+  /** The types refuse this; a caller with no compiler meets the same refusal here. */
+  #assertMaySend(entry: EventEntry): void {
+    const from = entry.def.from
+    if (from === undefined || this.#side === undefined || from === this.#side) return
+    throw new TransportError(
+      'WT_VALIDATION_FAILED',
+      `event '${entry.name}' is declared from: '${from}', and this side is the ${this.#side}`,
+      'Only the declared side sends this event. Declare it the other way, or leave the direction off.',
+    )
+  }
+
   /** Fire and forget on whichever lane the contract declared. The call site never chooses. */
   emit(event: string, payload: unknown): void {
     const entry = this.#table.byName(event)
@@ -428,6 +446,7 @@ export class Session {
         'Add it to the contract, or check the spelling.',
       )
     }
+    this.#assertMaySend(entry)
     const codec = slotCodec(entry.def, 'payload')
     const bytes = encodeWith(codec, payload)
     if (entry.lane === 'unreliable') {
@@ -698,7 +717,11 @@ export class Session {
   }
 
   stats(): SessionStats {
-    return { ...this.#dgQueue.stats(), staleReceived: this.#gate.staleReceived }
+    return {
+      ...this.#dgQueue.stats(),
+      staleReceived: this.#gate.staleReceived,
+      directionDropped: this.#directionDropped,
+    }
   }
 
   /**
@@ -1418,6 +1441,11 @@ export class Session {
   ): Promise<void> {
     const entry = this.#table.byId(eventId)
     if (entry === undefined) return // peers on adjacent contracts legitimately differ
+    // Declared as sent by this side, so an inbound one is the peer sending the wrong way.
+    if (this.#side !== undefined && entry.def.from === this.#side) {
+      this.#directionDropped++
+      return
+    }
     expectCodec(entry.name, 'payload', slotCodec(entry.def, 'payload'), codec)
     const handlers = this.#handlers.get(entry.name)
     if (handlers === undefined || handlers.size === 0) return

@@ -143,6 +143,13 @@ export class Hub {
         'Add it to the contract, or check the spelling.',
       )
     }
+    if (entry.def.from === 'client') {
+      throw new TransportError(
+        'WT_VALIDATION_FAILED',
+        `event '${event}' is declared from: 'client', and a broadcast is the server sending`,
+        'Only the declared side sends this event. Declare it the other way, or leave the direction off.',
+      )
+    }
     const codec = slotCodec(entry.def, 'payload')
     const body = encodeWith(codec, payload)
     const except = args.except ?? []

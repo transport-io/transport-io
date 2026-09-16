@@ -63,6 +63,10 @@ a contract assembled programmatically.
 
 `bytes()` in any slot declares a `Uint8Array` carried as bytes on the wire, never through
 JSON: `reliable(bytes())`, `rpc(z.object({ since: z.number() }), bytes())`.
+`fromServer(reliable<T>())` and `fromClient(unreliable<T>())` say which side sends an event:
+the other side's `emit` refuses it in the types, the sender's `on` cannot listen for it, and a
+peer sending it the wrong way is dropped and counted in `stats().directionDropped`. A call or
+a stream takes no direction. An event both sides send still has one payload shape for both.
 `unreliable(payload?, { fallback: 'newest' })` declares what the event accepts on a fallback
 transport, which carries the reliable lane only: in order, with the oldest and the stale
 dropped at the sender as the datagram ring drops them. An unreliable event that declares

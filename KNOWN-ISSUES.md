@@ -187,6 +187,11 @@ Modelled cleanly it is two entries, `cursor` outbound and something like `cursor
 inbound, which doubles the contract for every broadcast event and puts two names in the
 reader's head for one idea.
 
+`fromServer` and `fromClient` remove the cost of the harmless case, an event one side sends
+and the other never listens for: the wrong side cannot emit it in the types, and a peer that
+sends it anyway is dropped. They do not remove the tax. An event both sides carry, `cursor`
+above, is still one payload shape for both directions.
+
 Both shapes are available today and neither is enforced. No design is being rushed for it:
 the cost is real and the fix is not obviously better than the tax. Documented so the choice
 is made deliberately rather than discovered halfway through an application.

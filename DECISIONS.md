@@ -2731,6 +2731,10 @@ alone while the interface line costs one line and buys 107 against 377.
 
 **Reconsider when:** the surface is being reworked for another reason at 1.0, at which point
 this stops being a change of its own and becomes a property to design for. Not before.
+
+**Note, 2026-09-16.** D134 adds a direction an event can declare. It removes the cost of the
+harmless case and not the tax this entry records: an undirected event is still one payload
+shape for both directions.
 ### D108. Each transport constructs and connects, and the seam stays for three cases
 `new Client({ contract, connect: () => connectDev() })` followed by `await client.connect()`
 is two statements and an arrow whose only job is to defer a call the next line makes anyway.
@@ -3605,3 +3609,47 @@ the one that runs and the timer's attempt yields to it.
 
 **Reconsider when:** an application needs the attempt count or the next wait on the
 snapshot, at which point they are added as fields rather than as a status.
+
+### D134. An event can say which side sends it, and that is the cheap half of D107's tax
+The first outside application's contract let a client emit `users` and `dm`, events only
+the server ever sends; the server never listened, so it was harmless, and nothing in the
+types said so. Its notes asked for a direction on an event: the client's `emit` stops
+accepting it, and the server drops it at runtime if a client sends it anyway. Approved,
+with the shape left open.
+
+**Decision.** `fromServer(def)` and `fromClient(def)` wrap `reliable` or `unreliable`, with
+or without a fallback declaration, and add `from: 'server' | 'client'` to the definition;
+`MapOf` carries it as `from`, `undefined` on the many events that say nothing. `SentBy<M,
+side>` and `ReceivedBy<M, side>` are the names each side may send and receive, and `emit`
+and `on` on the client, the peer and a room target take them as their constraint. At
+runtime a session knows its side: an outbound directed event from the wrong side is refused
+at `emit` as `WT_VALIDATION_FAILED`, for a caller with no compiler, and an inbound event
+declared as sent by the receiving side is dropped and counted in
+`stats().directionDropped`, never handled and never a fault. A call or a stream cannot take
+a direction, since a client asks and a server answers.
+
+Why wrappers rather than `reliable<T>({ from: 'server' })`: the helpers take either a type
+argument or a schema, and TypeScript infers no type parameter beside an explicit one, so an
+option carrying a literal direction would need one overload per direction per form, twelve
+signatures on `unreliable` alone, for a property most events never set. Two functions cost
+two functions.
+
+Why it is not exchanged at handshake: the receiver drops by its own contract, which is the
+rule §4.3 already applies to what can be caught per message. A peer on a contract that
+disagrees about the direction sees its event dropped and its count climb, not its session
+refused.
+
+What this is and is not. It is the cheap half of the tax D107 records: an event one side
+sends and the other never listens for now costs nothing in the types and nothing on the
+wire. It is not the tax's removal: an event both sides carry, `cursor` with a `from` the
+sender fills in about itself and every receiver reads about someone else, is still one
+payload shape for two directions, and D107 stands.
+
+**Measured.** Hover on `emit`, `call` and `stream` unchanged by the field in the map. The
+right direction crosses both ways and the map carries `from`; an untyped caller is refused
+at `emit` on the client, on the peer and on a broadcast; a raw session sending a
+server-only event to a server is dropped, counted once, and its next undirected event is
+handled.
+
+**Reconsider when:** an application asks for a per-direction payload shape under one name,
+which is the tax itself, and belongs to the surface rework D107 defers to 1.0.

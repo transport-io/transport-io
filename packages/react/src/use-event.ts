@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useEffectEvent } from 'react'
-import type { Registered } from 'transport-io'
+import type { ReceivedBy, Registered } from 'transport-io'
 import { useClient } from './context.tsx'
 
 /**
@@ -16,7 +16,7 @@ import { useClient } from './context.tsx'
  * Events to *components and Hooks*, and on calling them during render; `client.on` is a
  * plain subscription API called from inside an Effect.
  */
-export function useEvent<K extends keyof Registered & string>(
+export function useEvent<K extends ReceivedBy<Registered, 'client'> & string>(
   event: K,
   handler: (payload: Registered[K]['payload']) => void,
 ): void {

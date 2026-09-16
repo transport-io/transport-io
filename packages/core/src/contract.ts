@@ -20,6 +20,13 @@ export type FallbackPolicy = 'newest'
 export type Schema = StandardSchemaV1
 
 /**
+ * Which side sends an event, when the contract says. Most events say nothing and travel
+ * both ways. `fromServer` and `fromClient` set it, and a side that is not the sender cannot
+ * `emit` it in the types, and drops it at runtime if it arrives anyway (D134).
+ */
+export type Direction = 'client' | 'server'
+
+/**
  * `returns` is meaningful only on the reliable lane: an unreliable event has no response
  * path. `yields` is the streaming form of `returns` and excludes it: an event answers with
  * one value or with a sequence, never with a choice made at the call site.
@@ -43,6 +50,7 @@ export type EventDef =
       readonly payload: Schema
       readonly id?: number
       readonly fallback?: FallbackPolicy
+      readonly from?: Direction
       readonly returns?: never
       readonly yields?: never
     }
@@ -51,6 +59,7 @@ export type EventDef =
       readonly payload: Schema
       readonly returns?: Schema
       readonly id?: number
+      readonly from?: Direction
       readonly yields?: never
       readonly fallback?: never
     }
@@ -61,6 +70,7 @@ export type EventDef =
       readonly id?: number
       readonly returns?: never
       readonly fallback?: never
+      readonly from?: never
     }
 
 export type Contract = Readonly<Record<string, EventDef>>
@@ -84,6 +94,7 @@ export type MapOf<C extends Contract> = {
     readonly fallback: C[K] extends { readonly fallback: infer F extends FallbackPolicy }
       ? F
       : undefined
+    readonly from: C[K] extends { readonly from: infer F extends Direction } ? F : undefined
   }
 }
 
@@ -91,11 +102,22 @@ export interface EventShape {
   readonly payload: unknown
   readonly returns: unknown
   readonly yields: unknown
-  /** Optional so a hand-written map still satisfies `AnyMap`; `MapOf` always sets both. */
+  /** Optional so a hand-written map still satisfies `AnyMap`; `MapOf` always sets them. */
   readonly lane?: Lane | undefined
   readonly fallback?: FallbackPolicy | undefined
+  readonly from?: Direction | undefined
 }
 export type AnyMap = Readonly<Record<string, EventShape>>
+
+/** The events a side may send: every one not declared as coming from the other side. */
+export type SentBy<M extends AnyMap, S extends Direction> = {
+  [K in keyof M]: M[K] extends { readonly from: Exclude<Direction, S> } ? never : K
+}[keyof M]
+
+/** The events a side may receive: every one not declared as coming from itself. */
+export type ReceivedBy<M extends AnyMap, S extends Direction> = {
+  [K in keyof M]: M[K] extends { readonly from: S } ? never : K
+}[keyof M]
 
 /**
  * Augmented by the application to register its contract once:
@@ -312,6 +334,28 @@ export function streaming(
     payload: payload ?? type$<unknown>(),
     yields: yields ?? type$<unknown>(),
   }
+}
+
+/** An event with no response path, which is what a direction can be put on. */
+type EmitDef = {
+  readonly lane: Lane
+  readonly payload: Schema
+  readonly returns?: never
+  readonly yields?: never
+}
+
+/**
+ * Sent by the server only. The client's `emit` refuses it in the types, and a server that
+ * receives one from a client drops it, counted in `stats().directionDropped`. A call or a
+ * stream cannot take a direction: a client asks and a server answers, always.
+ */
+export function fromServer<D extends EmitDef>(def: D): D & { readonly from: 'server' } {
+  return { ...def, from: 'server' }
+}
+
+/** Sent by the client only. The server's `emit` and broadcasts refuse it; a client drops it. */
+export function fromClient<D extends EmitDef>(def: D): D & { readonly from: 'client' } {
+  return { ...def, from: 'client' }
 }
 
 /**

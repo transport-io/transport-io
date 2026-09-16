@@ -158,6 +158,35 @@ An event that declares nothing has consented to nothing. A contract that contain
 be wired to a fallback at all: the line that adds the fallback fails to compile and names the
 event (§2.5).
 
+### 1.5 Direction
+
+Most events travel both ways under one name. An event only one side sends can say so, and
+the other side's `emit` then refuses it in the types, the sender's `on` refuses to listen for
+it, and a peer that sends it the wrong way anyway is dropped at the receiver and counted in
+`stats().directionDropped`:
+
+```ts standalone
+import { defineContract, fromClient, fromServer, type MapOf, reliable, unreliable } from 'transport-io'
+
+export const directed = defineContract({
+  chat: reliable<{ from: string; body: string }>(),
+  users: fromServer(reliable<{ names: readonly string[] }>()),
+  cursor: fromClient(unreliable<{ x: number; y: number }>({ fallback: 'newest' })),
+})
+
+export interface DirectedMap extends MapOf<typeof directed> {}
+```
+
+`fromServer` and `fromClient` wrap `reliable` or `unreliable`, with a fallback declaration
+or without; a call or a stream cannot take one, since a client asks and a server answers.
+`MapOf` carries the direction as `from`, and `SentBy<M, side>` and `ReceivedBy<M, side>` are
+the event names each side may send and receive. A caller with no compiler meets the same
+refusal at `emit` as `WT_VALIDATION_FAILED`.
+
+This removes the cost of the harmless case, an event the client could send and the server
+never listens for. It does not remove the modelling tax: an event both sides carry still has
+one payload shape for both directions.
+
 ---
 
 ## 2. Client

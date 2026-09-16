@@ -7,7 +7,9 @@ import {
   type Contract,
   type EventTable,
   type FallbackReady,
+  type ReceivedBy,
   type Registered,
+  type SentBy,
   type StreamableOf,
 } from './contract.ts'
 import { Hub } from './hub.ts'
@@ -34,11 +36,11 @@ export interface ServerPeer<M extends AnyMap = Registered, D = undefined> {
   readonly rooms: readonly string[]
   join(room: string): Promise<void>
   leave(room: string): Promise<void>
-  on<K extends keyof M & string>(
+  on<K extends ReceivedBy<M, 'server'> & string>(
     event: K,
     handler: (payload: M[K]['payload']) => void,
   ): () => void
-  emit<K extends keyof M & string>(event: K, payload: M[K]['payload']): void
+  emit<K extends SentBy<M, 'server'> & string>(event: K, payload: M[K]['payload']): void
   stats(): SessionStats
   close(code?: number, reason?: string): void
 }
@@ -82,7 +84,10 @@ export interface ServerOptions {
 }
 
 export interface RoomTarget<M extends AnyMap = Registered> {
-  emit<K extends keyof M & string>(event: K, payload: M[K]['payload']): Promise<void>
+  emit<K extends SentBy<M, 'server'> & string>(
+    event: K,
+    payload: M[K]['payload'],
+  ): Promise<void>
   except(...peers: PeerId[]): RoomTarget<M>
 }
 
@@ -246,6 +251,7 @@ export class Server<M extends AnyMap = Registered, D = undefined> {
     const session = new Session(conn, {
       table,
       origin,
+      side: 'server',
       ...(this.#opts.validateInbound === undefined
         ? {}
         : { validateInbound: this.#opts.validateInbound }),
