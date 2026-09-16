@@ -294,6 +294,7 @@ is never thrown from this library.
 | `WT_HANDSHAKE_FAILED` | the handshake failed and the origin did not answer over HTTPS, or was not asked: a wrong pinned hash, an expired certificate, or nothing listening | rule those out in that order; the browser reports all three identically |
 | `WT_UDP_UNREACHABLE` | the handshake failed but the origin answers over HTTPS: the server is up and UDP is not reaching it | check the firewall, the VPN, or the platform's UDP ingress; nothing in the library routes around it |
 | `WT_CERT_EXPIRED` | the `transport-io dev` certificate has expired | run `transport-io dev` again; it mints a new one |
+| `WT_PORT_IN_USE` | a listener's port is held by another process; the dev command checks both loopback addresses | stop that process, or pass another port |
 | `WT_DEV_ONLY` | `connectDev` or `listenDev` outside loopback, or without the environment `transport-io dev` sets | use `connectBrowser` with your own certificate anywhere that is not local development |
 
 ## Behaviour worth knowing before you debug it

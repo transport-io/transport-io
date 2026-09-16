@@ -18,6 +18,7 @@ import { Client, type ClientOptions } from '../client.ts'
 import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
+import { assertUdpPortFree } from './port.node.ts'
 import { handshakeFailure, probe, probeTarget } from './probe.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
 
@@ -158,6 +159,9 @@ export interface Http3Listener {
  * of the no-fallback rule, and it is browser-independent (D10, ADR 0003).
  */
 export async function listenHttp3(opts: Http3ServerOptions): Promise<Http3Listener> {
+  // The binding binds a held UDP port without a word, and the server then never hears a
+  // session. Probed first, so a taken port is an error here and not a silence later.
+  await assertUdpPortFree(opts.port, opts.host ?? '127.0.0.1')
   const server = new Http3Server({
     port: opts.port,
     host: opts.host ?? '127.0.0.1',

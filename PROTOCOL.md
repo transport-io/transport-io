@@ -857,6 +857,7 @@ Raised by an implementation to its own application and never transmitted.
 | `WT_UDP_UNREACHABLE` | The transport-level handshake failed, and the same origin answered a `HEAD` at `/.well-known/transport-io` over HTTPS within 2000 ms. The server is up over TCP and only the QUIC path is failing: a firewall, a VPN, or a platform with no UDP ingress. |
 | `WT_CERT_EXPIRED` | A pinned development certificate is past its validity. Mint a new one and reload the client so it picks up the new hash. |
 | `WT_DEV_ONLY` | A development-only affordance was reached from somewhere that is not loopback. |
+| `WT_PORT_IN_USE` | A listener was asked to bind a port another process holds, probed before binding because the QUIC binding reports nothing. Stop that process or pass another port. |
 
 ---
 

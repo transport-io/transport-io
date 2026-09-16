@@ -18,6 +18,7 @@ import {
 } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { WebSocketServer } from 'ws'
+import { asPortInUse } from './port.node.ts'
 import { PROBE_PATH } from './probe.ts'
 import type { Connection } from './types.ts'
 import { type SocketLike, WebSocketConnection } from './websocket-connection.ts'
@@ -67,7 +68,7 @@ export async function listenWebSocket(
   })
 
   await new Promise<void>((resolve, reject) => {
-    http.once('error', reject)
+    http.once('error', (e) => reject(asPortInUse(e, `TCP port ${opts.port}`)))
     http.listen(opts.port, opts.host ?? '127.0.0.1', resolve)
   })
   const address = http.address()

@@ -19,6 +19,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { createServer, type Server as HttpServer, type ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve } from 'node:path'
 import { DEV_ENDPOINT } from '../transport/dev.ts'
+import { asPortInUse, assertTcpPortFree } from '../transport/port.node.ts'
 
 const MIME: Readonly<Record<string, string>> = {
   '.html': 'text/html; charset=utf-8',
@@ -77,7 +78,13 @@ function sendFile(res: ServerResponse, file: string): boolean {
   return true
 }
 
-export function startDevServer(opts: DevServerOptions): Promise<HttpServer> {
+/** The address the page server binds, which is the one the command prints. */
+export const DEV_HOST = '127.0.0.1'
+
+export async function startDevServer(opts: DevServerOptions): Promise<HttpServer> {
+  // Binding `127.0.0.1` succeeds beside a server on `::`, and `localhost` may resolve to
+  // `::1`, which is that other server. Both loopback addresses are probed first.
+  await assertTcpPortFree(opts.port)
   const server = createServer((req, res) => {
     const path = (req.url ?? '/').split('?')[0] ?? '/'
 
@@ -114,7 +121,7 @@ export function startDevServer(opts: DevServerOptions): Promise<HttpServer> {
   })
 
   return new Promise((ok, fail) => {
-    server.once('error', fail)
-    server.listen(opts.port, '127.0.0.1', () => ok(server))
+    server.once('error', (e) => fail(asPortInUse(e, `TCP port ${opts.port}`)))
+    server.listen(opts.port, DEV_HOST, () => ok(server))
   })
 }

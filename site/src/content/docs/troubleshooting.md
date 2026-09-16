@@ -49,6 +49,14 @@ path to it; or the server process found no certificate in its environment. Anywh
 not local development, `connectBrowser` and `listenHttp3` with a certificate of your own.
 See [Certificates](/guides/certificates/).
 
+## WT_PORT_IN_USE
+
+A listener was asked to bind a port another process holds. The message names the port and,
+for a TCP port, the loopback address that answered: `transport-io dev` checks both
+`127.0.0.1` and `::1`, because a server bound to `::` alone lets `127.0.0.1` bind beside it
+and then takes the browser's `localhost`. The QUIC binding reports nothing for a held UDP
+port, so the check runs before it binds. Stop the other process, or pass another port.
+
 ## WT_HANDSHAKE_TIMEOUT
 
 The session opened and no application bytes arrived within 5000 ms. Safari does this: it

@@ -23,6 +23,7 @@ export type TransportErrorCode =
   | 'WT_UDP_UNREACHABLE'
   | 'WT_LANE_UNAVAILABLE'
   | 'WT_CERT_EXPIRED'
+  | 'WT_PORT_IN_USE'
 
 export class TransportError extends Error {
   readonly code: TransportErrorCode

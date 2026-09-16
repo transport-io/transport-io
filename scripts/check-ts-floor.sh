@@ -242,6 +242,7 @@ const UNREACHABLE = {
   "transport/parity-suite.d.ts": "test infrastructure for transport implementers",
   "transport/probe.d.ts": "the probe after a failed handshake, reachable only through a connector option",
   "transport/websocket-connection.d.ts": "the WebSocket mapping, reachable only through connectWebSocket and listenWebSocket",
+  "transport/port.node.d.ts": "the port probes behind listenHttp3, listenWebSocket and the dev command, reachable only through them",
 }
 const missing = shipped
   .filter((f) => !listed.includes(f))
