@@ -18,8 +18,9 @@ import { spawn } from 'node:child_process'
 import { existsSync, realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { DEV_ENDPOINT } from '../transport/dev.ts'
 import { daysLeft, ensureCertificate } from './certificate.node.ts'
-import { startDevServer } from './dev-server.node.ts'
+import { DEV_HOST, startDevServer } from './dev-server.node.ts'
 
 const DEFAULT_PORT = 3000
 const DEFAULT_WT_PORT = 4433
@@ -134,17 +135,24 @@ async function main(): Promise<void> {
   console.log('')
   console.log('transport-io dev')
   console.log('')
-  console.log(`  page          http://localhost:${args.port}`)
+  // The address it binds, not `localhost`: a browser may resolve that to `::1`.
+  const origin = `http://${DEV_HOST}:${args.port}`
+  if (args.demo || staticDir !== undefined) console.log(`  page          ${origin}`)
+  else console.log(`  manifest      ${origin}${DEV_ENDPOINT}`)
   console.log(`  webtransport  ${wtUrl}`)
   console.log(`  certificate   valid ${daysLeft(cert.validTo)}d  sha-256 ${short}…`)
   if (cert.renewed) {
     console.log('  certificate renewed, so reload any tab you already had open')
   }
   console.log('')
-  console.log('  Open the page in two tabs. Chrome or Firefox; Safari cannot connect.')
-  if (!args.demo && staticDir === undefined) {
-    console.log('')
-    console.log('  No static directory found. Pass --static <dir> to serve your built page.')
+  if (args.demo || staticDir !== undefined) {
+    console.log('  Open the page in two tabs. Chrome or Firefox; Safari cannot connect.')
+  } else {
+    console.log(
+      '  No static directory, so no page is served here. Your own dev server, Vite for',
+    )
+    console.log('  example, serves the page and proxies the manifest path above to this port.')
+    console.log('  Pass --static <dir> to serve a built page from here instead.')
   }
   console.log('')
 
