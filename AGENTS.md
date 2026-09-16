@@ -416,7 +416,12 @@ takes an unconnected `Client`, or a `FallbackClient` from `withFallback`, and co
 an effect, so construct the client inside a `useState` initialiser, never at module level. On
 a fallback session `useCall` and `useStream` report `unavailable` before anything is asked and
 `useNative()` is `null`; `useClient()` returns either kind, so `call` is reached through
-`useNative()`. React 19.2 or newer. The guide is at
+`useNative()`, unless the hooks were made with `createHooks<AppMap>({ fallback: false })`,
+which types `useClient()` as the `Client` and throws if a fallback client is mounted under
+it. `useCall`'s function resolves to the answer and rejects with the `TransportError`, with
+`WT_ABORTED` when superseded or unmounted, and with `WT_LANE_UNAVAILABLE` on a fallback
+session; a caller that ignores the promise sees the failure in the state and no unhandled
+rejection. React 19.2 or newer. The guide is at
 https://transport-io.github.io/transport-io/guides/react/.
 
 ## Not implemented

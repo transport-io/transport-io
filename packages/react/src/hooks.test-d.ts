@@ -20,7 +20,7 @@ import { useStream } from './use-stream.ts'
 
 declare const callResult: UseCallResult<TestMap, 'save'>
 expectTypeOf(callResult).toEqualTypeOf<
-  readonly [(payload: { text: string }) => Promise<void>, CallState<{ n: number }>]
+  readonly [(payload: { text: string }) => Promise<{ n: number }>, CallState<{ n: number }>]
 >()
 // Positional, which is exactly what a union array would destroy.
 expectTypeOf(callResult[0]).parameter(0).toEqualTypeOf<{ text: string }>()
@@ -149,3 +149,13 @@ void anyClient.call
 if (!('native' in anyClient)) {
   expectTypeOf(anyClient.call('save', { text: 'x' })).toEqualTypeOf<Promise<{ n: number }>>()
 }
+
+// --- with no fallback, the client hook is the client, with call and stream on it ---
+
+const withFallbackHooks = createHooks<TestMap>()
+const nativeHooks = createHooks<TestMap>({ fallback: false })
+expectTypeOf(withFallbackHooks.useClient).returns.toEqualTypeOf<
+  Client<TestMap> | FallbackClient<TestMap>
+>()
+expectTypeOf(nativeHooks.useClient).returns.toEqualTypeOf<Client<TestMap>>()
+expectTypeOf(nativeHooks.useNative).returns.toEqualTypeOf<Client<TestMap>>()

@@ -3535,3 +3535,37 @@ decoder and the datagram decoder.
 **Reconsider when:** an application needs bytes and JSON in one payload, at which point a
 third codec, MessagePack, is the reserved `codec-msgpack` feature token, and it is costed
 against what that application actually sends.
+
+### D132. The call hook resolves to the answer, and hooks can say there is no fallback
+From the first outside application: `useClient()` returned a type without `call` because
+the client might be a fallback client, and the application had no fallback and still wrote
+`useNative()` and a null check at every call site. And `useCall`'s function resolved to
+`void`, so getting the answer meant reading hook state, and where the answer was wanted right
+away the application called `useNative().call` instead and lost the state.
+
+**Decision.** `useCall`'s function resolves to the answer, the way TanStack Query's
+`mutateAsync` does, and the state is updated as well. It rejects with the `TransportError`
+on failure, with `WT_ABORTED` when a newer call superseded it or the component unmounted,
+and with `WT_LANE_UNAVAILABLE` on a fallback session, where it asks the server nothing. The
+hook attaches a no-op handler to its own promise before returning it, so a caller that
+fires and forgets reads the failure from the state and never produces an unhandled
+rejection, while an awaiter still gets the rejection. That is the one shape that serves
+both the button and the handler that needs the value, without a second function.
+
+`createHooks<M>({ fallback: false })` says the application has no fallback. Its
+`useClient()` is typed `Client<M>`, with `call` and `stream` on it, and `useNative()` is the
+same client rather than a nullable handle. The declaration is checked at runtime: a client
+built with `withFallback` mounted under those hooks throws on first use, since a type that
+lies is worse than the null check it removed. The default stays the union, because the
+default has to be right for every client the provider can hold.
+
+**Measured.** The function resolves with the data the state also shows; rejects with the
+handler's error while the state shows it; an ignored rejection leaves the state at `error`
+and the test runner reports no unhandled rejection; a superseded call rejects with
+`WT_ABORTED` while the newer one resolves; on a fallback session it rejects with
+`WT_LANE_UNAVAILABLE` and the server is asked nothing. The type test pins the tuple's first
+element as `(payload) => Promise<returns>` and `createHooks<M>({ fallback: false })`'s
+`useClient()` as `Client<M>`.
+
+**Reconsider when:** `useStream`'s function is asked for the same, at which point it
+returns the `StreamResult` so a caller can `cancel()` it, and the state stays as it is.

@@ -9,7 +9,7 @@ import { describe, expect, test } from 'bun:test'
 import { act, render } from '@testing-library/react'
 import { useState } from 'react'
 import { createHooks } from './create-hooks.ts'
-import { settle, type TestMap, wire } from './harness.tsx'
+import { settle, type TestMap, wire, wireFallback } from './harness.tsx'
 
 const api = createHooks<TestMap>()
 
@@ -83,7 +83,7 @@ describe('the hooks handed back actually work', () => {
     const { client, server, wrapper } = await wire()
     server.handle('save', async ({ text }) => ({ n: text.length }))
 
-    let invoke: ((p: { text: string }) => Promise<void>) | undefined
+    let invoke: ((p: { text: string }) => Promise<{ n: number }>) | undefined
     let last = ''
     let data = -1
     function Component(): null {
@@ -126,5 +126,47 @@ describe('the hooks handed back actually work', () => {
     expect(a).not.toBe(b)
     expect(typeof a.useEvent).toBe('function')
     expect(typeof b.useStream).toBe('function')
+  })
+})
+
+describe('createHooks({ fallback: false })', () => {
+  const native = createHooks<TestMap>({ fallback: false })
+
+  test('useClient() is the client, with call on it', async () => {
+    const { server, wrapper } = await wire()
+    server.handle('save', async ({ text }) => ({ n: text.length }))
+    let answer: { n: number } | undefined
+    function Component(): null {
+      const client = native.useClient()
+      const same = native.useNative()
+      if (answer === undefined) {
+        void client.call('save', { text: 'abc' }).then((r) => {
+          answer = r
+        })
+      }
+      expect(same).toBe(client)
+      return null
+    }
+    render(<Component />, { wrapper })
+    await act(async () => {
+      await settle(30)
+    })
+    expect(answer).toEqual({ n: 3 })
+  })
+
+  test('a fallback client mounted under it throws on first use, rather than lying', async () => {
+    const { wrapper } = await wireFallback()
+    function Component(): null {
+      native.useClient()
+      return null
+    }
+    let message = ''
+    try {
+      render(<Component />, { wrapper })
+    } catch (e) {
+      message = (e as Error).message
+    }
+    expect(message).toContain('fallback: false')
+    expect(message).toContain('withFallback')
   })
 })

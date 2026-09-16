@@ -35,8 +35,16 @@ export interface UseCallOptions {
   readonly abortOnUnmount?: boolean
 }
 
+/**
+ * The function resolves to the answer, the way TanStack Query's `mutateAsync` does, so a
+ * caller that wants the value right away has it without reading hook state; the state is
+ * updated as well. It rejects with the `TransportError` on failure, with `WT_ABORTED` when
+ * the call was superseded or the component unmounted, and with `WT_LANE_UNAVAILABLE` on a
+ * fallback session. A caller that ignores the promise sees the failure in `state` and never
+ * an unhandled rejection: the hook observes its own promise.
+ */
 export type UseCallResult<M extends AnyMap, K extends CallableOf<M> & string> = readonly [
-  (payload: M[K]['payload']) => Promise<void>,
+  (payload: M[K]['payload']) => Promise<M[K]['returns']>,
   CallState<M[K]['returns']>,
 ]
 
@@ -46,6 +54,22 @@ function asTransportError(e: unknown): TransportError {
     'WT_HANDLER_ERROR',
     e instanceof Error ? e.message : String(e),
     'The call rejected with something that was not a TransportError.',
+  )
+}
+
+function laneUnavailable(): TransportError {
+  return new TransportError(
+    'WT_LANE_UNAVAILABLE',
+    'call() needs a WebTransport session, and this one is on a WebSocket',
+    'The state already reports unavailable; check it before asking. Emits still work here.',
+  )
+}
+
+function aborted(why: string): TransportError {
+  return new TransportError(
+    'WT_ABORTED',
+    `the call was ${why}`,
+    'Nothing to retry: the hook aborted this call on purpose.',
   )
 }
 
@@ -80,28 +104,46 @@ export function useCall<K extends CallableOf<Registered> & string>(
   }, [abortOnUnmount])
 
   const invoke = useCallback(
-    async (payload: Registered[K]['payload']): Promise<void> => {
+    (payload: Registered[K]['payload']): Promise<Registered[K]['returns']> => {
       // The state already says so; there is nothing to ask and nothing to report twice.
-      if (client.getSnapshot().transport === 'websocket') return
+      if (client.getSnapshot().transport === 'websocket') {
+        return Promise.reject(laneUnavailable())
+      }
       // A second call supersedes the first: rendering two answers at once is not a state
       // this union can hold, and the newer one is the one the user asked for.
       inFlight.current?.abort()
       const controller = new AbortController()
       inFlight.current = controller
       setState({ status: 'pending' })
-      try {
-        const data = await callable(client).call(event, payload, { signal: controller.signal })
-        if (mounted.current && inFlight.current === controller) {
-          setState({ status: 'success', data })
+      const run = (async (): Promise<Registered[K]['returns']> => {
+        try {
+          const data = await callable(client).call(event, payload, {
+            signal: controller.signal,
+          })
+          if (mounted.current && inFlight.current === controller) {
+            setState({ status: 'success', data })
+          }
+          return data
+        } catch (e) {
+          // An abort is this hook's own doing, on unmount or on being superseded. Reporting
+          // it as an error would put a failure on screen that nobody caused; the promise
+          // still says so, since an awaiter must not hang.
+          if (controller.signal.aborted) {
+            throw aborted(
+              mounted.current ? 'superseded by a newer call' : 'abandoned on unmount',
+            )
+          }
+          const error = asTransportError(e)
+          if (mounted.current && inFlight.current === controller) {
+            setState({ status: 'error', error })
+          }
+          throw error
         }
-      } catch (e) {
-        // An abort is this hook's own doing, on unmount or on being superseded. Reporting
-        // it as an error would put a failure on screen that nobody caused.
-        if (controller.signal.aborted) return
-        if (mounted.current && inFlight.current === controller) {
-          setState({ status: 'error', error: asTransportError(e) })
-        }
-      }
+      })()
+      // Observed here, so a caller that fires and forgets reads the failure from the state
+      // and never from an unhandled rejection. An awaiter still gets the rejection.
+      run.catch(() => undefined)
+      return run
     },
     [client, event],
   )

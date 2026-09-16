@@ -19,7 +19,7 @@ describe('the state machine', () => {
     })
 
     const states: string[] = []
-    let invoke: ((p: { text: string }) => Promise<void>) | undefined
+    let invoke: ((p: { text: string }) => Promise<{ n: number }>) | undefined
 
     function Component(): null {
       const [call, state] = useCall('save')
@@ -53,7 +53,7 @@ describe('the state machine', () => {
       throw new Error('nope')
     })
 
-    let invoke: ((p: { text: string }) => Promise<void>) | undefined
+    let invoke: ((p: { text: string }) => Promise<{ n: number }>) | undefined
     let last = ''
     function Component(): null {
       const [call, state] = useCall('save')
@@ -64,7 +64,8 @@ describe('the state machine', () => {
 
     render(<Component />, { wrapper })
     await act(async () => {
-      await invoke?.({ text: 'x' })
+      // The promise rejects as well; the state is what this test is about.
+      await invoke?.({ text: 'x' }).catch(() => undefined)
       await settle()
     })
 
@@ -88,7 +89,7 @@ describe('unmounting', () => {
       return { n: 0 }
     })
 
-    let invoke: ((p: { text: string }) => Promise<void>) | undefined
+    let invoke: ((p: { text: string }) => Promise<{ n: number }>) | undefined
     function Component(): null {
       const [call] = useCall('save')
       invoke = call
@@ -123,7 +124,7 @@ describe('unmounting', () => {
       return { n: 1 }
     })
 
-    let invoke: ((p: { text: string }) => Promise<void>) | undefined
+    let invoke: ((p: { text: string }) => Promise<{ n: number }>) | undefined
     function Component(): null {
       const [call] = useCall('save', { abortOnUnmount: false })
       invoke = call
@@ -156,7 +157,7 @@ describe('on a fallback session', () => {
     })
 
     const seen: string[] = []
-    let invoke: ((p: { text: string }) => Promise<void>) | undefined
+    let invoke: ((p: { text: string }) => Promise<{ n: number }>) | undefined
     function Component(): null {
       const [call, state] = useCall('save')
       invoke = call
@@ -168,11 +169,95 @@ describe('on a fallback session', () => {
     expect(seen[0]).toBe('unavailable')
 
     await act(async () => {
-      await invoke?.({ text: 'hello' })
+      await expect(invoke?.({ text: 'hello' })).rejects.toMatchObject({
+        code: 'WT_LANE_UNAVAILABLE',
+      })
       await settle(10)
     })
     expect(asked).toBe(0)
     expect(seen.every((s) => s === 'unavailable')).toBe(true)
     client.disconnect()
+  })
+})
+
+describe('the function resolves to the answer', () => {
+  test('resolves with the data the state also shows', async () => {
+    const { server, wrapper } = await wire()
+    server.handle('save', async ({ text }) => ({ n: text.length }))
+    let invoke: ((p: { text: string }) => Promise<{ n: number }>) | undefined
+    let last: string = 'idle'
+    function Component(): null {
+      const [call, state] = useCall('save')
+      invoke = call
+      last = state.status
+      return null
+    }
+    render(<Component />, { wrapper })
+    await act(async () => {
+      await settle(10)
+    })
+    let answer: { n: number } | undefined
+    await act(async () => {
+      answer = await invoke?.({ text: 'seven!!' })
+      await settle(10)
+    })
+    expect(answer).toEqual({ n: 7 })
+    expect(last).toBe('success')
+  })
+
+  test('rejects with the TransportError the state shows, and an ignored rejection is observed', async () => {
+    const { server, wrapper } = await wire()
+    server.handle('save', async () => {
+      throw new Error('no')
+    })
+    let invoke: ((p: { text: string }) => Promise<{ n: number }>) | undefined
+    let last: string = 'idle'
+    function Component(): null {
+      const [call, state] = useCall('save')
+      invoke = call
+      last = state.status
+      return null
+    }
+    render(<Component />, { wrapper })
+    await act(async () => {
+      await settle(10)
+    })
+    await act(async () => {
+      await expect(invoke?.({ text: 'x' })).rejects.toMatchObject({ code: 'WT_HANDLER_ERROR' })
+      await settle(10)
+    })
+    expect(last).toBe('error')
+    // Fire and forget: the failure lands in the state and nowhere else.
+    await act(async () => {
+      void invoke?.({ text: 'y' })
+      await settle(20)
+    })
+    expect(last).toBe('error')
+  })
+
+  test('a superseded call rejects with WT_ABORTED while the newer one resolves', async () => {
+    const { server, wrapper } = await wire()
+    server.handle('save', async ({ text }) => {
+      await settle(text === 'slow' ? 30 : 1)
+      return { n: text.length }
+    })
+    let invoke: ((p: { text: string }) => Promise<{ n: number }>) | undefined
+    function Component(): null {
+      const [call] = useCall('save')
+      invoke = call
+      return null
+    }
+    render(<Component />, { wrapper })
+    await act(async () => {
+      await settle(10)
+    })
+    let outcome: string = ''
+    await act(async () => {
+      const slow = invoke?.({ text: 'slow' }).catch((e: { code: string }) => e.code)
+      const fast = invoke?.({ text: 'fast' })
+      outcome = `${await slow} ${(await fast)?.n}`
+      await settle(40)
+    })
+    expect(outcome).toBe('WT_ABORTED 4')
   })
 })

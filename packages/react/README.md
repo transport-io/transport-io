@@ -35,12 +35,13 @@ The named exports below read the globally registered map instead.
 | | |
 |---|---|
 | `createHooks<AppMap>()` | The hooks, typed for one contract. The documented default. |
+| `createHooks<AppMap>({ fallback: false })` | The same, for an application with no fallback: `useClient()` is the `Client`, `call` and `stream` on it. Checked at runtime. |
 | `<TransportProvider client>` | Holds the client and connects while mounted. Takes a client rather than making one. |
 | `useClient()` | The client itself, for `emit`. A `Client` or a `FallbackClient`, so `call` and `stream` are reached through `useNative()`. |
 | `useNative()` | `call` and `stream` as the current session carries them, or `null` on a fallback session. |
 | `useConnection()` | Status, session id, rooms, last error, and the connect and disconnect calls. |
 | `useEvent(name, handler)` | Subscribe for as long as the component is mounted. No memoising required. |
-| `useCall(name)` | Request and response, as a discriminated union. `unavailable` on a fallback session, before anything is asked. |
+| `useCall(name)` | Request and response. The function resolves to the answer and rejects on failure; the state is a discriminated union. `unavailable` on a fallback session, before anything is asked. |
 | `useStream(name)` | A streaming response, accumulated. `stop` ends it as `done`; unmount cancels. `unavailable` on a fallback session. |
 
 There is deliberately no `useEmit` and no `useRooms`. `emit` is one synchronous method with
@@ -69,7 +70,8 @@ session and StrictMode calls it twice in development.
 
 **A fallback session has no calls.** `useCall` and `useStream` report `unavailable` there
 before anything is asked, `useNative()` is `null`, and `useClient()` returns either kind of
-client, so reach `call` and `stream` through `useNative()`.
+client, so reach `call` and `stream` through `useNative()`, or make the hooks with
+`createHooks<AppMap>({ fallback: false })` and have `useClient()` be the `Client`.
 
 The [React guide](https://transport-io.github.io/transport-io/guides/react/) has the whole
 thing with code.

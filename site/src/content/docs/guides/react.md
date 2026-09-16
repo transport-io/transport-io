@@ -44,6 +44,18 @@ validator's internals in it.
 The named exports (`useEvent`, `useCall`, …) read the globally registered map instead; see
 [Registering the map](/guides/register/).
 
+An application with no fallback says so, and `useClient()` is then the `Client`, with `call`
+and `stream` on it, instead of a union that has to be narrowed through `useNative()`:
+
+```ts
+import { createHooks } from '@transport-io/react'
+import type { AppMap } from './api.ts'
+
+export const native = createHooks<AppMap>({ fallback: false })
+```
+
+It is checked: a client built with `withFallback` under these hooks throws on first use.
+
 ## The provider takes a client
 
 It does not make one. **A module-level client is a cross-request state leak** on anything
@@ -87,7 +99,8 @@ second call.
 A client built with `withFallback` fits the provider as well. On a fallback session, which
 carries emits and nothing else, `useCall` and `useStream` report `unavailable` before anything
 is asked, `useNative()` is `null`, and `useConnection().transport` is `'websocket'`. Nothing
-is discovered by calling.
+is discovered by calling: the call's promise rejects with `WT_LANE_UNAVAILABLE` and asks the
+server nothing.
 
 ## Connection state
 
@@ -163,8 +176,28 @@ export function Save(): ReactNode {
 }
 ```
 
+The function resolves to the answer as well, so a handler that wants the value right away
+has it without reading the state:
+
+```tsx
+import { api } from './api.ts'
+
+export function useSaveAndTell(): (text: string) => Promise<string> {
+  const [save] = api.useCall('save')
+  return async (text) => {
+    const { n } = await save({ text })
+    return `${n} characters`
+  }
+}
+```
+
+It rejects with the `TransportError` on failure, with `WT_ABORTED` when a newer call
+superseded it or the component unmounted, and with `WT_LANE_UNAVAILABLE` on a fallback
+session. A caller that ignores the promise, as the button above does, reads the failure from
+`state` and never sees an unhandled rejection.
+
 `unavailable` is the state on a fallback session, where there is no stream to carry a call.
-It is there before the button is pressed, and pressing it asks nothing.
+It is there before the button is pressed, and pressing it asks the server nothing.
 
 **Unmounting aborts an in-flight call.** An unmounted component's answer goes nowhere, and
 aborting is a QUIC stream reset that costs no application message. That bites when the call

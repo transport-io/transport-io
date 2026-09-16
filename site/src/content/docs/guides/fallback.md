@@ -157,8 +157,8 @@ open it.
 ## In React
 
 `TransportProvider` takes a fallback client as it takes any other. On a fallback session,
-`useCall` and `useStream` report `unavailable` before anything is asked, and asking does
-nothing. `useNative()` is the client on a WebTransport session and `null` otherwise, for
+`useCall` and `useStream` report `unavailable` before anything is asked, and asking sends
+nothing: the call's promise rejects with `WT_LANE_UNAVAILABLE`. `useNative()` is the client on a WebTransport session and `null` otherwise, for
 anything the hooks do not cover.
 
 ```ts file=api.ts

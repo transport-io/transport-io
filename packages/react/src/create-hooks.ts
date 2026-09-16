@@ -16,7 +16,7 @@
  * `MapOf<typeof contract>` in directly instead of a named interface takes it to 411, which is
  * the alias expansion this project has now measured three times.
  */
-import type { AnyMap, CallableOf, NativeLanes, StreamableOf } from 'transport-io'
+import type { AnyMap, CallableOf, Client, NativeLanes, StreamableOf } from 'transport-io'
 import { type AnyClient, useClient } from './context.tsx'
 import { type UseCallOptions, type UseCallResult, useCall } from './use-call.ts'
 import { type Connection, useConnection } from './use-connection.ts'
@@ -44,6 +44,25 @@ export interface Hooks<M extends AnyMap> {
 }
 
 /**
+ * The hooks for an application with no fallback: `useClient()` is the `Client`, `call` and
+ * `stream` on it, and `useNative()` is the same client rather than a nullable handle.
+ */
+export interface NativeHooks<M extends AnyMap> extends Hooks<M> {
+  useClient(): Client<M>
+  useNative(): Client<M>
+}
+
+export interface CreateHooksOptions {
+  /**
+   * `false` says the provider will never hold a client built with `withFallback`, so the
+   * hooks can type `useClient()` as the native client. Checked at runtime: a fallback
+   * client under these hooks throws on first use, since a type that lies is worse than a
+   * null check.
+   */
+  readonly fallback?: boolean
+}
+
+/**
  * The hooks, typed for one contract.
  *
  * ```ts
@@ -55,7 +74,32 @@ export interface Hooks<M extends AnyMap> {
  * runtime - the client does, from the contract it was constructed with. What the type
  * parameter changes is which event names and payloads the compiler accepts.
  */
-export function createHooks<M extends AnyMap>(): Hooks<M> {
+export function createHooks<M extends AnyMap>(): Hooks<M>
+export function createHooks<M extends AnyMap>(options: {
+  readonly fallback: false
+}): NativeHooks<M>
+export function createHooks<M extends AnyMap>(options?: CreateHooksOptions): Hooks<M> {
+  if (options?.fallback === false) {
+    // A hook, since it reads the context; named as one so the rules of hooks apply to it.
+    const useNativeClient = (): Client<M> => {
+      const client = useClient()
+      if ('native' in client) {
+        throw new Error(
+          'createHooks({ fallback: false }), but the provider holds a client built with ' +
+            'withFallback. Drop the option, or build the client with new Client.',
+        )
+      }
+      return client as unknown as Client<M>
+    }
+    return {
+      useClient: useNativeClient,
+      useNative: useNativeClient,
+      useConnection,
+      useEvent,
+      useCall,
+      useStream,
+    } as unknown as NativeHooks<M>
+  }
   return {
     useClient,
     useNative,

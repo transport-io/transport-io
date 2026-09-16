@@ -11,7 +11,12 @@ export {
   type TransportProviderProps,
   useClient,
 } from './context.tsx'
-export { createHooks, type Hooks } from './create-hooks.ts'
+export {
+  type CreateHooksOptions,
+  createHooks,
+  type Hooks,
+  type NativeHooks,
+} from './create-hooks.ts'
 export { type CallState, type UseCallOptions, type UseCallResult, useCall } from './use-call.ts'
 export { type Connection, useConnection } from './use-connection.ts'
 export { useEvent } from './use-event.ts'
