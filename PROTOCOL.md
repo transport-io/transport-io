@@ -247,25 +247,19 @@ A refusal MUST name the offending event in the close reason, for example
 `event 'cursor' is 'unreliable' here and 'reliable' at the peer`.
 
 **Property worth knowing before you deploy: the server sends its event table to every peer
-that completes a handshake.** Anyone who can open a session learns the full set of event
-names and lanes - not payloads, not schemas, not data, but the surface. For almost every
+its listener accepts.** Anyone who reaches a handshake learns the full set of event names
+and lanes - not payloads, not schemas, not data, but the surface. For almost every
 application this is uninteresting, and it is the same information a client bundle already
-contains. It matters when event names encode unreleased features or internal structure,
-because an unauthenticated peer can read them.
+contains. It matters when event names encode unreleased features or internal structure.
 
-**This library authenticates nothing, and offers no hook to.** `Connection` exposes no
-headers, no URL, no peer address and no identity; `ServerOptions` has no reject callback;
-and the handshake payload is exhaustively `{ v, feat, events }`. The only control an
-application has is whether to call `accept()` on a connection at all - and the transport
-listener hands it nothing to decide on. Note also that `accept()` writes the full event
-table before `onSession` fires, so the disclosure described above happens **before** any
-application code runs; refusing the peer afterwards does not undo it.
-
-If event names are sensitive, the mitigation is at a layer below this one: terminate the
-HTTP/3 request behind something that authenticates, and do not route unauthenticated peers
-to the WebTransport endpoint at all. Earlier drafts of this section told operators to "gate
-session establishment behind authentication", which read as a feature of this protocol. It
-is not one.
+**The door is the listener's `authorize`**, which decides each peer from the request that
+opened the session, its path, query and peer address, before the session is accepted. A
+refused peer is closed as `WT_UNAUTHORIZED` (§10.2) before this side's frame 0, so it
+receives the reason and never the table. The handshake payload itself is exhaustively
+`{ v, feat, events }` and carries no credential: a browser can put a token only in the
+request's query string, and nothing can stand in front of the QUIC endpoint, since a proxy
+drops UDP. Without an `authorize`, every peer that opens a session is accepted and receives
+the table before any application code runs.
 
 **Payload schema shape is not exchanged and not compared.** A schema disagreement produces
 one `WT_VALIDATION_FAILED` on one message, which is local, readable and recoverable. An
