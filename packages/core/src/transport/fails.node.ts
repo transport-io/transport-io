@@ -17,10 +17,10 @@ import { Http3Server, quicheLoaded, WebTransport } from '@fails-components/webtr
 import { Client, type ClientOptions } from '../client.ts'
 import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
-import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
+import { CloseCode, DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
 import { assertUdpPortFree } from './port.node.ts'
 import { handshakeFailure, probe, probeTarget } from './probe.ts'
-import type { BidiStream, CloseInfo, Connection } from './types.ts'
+import type { Authorize, BidiStream, CloseInfo, Connection, ConnectRequest } from './types.ts'
 
 type AnySession = {
   readonly ready: Promise<void>
@@ -36,15 +36,20 @@ type AnySession = {
     readonly maxDatagramSize: number
   }
   close: (info: { closeCode: number; reason: string }) => void
+  readonly header?: Record<string, string>
+  readonly peerAddress?: string
+  readonly userData?: { path?: string }
 }
 
 class FailsConnection implements Connection {
   readonly #session: AnySession
   readonly closed: Promise<CloseInfo>
+  readonly data: unknown
   #datagramWriter: WritableStreamDefaultWriter<Uint8Array> | undefined
 
-  constructor(session: AnySession) {
+  constructor(session: AnySession, data?: unknown) {
     this.#session = session
+    this.data = data
     this.closed = session.closed.then((info) => ({
       code: info.closeCode ?? 0,
       reason: info.reason ?? '',
@@ -137,19 +142,61 @@ class FailsConnection implements Connection {
   }
 }
 
-export interface Http3ServerOptions {
+export interface Http3ServerOptions<D = undefined> {
   readonly port: number
   readonly host?: string
   readonly cert: string
   readonly privKey: string
   readonly secret?: string
   readonly path?: string
+  /**
+   * Decides each peer before its session is accepted, from the request that opened it. What
+   * it returns is `peer.data`; `null` closes the session as `WT_UNAUTHORIZED` before the
+   * handshake, so the peer never receives the event table.
+   */
+  readonly authorize?: Authorize<D>
 }
 
-export interface Http3Listener {
+export interface Http3Listener<D = undefined> {
   readonly port: number
-  sessions(): AsyncIterable<Connection>
+  sessions(): AsyncIterable<Connection & { readonly data?: D }>
   stop(): void
+}
+
+/** The request a session was opened with, as `authorize` sees it. */
+function requestOf(session: AnySession): ConnectRequest {
+  const raw = session.userData?.path ?? session.header?.[':path'] ?? '/'
+  const at = raw.indexOf('?')
+  return {
+    path: at === -1 ? raw : raw.slice(0, at),
+    query: new URLSearchParams(at === -1 ? '' : raw.slice(at + 1)),
+    peerAddress: session.peerAddress ?? '',
+    headers: session.header ?? {},
+  }
+}
+
+/**
+ * Runs `authorize` for a session that has just been established. A refusal closes it with
+ * `WT_UNAUTHORIZED` before this side sends frame 0, so the peer learns why and learns
+ * nothing else.
+ */
+async function decide<D>(
+  session: AnySession,
+  authorize: Authorize<D> | undefined,
+): Promise<{ accepted: true; data: D | undefined } | { accepted: false }> {
+  if (authorize === undefined) return { accepted: true, data: undefined }
+  let verdict: D | null
+  try {
+    verdict = await authorize(requestOf(session))
+  } catch {
+    session.close({ closeCode: CloseCode.WT_UNAUTHORIZED, reason: 'authorize failed' })
+    return { accepted: false }
+  }
+  if (verdict === null) {
+    session.close({ closeCode: CloseCode.WT_UNAUTHORIZED, reason: 'refused by authorize' })
+    return { accepted: false }
+  }
+  return { accepted: true, data: verdict }
 }
 
 /**
@@ -158,7 +205,9 @@ export interface Http3Listener {
  * cannot be negotiated into it, whatever a client supports. That is the real enforcement
  * of the no-fallback rule, and it is browser-independent (D10, ADR 0003).
  */
-export async function listenHttp3(opts: Http3ServerOptions): Promise<Http3Listener> {
+export async function listenHttp3<D = undefined>(
+  opts: Http3ServerOptions<D>,
+): Promise<Http3Listener<D>> {
   // The binding binds a held UDP port without a word, and the server then never hears a
   // session. Probed first, so a taken port is an error here and not a silence later.
   await assertUdpPortFree(opts.port, opts.host ?? '127.0.0.1')
@@ -174,7 +223,25 @@ export async function listenHttp3(opts: Http3ServerOptions): Promise<Http3Listen
     ready: Promise<void>
     port: number | null
     sessionStream: (path: string) => ReadableStream<AnySession>
+    setRequestCallback: (
+      cb: (args: { header: Record<string, string> }) => Promise<{
+        status: number
+        path: string
+        header: Record<string, string>
+        userData: { path: string }
+      }>,
+    ) => void
   }
+
+  // The binding routes a session by the whole `:path`, query included, so `/?token=x` never
+  // reached a listener on `/`. The callback strips the query for routing and keeps the
+  // original for `authorize`, which is the one place a browser can put a token.
+  server.setRequestCallback(async ({ header }) => {
+    const raw = header[':path'] ?? '/'
+    const at = raw.indexOf('?')
+    const pathname = at === -1 ? raw : raw.slice(0, at)
+    return { status: 200, path: pathname, header, userData: { path: raw } }
+  })
 
   server.startServer()
   await server.ready
@@ -183,14 +250,16 @@ export async function listenHttp3(opts: Http3ServerOptions): Promise<Http3Listen
   return {
     port: server.port ?? opts.port,
     stop: () => server.stopServer(),
-    async *sessions(): AsyncIterable<Connection> {
+    async *sessions(): AsyncIterable<Connection & { readonly data?: D }> {
       const reader = server.sessionStream(path).getReader()
       for (;;) {
         const { value, done } = await reader.read()
         if (done) return
         if (value === undefined) continue
         await value.ready
-        yield new FailsConnection(value)
+        const verdict = await decide(value, opts.authorize)
+        if (!verdict.accepted) continue
+        yield new FailsConnection(value, verdict.data) as Connection & { readonly data?: D }
       }
     },
   }
@@ -203,7 +272,9 @@ export async function listenHttp3(opts: Http3ServerOptions): Promise<Http3Listen
  * `await server.listen(await listenDev())` and never reads a certificate path, a port, or an
  * environment variable itself.
  */
-export async function listenDev(): Promise<Http3Listener> {
+export async function listenDev<D = undefined>(
+  opts: { readonly authorize?: Authorize<D> } = {},
+): Promise<Http3Listener<D>> {
   const cert = process.env.TRANSPORT_IO_DEV_CERT
   const privKey = process.env.TRANSPORT_IO_DEV_KEY
   const port = process.env.TRANSPORT_IO_DEV_WT_PORT
@@ -214,7 +285,14 @@ export async function listenDev(): Promise<Http3Listener> {
       'Start this process with `npx transport-io dev`, which mints the certificate and sets it. Use listenHttp3 with your own certificate otherwise.',
     )
   }
-  return await listenHttp3({ port: Number(port), host: '127.0.0.1', cert, privKey, path: '/' })
+  return await listenHttp3<D>({
+    port: Number(port),
+    host: '127.0.0.1',
+    cert,
+    privKey,
+    path: '/',
+    ...(opts.authorize === undefined ? {} : { authorize: opts.authorize }),
+  })
 }
 
 export interface Http3ConnectOptions {

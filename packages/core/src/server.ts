@@ -14,13 +14,23 @@ import { Hub } from './hub.ts'
 import { OriginAllocator } from './origin.ts'
 import { CloseCode } from './protocol.ts'
 import { Session, type SessionStats } from './session.ts'
-import type { Connection, Transport } from './transport/types.ts'
+import type { CloseInfo, Connection, Transport } from './transport/types.ts'
 
-export interface ServerPeer<M extends AnyMap = Registered> {
+export interface ServerPeer<M extends AnyMap = Registered, D = undefined> {
   readonly id: PeerId
   readonly origin: number
   /** What carries this peer's session. The reliable lane only, on anything but `webtransport`. */
   readonly transport: Transport
+  /**
+   * What the listener's `authorize` returned for this peer, `undefined` without one.
+   * Assignable, so a server with no `authorize` can keep per-peer state here too.
+   */
+  data: D
+  /**
+   * Settles once the peer has left every room and released everything it held, so a
+   * `memberCount` read after it reflects the departure. `onDisconnecting` runs before that.
+   */
+  readonly closed: Promise<CloseInfo>
   readonly rooms: readonly string[]
   join(room: string): Promise<void>
   leave(room: string): Promise<void>
@@ -33,7 +43,7 @@ export interface ServerPeer<M extends AnyMap = Registered> {
   close(code?: number, reason?: string): void
 }
 
-export interface CallContext<M extends AnyMap = Registered> {
+export interface CallContext<M extends AnyMap = Registered, D = undefined> {
   /** Fires when the initiator resets the stream. Immediate, and free on this transport. */
   readonly signal: AbortSignal
   /**
@@ -43,12 +53,16 @@ export interface CallContext<M extends AnyMap = Registered> {
    * says who is asking. `peer.id` is a value this server assigned itself and identifies
    * nobody: authenticate the payload, then use `peer.join` to act on the result.
    */
-  readonly peer: ServerPeer<M>
+  readonly peer: ServerPeer<M, D>
 }
 
-/** Anything that yields connections: a transport listener, or a test double. */
-export interface ConnectionSource {
-  sessions(): AsyncIterable<Connection>
+/**
+ * Anything that yields connections: a transport listener, or a test double. `D` is what a
+ * listener's `authorize` attaches to each connection as `data`; a source without one yields
+ * connections with no `data`, and the server's `D` must agree with the listener's.
+ */
+export interface ConnectionSource<D = undefined> {
+  sessions(): AsyncIterable<Connection & { readonly data?: D }>
 }
 
 export interface ListenOptions {
@@ -72,13 +86,14 @@ export interface RoomTarget<M extends AnyMap = Registered> {
   except(...peers: PeerId[]): RoomTarget<M>
 }
 
-export class Server<M extends AnyMap = Registered> {
+export class Server<M extends AnyMap = Registered, D = undefined> {
   readonly #opts: ServerOptions
   readonly #nodeId: string
   readonly #origins: OriginAllocator
-  readonly #peers = new Map<PeerId, { peer: ServerPeer<M>; session: Session }>()
+  readonly #peers = new Map<PeerId, { peer: ServerPeer<M, D>; session: Session }>()
   #acceptErrors = 0
-  readonly #onPeer: ((peer: ServerPeer<M>) => void)[] = []
+  readonly #onPeer: ((peer: ServerPeer<M, D>) => void)[] = []
+  readonly #onDisconnecting: ((peer: ServerPeer<M, D>, info: CloseInfo) => void)[] = []
   #table: EventTable | undefined
   #hub: Hub | undefined
   #adapter: Adapter | undefined
@@ -106,7 +121,7 @@ export class Server<M extends AnyMap = Registered> {
    * cannot vanish. `acceptErrors` is the count, and `onAcceptError` is for an application
    * that wants to do something about it.
    */
-  async listen(source?: ConnectionSource, opts?: ListenOptions): Promise<void> {
+  async listen(source?: ConnectionSource<D>, opts?: ListenOptions): Promise<void> {
     this.#table = await buildEventTable(this.#opts.contract)
     this.#adapter = this.#opts.adapter ?? new MemoryAdapter(this.#nodeId)
     this.#hub = new Hub(this.#adapter, this.#table)
@@ -126,12 +141,12 @@ export class Server<M extends AnyMap = Registered> {
    * which has not, so this line fails to compile rather than a session failing at runtime.
    * The session refuses at accept as well, for callers with no compiler (D121).
    */
-  withFallback(source: ConnectionSource & FallbackReady<M>, opts?: ListenOptions): void {
+  withFallback(source: ConnectionSource<D> & FallbackReady<M>, opts?: ListenOptions): void {
     this.#requireTable()
     void this.#acceptFrom(source, opts)
   }
 
-  #acceptFrom(source: ConnectionSource, opts?: ListenOptions): Promise<void> {
+  #acceptFrom(source: ConnectionSource<D>, opts?: ListenOptions): Promise<void> {
     const loop = (async () => {
       for await (const conn of source.sessions()) {
         // Per connection, so one refused handshake does not end the loop for everyone
@@ -162,7 +177,7 @@ export class Server<M extends AnyMap = Registered> {
   /** Register a responder for a callable event. */
   handle<K extends CallableOf<M> & string>(
     event: K,
-    handler: (payload: M[K]['payload'], ctx: CallContext<M>) => Promise<M[K]['returns']>,
+    handler: (payload: M[K]['payload'], ctx: CallContext<M, D>) => Promise<M[K]['returns']>,
   ): () => void
   /**
    * Register a responder for a streaming event. The handler is an async generator: each
@@ -171,9 +186,15 @@ export class Server<M extends AnyMap = Registered> {
    */
   handle<K extends StreamableOf<M> & string>(
     event: K,
-    handler: (payload: M[K]['payload'], ctx: CallContext<M>) => AsyncIterable<M[K]['yields']>,
+    handler: (
+      payload: M[K]['payload'],
+      ctx: CallContext<M, D>,
+    ) => AsyncIterable<M[K]['yields']>,
   ): () => void
-  handle(event: string, handler: (payload: never, ctx: CallContext<M>) => never): () => void {
+  handle(
+    event: string,
+    handler: (payload: never, ctx: CallContext<M, D>) => never,
+  ): () => void {
     this.#callHandlers.set(event, handler as never)
     for (const { session } of this.#peers.values()) {
       session.handle(event, handler as never)
@@ -188,7 +209,7 @@ export class Server<M extends AnyMap = Registered> {
     }
   }
 
-  onSession(cb: (peer: ServerPeer<M>) => void): () => void {
+  onSession(cb: (peer: ServerPeer<M, D>) => void): () => void {
     this.#onPeer.push(cb)
     return () => {
       const i = this.#onPeer.indexOf(cb)
@@ -196,15 +217,31 @@ export class Server<M extends AnyMap = Registered> {
     }
   }
 
+  /**
+   * Runs when a peer's connection has closed and before it leaves its rooms, so
+   * `peer.rooms` still says where it was. `peer.closed` settles after the rooms are left.
+   */
+  onDisconnecting(cb: (peer: ServerPeer<M, D>, info: CloseInfo) => void): () => void {
+    this.#onDisconnecting.push(cb)
+    return () => {
+      const i = this.#onDisconnecting.indexOf(cb)
+      if (i >= 0) this.#onDisconnecting.splice(i, 1)
+    }
+  }
+
   memberCount(room: string): number {
     return this.#requireHub().memberCount(room)
   }
 
-  async accept(conn: Connection): Promise<ServerPeer<M>> {
+  async accept(conn: Connection & { readonly data?: D }): Promise<ServerPeer<M, D>> {
     const table = this.#requireTable()
     const hub = this.#requireHub()
     const id: PeerId = `${this.#nodeId}:${this.#nextPeer++}`
     const origin = this.#origins.allocate(Date.now())
+    let settleClosed!: (info: CloseInfo) => void
+    const closed = new Promise<CloseInfo>((resolve) => {
+      settleClosed = resolve
+    })
 
     const session = new Session(conn, {
       table,
@@ -214,10 +251,12 @@ export class Server<M extends AnyMap = Registered> {
         : { validateInbound: this.#opts.validateInbound }),
     })
 
-    const peer: ServerPeer<M> = {
+    const peer: ServerPeer<M, D> = {
       id,
       origin,
       transport: conn.kind(),
+      data: (conn as { data?: D }).data as D,
+      closed,
       get rooms() {
         return hub.rooms(id)
       },
@@ -234,11 +273,14 @@ export class Server<M extends AnyMap = Registered> {
     for (const [event, handler] of this.#callHandlers) session.handle(event, handler as never)
     this.#peers.set(id, { peer, session })
     void conn.closed
-      .then(async () => {
+      .then(async (info) => {
+        // Before the rooms go, so presence code can still read where the peer was.
+        for (const cb of this.#onDisconnecting) cb(peer, info)
         this.#peers.delete(id)
         this.#origins.free(origin, Date.now())
         session.dispose()
         await hub.removePeer(id)
+        settleClosed(info)
       })
       // Teardown is the last thing that runs for this peer; there is no caller left to
       // hand a rejection to. Without this it was an unhandled rejection, which ends the
@@ -270,6 +312,8 @@ export class Server<M extends AnyMap = Registered> {
   }
 }
 
-export function createServer<M extends AnyMap = Registered>(opts: ServerOptions): Server<M> {
-  return new Server<M>(opts)
+export function createServer<M extends AnyMap = Registered, D = undefined>(
+  opts: ServerOptions,
+): Server<M, D> {
+  return new Server<M, D>(opts)
 }

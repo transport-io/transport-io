@@ -77,6 +77,14 @@ server.to('lobby').except(peer.id).emit('cursor', pos)  // everyone but the send
 `except` is worth using on the unreliable lane. Echoing a peer's own cursor position back to
 it wastes bandwidth that a fresher frame could use.
 
+## Knowing a peer left
+
+`server.onDisconnecting((peer, info) => …)` runs when a peer's connection has closed and
+before it leaves its rooms, so `peer.rooms` still says where it was. `peer.closed` is a
+promise that settles after the rooms are let go, so a `memberCount` read after it already
+reflects the departure. [Authenticating a peer](/guides/authorize/) has both with a presence
+example.
+
 ## A reconnect is a new session
 
 Room membership does not survive a reconnect. Pending calls reject.

@@ -586,7 +586,71 @@ congestion, so no count here is the network's.
 
 ---
 
-### 3.3 Certificates, and the one error everyone hits first
+### 3.3 Who is connecting, and when they leave
+
+A listener decides each peer at the door with `authorize`, which receives the request that
+opened the session: its `path`, its `query`, the `peerAddress`, and on the WebSocket
+listener the upgrade `headers` too. A browser can put nothing but the path and the query on
+a WebTransport request, so the query is where a token travels. What `authorize` returns is
+`peer.data`, typed by the server's second type argument; `null` refuses the peer.
+
+```ts standalone
+import { createServer, defineContract, type MapOf, reliable } from 'transport-io'
+import { listenHttp3 } from 'transport-io/node-transport'
+
+const contract = defineContract({ chat: reliable<{ body: string }>() })
+interface AppMap extends MapOf<typeof contract> {}
+interface User {
+  name: string
+}
+
+declare const cert: string
+declare const privKey: string
+declare function userFor(token: string | null): Promise<User | null>
+
+export async function main(): Promise<void> {
+  const server = createServer<AppMap, User>({ contract })
+  server.onSession((peer) => {
+    void peer.join(`user:${peer.data.name}`)
+  })
+  await server.listen(
+    await listenHttp3({
+      port: 4433,
+      cert,
+      privKey,
+      authorize: ({ query }) => userFor(query.get('token')),
+    }),
+  )
+}
+```
+
+A refused peer's session closes as `WT_UNAUTHORIZED` (§10.2 code 1007) with the reason,
+before the server's frame 0, so it never receives the event table. On the client,
+`connect()` rejects with `WT_UNAUTHORIZED` carrying that reason, and a refusal does not dial
+the fallback. A server whose listener has no `authorize` has `peer.data` of `undefined`; the
+property is assignable, so per-peer state can live there either way. `listenDev` and
+`listenWebSocket` take the same `authorize`; the WebSocket one sees cookies, since the
+upgrade is an ordinary HTTP request.
+
+A departure is visible twice. `server.onDisconnecting((peer, info) => …)` runs when the
+connection has closed and before the peer leaves its rooms, so `peer.rooms` still says where
+it was. `peer.closed` is a promise that settles after the rooms are left, so a
+`memberCount` read after it reflects the departure. `info` is the close code and reason.
+
+```ts
+export function watchDepartures(server: Server<AppMap>): void {
+  server.onDisconnecting((peer) => {
+    for (const room of peer.rooms) console.log(`${peer.id} leaving ${room}`)
+  })
+  server.onSession((peer) => {
+    void peer.closed.then(() => console.log(`${peer.id} gone`))
+  })
+}
+```
+
+---
+
+### 3.4 Certificates, and the one error everyone hits first
 
 Omit `certificateHash` and the connection is validated against the platform's CA store like
 any other HTTPS origin. That is the production path. Pass one only to pin a self-signed

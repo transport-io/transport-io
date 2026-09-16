@@ -71,7 +71,7 @@ export {
   type ServerPeer,
 } from './server.ts'
 export type { SessionStats, StreamResult } from './session.ts'
-export type { Transport } from './transport/types.ts'
+export type { Authorize, CloseInfo, ConnectRequest, Transport } from './transport/types.ts'
 
 /**
  * Hand-maintained and asserted against `package.json` by `index.test.ts`, because

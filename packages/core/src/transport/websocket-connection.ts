@@ -74,11 +74,14 @@ export interface WebSocketConnectionOptions {
   /** For the tests that prove the deadline; production never sets them. */
   readonly keepaliveIntervalMs?: number
   readonly idleTimeoutMs?: number
+  /** What the listener's `authorize` returned, carried to the session as `peer.data`. */
+  readonly data?: unknown
 }
 
 export class WebSocketConnection implements Connection {
   readonly #socket: SocketLike
   readonly #lowWater: number
+  readonly data: unknown
   readonly #keepaliveMs: number
   readonly #idleMs: number
   readonly #timers = new OwnedTimers()
@@ -93,6 +96,7 @@ export class WebSocketConnection implements Connection {
   constructor(socket: SocketLike, opts: WebSocketConnectionOptions = {}) {
     this.#socket = socket
     this.#lowWater = opts.lowWaterBytes ?? WS_SEND_LOW_WATER_BYTES
+    this.data = opts.data
     this.#keepaliveMs = opts.keepaliveIntervalMs ?? WS_KEEPALIVE_INTERVAL_MS
     this.#idleMs = opts.idleTimeoutMs ?? WS_IDLE_TIMEOUT_MS
     socket.binaryType = 'arraybuffer'

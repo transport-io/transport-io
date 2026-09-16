@@ -18,24 +18,51 @@ import {
 } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { WebSocketServer } from 'ws'
+import { CloseCode } from '../protocol.ts'
 import { asPortInUse } from './port.node.ts'
 import { PROBE_PATH } from './probe.ts'
-import type { Connection } from './types.ts'
-import { type SocketLike, WebSocketConnection } from './websocket-connection.ts'
+import type { Authorize, Connection, ConnectRequest } from './types.ts'
+import {
+  type SocketLike,
+  toWebSocketCloseCode,
+  WebSocketConnection,
+} from './websocket-connection.ts'
 
-export interface WebSocketServerOptions {
+export interface WebSocketServerOptions<D = undefined> {
   readonly port: number
   readonly host?: string
   /** PEM. Both or neither: with them the listener is `wss://`, without them `ws://`. */
   readonly cert?: string
   readonly privKey?: string
   readonly path?: string
+  /**
+   * Decides each peer from its upgrade request, which carries headers and cookies as well
+   * as the path and query. What it returns is `peer.data`; `null` closes the socket as
+   * `WT_UNAUTHORIZED` before the handshake.
+   */
+  readonly authorize?: Authorize<D>
 }
 
-export interface WebSocketListener {
+export interface WebSocketListener<D = undefined> {
   readonly port: number
-  sessions(): AsyncIterable<Connection>
+  sessions(): AsyncIterable<Connection & { readonly data?: D }>
   stop(): void
+}
+
+function requestOf(req: IncomingMessage): ConnectRequest {
+  const raw = req.url ?? '/'
+  const at = raw.indexOf('?')
+  const headers: Record<string, string> = {}
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (typeof v === 'string') headers[k] = v
+    else if (Array.isArray(v)) headers[k] = v.join(', ')
+  }
+  return {
+    path: at === -1 ? raw : raw.slice(0, at),
+    query: new URLSearchParams(at === -1 ? '' : raw.slice(at + 1)),
+    peerAddress: req.socket.remoteAddress ?? '',
+    headers,
+  }
 }
 
 function answer(req: IncomingMessage, res: ServerResponse): void {
@@ -44,20 +71,20 @@ function answer(req: IncomingMessage, res: ServerResponse): void {
   res.writeHead(req.url === PROBE_PATH ? 204 : 404).end()
 }
 
-export async function listenWebSocket(
-  opts: WebSocketServerOptions,
-): Promise<WebSocketListener> {
+export async function listenWebSocket<D = undefined>(
+  opts: WebSocketServerOptions<D>,
+): Promise<WebSocketListener<D>> {
   const http =
     opts.cert !== undefined && opts.privKey !== undefined
       ? createHttpsServer({ cert: opts.cert, key: opts.privKey }, answer)
       : createHttpServer(answer)
   const wss = new WebSocketServer({ server: http, path: opts.path ?? '/' })
 
-  const queue: Connection[] = []
-  let waiting: ((next: Connection | undefined) => void) | undefined
+  type Accepted = Connection & { readonly data?: D }
+  const queue: Accepted[] = []
+  let waiting: ((next: Accepted | undefined) => void) | undefined
   let stopped = false
-  wss.on('connection', (socket) => {
-    const conn = new WebSocketConnection(socket as unknown as SocketLike)
+  const deliver = (conn: Accepted): void => {
     if (waiting !== undefined) {
       const wake = waiting
       waiting = undefined
@@ -65,6 +92,31 @@ export async function listenWebSocket(
     } else {
       queue.push(conn)
     }
+  }
+  const refuse = (socket: SocketLike, reason: string): void => {
+    socket.close(toWebSocketCloseCode(CloseCode.WT_UNAUTHORIZED), reason)
+  }
+  const authorize = opts.authorize
+  wss.on('connection', (raw, req) => {
+    const socket = raw as unknown as SocketLike
+    if (authorize === undefined) {
+      deliver(new WebSocketConnection(socket) as Accepted)
+      return
+    }
+    void (async () => {
+      let verdict: D | null
+      try {
+        verdict = await authorize(requestOf(req))
+      } catch {
+        refuse(socket, 'authorize failed')
+        return
+      }
+      if (verdict === null) {
+        refuse(socket, 'refused by authorize')
+        return
+      }
+      deliver(new WebSocketConnection(socket, { data: verdict }) as Accepted)
+    })()
   })
 
   await new Promise<void>((resolve, reject) => {
@@ -85,12 +137,12 @@ export async function listenWebSocket(
       http.closeAllConnections()
       http.close()
     },
-    async *sessions(): AsyncIterable<Connection> {
+    async *sessions(): AsyncIterable<Accepted> {
       for (;;) {
         if (stopped) return
         const next =
           queue.shift() ??
-          (await new Promise<Connection | undefined>((resolve) => {
+          (await new Promise<Accepted | undefined>((resolve) => {
             waiting = resolve
           }))
         if (next === undefined) return

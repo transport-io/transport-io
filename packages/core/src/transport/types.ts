@@ -14,6 +14,27 @@ export interface CloseInfo {
   readonly reason: string
 }
 
+/**
+ * What a listener knows about a peer before its session exists: the request that opened
+ * it. A browser can put nothing but the path and the query on a WebTransport request, so
+ * the query is where a token travels; the WebSocket mapping sees the upgrade request's
+ * headers too.
+ */
+export interface ConnectRequest {
+  /** The request path without its query. */
+  readonly path: string
+  readonly query: URLSearchParams
+  readonly peerAddress: string
+  readonly headers: Readonly<Record<string, string>>
+}
+
+/**
+ * Decides a peer at the door. `null` refuses it: the session closes as `WT_UNAUTHORIZED`
+ * before the server's handshake, so a refused peer never receives the event table. Anything
+ * else is accepted and becomes `peer.data`.
+ */
+export type Authorize<D> = (request: ConnectRequest) => D | null | Promise<D | null>
+
 export interface BidiStream {
   readonly readable: ReadableStream<Uint8Array>
   readonly writable: WritableStream<Uint8Array>

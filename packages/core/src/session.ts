@@ -24,7 +24,7 @@ import {
 } from './protocol.ts'
 import { DatagramQueue, EmitQueue, PeerTooSlowError, type QueueStats } from './queue.ts'
 import { type OwnedTimer, OwnedTimers } from './timers.ts'
-import type { BidiStream, Connection } from './transport/types.ts'
+import type { BidiStream, CloseInfo, Connection } from './transport/types.ts'
 
 export interface SessionStats extends QueueStats {
   readonly staleReceived: number
@@ -237,6 +237,8 @@ export class Session {
   #deadlineReject: ((e: unknown) => void) | undefined
   #handshakeSettled = false
   #disposed = false
+  /** What the transport reported when it closed, so a refusal keeps its code and reason. */
+  #closeInfo: CloseInfo | undefined
 
   /** Resolves when both sides have exchanged a valid handshake. */
   readonly ready: Promise<Negotiated>
@@ -267,7 +269,10 @@ export class Session {
   async start(): Promise<Negotiated> {
     // Whoever closes, both sides release. Registered before anything can fail, so a
     // session that dies during the handshake is cleaned up too.
-    void this.#conn.closed.then(() => this.dispose())
+    void this.#conn.closed.then((info) => {
+      this.#closeInfo = info
+      this.dispose()
+    })
 
     // The runtime half of the contract gate (D121). A transport that carries only the
     // reliable lane is refused unless every unreliable event has declared what it accepts
@@ -730,12 +735,19 @@ export class Session {
     this.#sweepTimer = undefined
     this.#handshakeTimer = undefined
     if (!this.#handshakeSettled) {
+      const info = this.#closeInfo
       this.#settleHandshake(
-        new TransportError(
-          'WT_SESSION_CLOSED',
-          'the session closed before the handshake completed',
-          'Connect again. A session torn down mid-handshake cannot be revived.',
-        ),
+        info?.code === CloseCode.WT_UNAUTHORIZED
+          ? new TransportError(
+              'WT_UNAUTHORIZED',
+              info.reason === '' ? 'the server refused this connection' : info.reason,
+              'The server refused this peer at authorize. Obtain a valid credential and connect again.',
+            )
+          : new TransportError(
+              'WT_SESSION_CLOSED',
+              'the session closed before the handshake completed',
+              'Connect again. A session torn down mid-handshake cannot be revived.',
+            ),
       )
     }
     this.#handlers.clear()

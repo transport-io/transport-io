@@ -129,5 +129,6 @@ export const CloseCode = {
   WT_PROTOCOL_ERROR: 1004,
   WT_IDLE_TIMEOUT: 1005,
   WT_RELIABILITY_REFUSED: 1006,
+  WT_UNAUTHORIZED: 1007,
 } as const
 export type CloseCode = (typeof CloseCode)[keyof typeof CloseCode]

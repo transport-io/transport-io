@@ -49,6 +49,13 @@ path to it; or the server process found no certificate in its environment. Anywh
 not local development, `connectBrowser` and `listenHttp3` with a certificate of your own.
 See [Certificates](/guides/certificates/).
 
+## WT_UNAUTHORIZED
+
+`connect()` rejected because the listener's `authorize` refused this peer, and the message
+is the server's reason. The session closed before the server sent anything, so nothing about
+the contract reached the page. Obtain a valid credential, usually a token in the WebTransport
+URL's query string, and connect again. A refusal does not dial the fallback.
+
 ## WT_PORT_IN_USE
 
 A listener was asked to bind a port another process holds. The message names the port and,

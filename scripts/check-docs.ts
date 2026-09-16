@@ -146,6 +146,7 @@ const COMPILED_DOCS = [
   'site/src/content/docs/guides/certificates.md',
   'site/src/content/docs/guides/register.md',
   'site/src/content/docs/guides/rooms.md',
+  'site/src/content/docs/guides/authorize.md',
   'site/src/content/docs/guides/call-and-stream.md',
   'site/src/content/docs/guides/backpressure.md',
   'site/src/content/docs/guides/reconnect.md',

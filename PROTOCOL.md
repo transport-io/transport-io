@@ -168,6 +168,11 @@ nothing received, a keepalive counting as something received.
 
 ## 4. Handshake
 
+A server that refuses a peer at the door MUST close the session as `WT_UNAUTHORIZED` before
+sending its frame 0, so a refused peer receives the reason and nothing else, the event table
+included.
+<!-- norm: unauthorized-closes-before-handshake -> packages/core/src/authorize.test.ts -->
+
 ### 4.1 Frame
 
 Each peer writes exactly one `HANDSHAKE` frame as frame 0 of its emit stream, immediately
@@ -838,6 +843,7 @@ exceed **1024 bytes**, per the HTTP/3 WebTransport draft.
 | `1004` | `WT_PROTOCOL_ERROR` | Unrecoverable framing violation. |
 | `1005` | `WT_IDLE_TIMEOUT` | Nothing received for 45000 ms on a mapping with an idle deadline (§3.3). The path is dead, or the peer sends no keepalive. |
 | `1006` | `WT_RELIABILITY_REFUSED` | Session was reliable-only, or on a fallback transport with an undeclared unreliable event in the contract. See §2. |
+| `1007` | `WT_UNAUTHORIZED` | The listener's `authorize` refused this peer. Sent before the server's frame 0, with the reason. |
 
 On the WebSocket mapping these are carried as WebSocket close codes: 1000 for `WT_NO_ERROR`,
 and 3000 plus the code otherwise (§3.3).

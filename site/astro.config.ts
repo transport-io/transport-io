@@ -118,6 +118,7 @@ export default defineConfig({
             { label: 'The two lanes', slug: 'guides/lanes' },
             { label: 'Types, or a schema', slug: 'guides/schema' },
             { label: 'Rooms', slug: 'guides/rooms' },
+            { label: 'Authenticating a peer', slug: 'guides/authorize' },
             { label: 'call() and stream()', slug: 'guides/call-and-stream' },
             { label: 'Backpressure', slug: 'guides/backpressure' },
             { label: 'Reconnecting', slug: 'guides/reconnect' },

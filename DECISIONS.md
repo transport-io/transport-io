@@ -3440,3 +3440,61 @@ rebuild 10 files, compile as one project, and the 8 that are the example's match
 
 **Reconsider when:** a second tutorial exists, at which point the gate takes the page, the
 example and its file list as arguments rather than constants.
+
+### D130. A peer says who it is at the door, and when it leaves, twice
+The first outside application, a shared board with cursors, Yjs shapes and private
+messages, spent three files on what the library did not give it: a second HTTP server for
+a token endpoint, a `hello` call verifying that token, a guard at the top of every handler,
+a ten second timer closing peers that never called it, a `WeakMap` from peer to name, and a
+two second poll of `memberCount` against a set of names to learn that somebody left. Its
+notes proposed the shape below, and the shape was approved as proposed.
+
+**Decision.** Three things on the server, built together because they compose.
+
+`authorize` on every listener: `listenHttp3({ authorize: async (request) => data | null })`,
+and the same on `listenDev` and `listenWebSocket`. It receives `path`, `query` and
+`peerAddress`, and on the WebSocket listener the upgrade request's `headers`, and it runs
+before the session is accepted. What it returns is `peer.data`; `null` refuses. The
+reference binding already had `setRequestCallback`, which sees the CONNECT headers before
+the session exists, and every session it creates carries `header` and `peerAddress`;
+`listenHttp3` used neither. It uses the callback now, for a second reason found while
+building this: the binding routes a session by the whole `:path`, query included, so
+`/?token=x` never reached a listener on `/` and the handshake failed. The callback returns
+the pathname as the routing path and keeps the original for `authorize`, which is the one
+place a browser can put a token, since it sends no cookies and no custom headers on a
+WebTransport request.
+
+`peer.data`, typed by the second type argument of `createServer<M, D>`, and carried on
+`ctx.peer` into every responder. A listener with `authorize` yields connections whose
+`data` is `D`, so a listener returning one shape into a server declaring another fails to
+compile at `listen()`. A listener without one yields no `data`, and the server's `D` is
+then a promise the application keeps; the property is assignable for that case.
+
+The departure, in two moments. `server.onDisconnecting((peer, info) => …)` runs when the
+connection has closed and before the peer leaves its rooms, so `peer.rooms` can still be
+read, which is what presence cleanup needs. `peer.closed` settles after the rooms are let
+go, so a `memberCount` read after it reflects the departure. `Server.accept()` already
+chained its cleanup on `conn.closed`; this exposes the two ends of that chain.
+
+**The two things settled while building it.** A refused `authorize` on the wire is a
+session close with the new §10.2 code 1007, `WT_UNAUTHORIZED`, and a reason, sent before the
+server's frame 0. It is not a CONNECT-level refusal, although the callback could give one:
+a browser reports every failed WebTransport handshake with one error, so a peer refused
+there could not tell refusal from a dead server, and the fallback would be dialled for it.
+Closing after acceptance costs a QUIC session that lives for one round trip and buys the
+client a code and the reason: `connect()` rejects with `WT_UNAUTHORIZED`, `lastError`
+carries it, and no fallback is tried, because a refusal is an answer. The event table is not
+sent to a peer that fails `authorize`, since no session is started for it; it is sent to
+every peer that passes, and to every peer when there is no `authorize`, which is what
+SECURITY.md now says in place of the advice to put something in front of the endpoint.
+
+**Measured.** Over real QUIC, a token in the query reaches `authorize`, the accepted peer's
+`data` carries the user and the peer address, the refused one's `connect()` rejects with
+`WT_UNAUTHORIZED` and the server's reason, and `onSession` ran once. The same over the
+WebSocket listener, with the upgrade's `host` header read. On a loopback, a refused peer
+received zero bytes from the server side. `onDisconnecting` saw `['lobby']` with the member
+count still one, and `closed` settled with the count at zero.
+
+**Reconsider when:** an application needs to refuse a peer without a QUIC session ever
+existing, at which point `authorize` gains a second return that maps to a CONNECT status,
+and the client-side code is given up for that peer.

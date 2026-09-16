@@ -24,6 +24,7 @@ export type TransportErrorCode =
   | 'WT_LANE_UNAVAILABLE'
   | 'WT_CERT_EXPIRED'
   | 'WT_PORT_IN_USE'
+  | 'WT_UNAUTHORIZED'
 
 export class TransportError extends Error {
   readonly code: TransportErrorCode

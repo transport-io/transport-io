@@ -28,19 +28,21 @@ than a patch.
 These are deliberate design positions rather than vulnerabilities. They are listed here so
 you can see them before depending on the library.
 
-**It authenticates nothing, and nothing can stand in front of it.** The WebTransport
+**Nothing can stand in front of it, so the door is `authorize`.** The WebTransport
 endpoint is QUIC over UDP to your process: a proxy, a load balancer or a CDN in front of it
-terminates TLS and drops UDP, and no session arrives. So authentication happens inside the
-session, in the application: the page obtains a token over HTTPS, makes one call with it
-first, and the server closes any peer that has not made that call within a deadline. Every
-handler checks the peer has passed it. `Connection` exposes no headers, no URL and no peer
-address, so nothing decides before the session exists.
+terminates TLS and drops UDP, and no session arrives. A listener's `authorize` decides each
+peer from the request that opened the session, its path, query and peer address, before the
+session is accepted; on the WebSocket listener it sees the upgrade request's headers and
+cookies as well. A browser sends no cookies and no custom headers on a WebTransport request,
+so a token travels in the query string, and the page obtains that token over HTTPS. What
+`authorize` returns is `peer.data`, checked by nobody after that: it is your value.
 
-**The handshake discloses your event names and lanes before any application code runs.**
-`accept()` writes the full event table as frame 0. It is not payloads, not schemas and not
-data, and for almost every application it is uninteresting. It is occasionally not: if your
-event names encode unreleased features or internal structure, an unauthenticated peer can
-read them, and refusing that peer afterwards does not undo it.
+**The handshake discloses your event names and lanes to every peer `authorize` accepts, and
+to every peer when there is no `authorize`.** A refused peer is closed before frame 0 and
+receives the reason and nothing else. An accepted one receives the full event table before
+any handler runs. It is not payloads, not schemas and not data, and for almost every
+application it is uninteresting; if your event names encode unreleased features or internal
+structure, refuse at the door.
 
 **A peer is not bound by your types.** A second implementation written from `PROTOCOL.md`
 can send anything the wire permits. The library validates inbound payloads against the

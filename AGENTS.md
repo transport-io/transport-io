@@ -200,8 +200,8 @@ be inspected before it is accepted.
 WebSocket listener after `listen()`, under the same compile-time gate as the client; a session
 whose contract has an undeclared unreliable event is refused at accept with
 `WT_RELIABILITY_REFUSED` and counted. The listener is `wss://` with a certificate and `ws://`
-without one, and it answers the probe from `WT_UDP_UNREACHABLE` over TCP. `ws` is an optional
-peer, installed only where a listener runs. `peer.transport` names what carries each peer.
+without one, and it answers the probe from `WT_UDP_UNREACHABLE` over TCP. `ws` is a
+dependency of core. `peer.transport` names what carries each peer.
 
 A handler receives `ctx.signal`, which fires when the caller aborts; one that returns
 promptly can ignore it. It also receives `ctx.peer`, the `ServerPeer` that made the call,
@@ -211,10 +211,20 @@ responder joins the caller. `peer.id` identifies nobody, so authenticate the pay
 **Rooms are server-authoritative.** A client cannot join by sending anything; only
 `peer.join()` does it, and the client learns membership from a notification. If you want
 client-initiated subscription, make it a `call` whose handler authorises the payload and
-then joins `ctx.peer`. **This library authenticates
-nothing** and gives a handler no peer identity beyond `peer.id`, which it assigned itself -
-so "handle it on the server" means your check runs there, not that anyone has been
-identified. See PROTOCOL.md §3.
+then joins `ctx.peer`.
+
+**The door is `authorize` on the listener**: `listenHttp3({ authorize: ({ path, query,
+peerAddress }) => data | null })`, run before the session is accepted. `null` closes the
+session as `WT_UNAUTHORIZED` before frame 0, so the peer receives the reason and never the
+event table; on the client `connect()` rejects with that code and nothing is dialled after it. What
+it returns is `peer.data`, typed by the second type argument of `createServer<M, D>` and
+assignable. A browser can put a token only in the WebTransport URL's query; the WebSocket
+listener's `authorize` also sees the upgrade request's `headers`. `listenDev` takes it too.
+`peer.id` identifies nobody: it is a value this server assigned itself.
+
+**A departure is visible twice.** `server.onDisconnecting((peer, info) => …)` runs when the
+connection closed and before the peer leaves its rooms, so `peer.rooms` still says where it
+was; `peer.closed` settles after the rooms are let go.
 
 `server.to(room).emit()` returns a promise because it crosses the adapter, but local
 delivery does not wait for it. Broadcasting to a room with no members is not an error.
@@ -295,6 +305,7 @@ is never thrown from this library.
 | `WT_UDP_UNREACHABLE` | the handshake failed but the origin answers over HTTPS: the server is up and UDP is not reaching it | check the firewall, the VPN, or the platform's UDP ingress; nothing in the library routes around it |
 | `WT_CERT_EXPIRED` | the `transport-io dev` certificate has expired | run `transport-io dev` again; it mints a new one |
 | `WT_PORT_IN_USE` | a listener's port is held by another process; the dev command checks both loopback addresses | stop that process, or pass another port |
+| `WT_UNAUTHORIZED` | the listener's `authorize` refused this peer; the message is the server's reason | obtain a valid credential and connect again; nothing is dialled after a refusal |
 | `WT_DEV_ONLY` | `connectDev` or `listenDev` outside loopback, or without the environment `transport-io dev` sets | use `connectBrowser` with your own certificate anywhere that is not local development |
 
 ## Behaviour worth knowing before you debug it
