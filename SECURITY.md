@@ -28,11 +28,13 @@ than a patch.
 These are deliberate design positions rather than vulnerabilities. They are listed here so
 you can see them before depending on the library.
 
-**It authenticates nothing.** `Connection` exposes no headers, no URL, no peer address and
-no identity, and `ServerOptions` has no reject hook. The only control an application has is
-whether to call `accept()` at all, and the transport listener hands it nothing to decide on.
-If you need authentication, terminate the HTTP/3 request behind something that authenticates
-and do not route unauthenticated peers to the WebTransport endpoint.
+**It authenticates nothing, and nothing can stand in front of it.** The WebTransport
+endpoint is QUIC over UDP to your process: a proxy, a load balancer or a CDN in front of it
+terminates TLS and drops UDP, and no session arrives. So authentication happens inside the
+session, in the application: the page obtains a token over HTTPS, makes one call with it
+first, and the server closes any peer that has not made that call within a deadline. Every
+handler checks the peer has passed it. `Connection` exposes no headers, no URL and no peer
+address, so nothing decides before the session exists.
 
 **The handshake discloses your event names and lanes before any application code runs.**
 `accept()` writes the full event table as frame 0. It is not payloads, not schemas and not
