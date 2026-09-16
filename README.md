@@ -57,7 +57,7 @@ export interface AppMap extends MapOf<typeof contract> {}
 ```
 
 `reliable` and `unreliable` take the payload. `rpc` and `streaming` take the payload and
-what comes back.
+what comes back. `bytes()` in any slot carries a `Uint8Array` as bytes, never through JSON.
 
 Write the `AppMap` interface line. Without it, every hover shows the whole contract with
 your validator's internals in it. `AppMap` is what each end is given,
@@ -194,7 +194,7 @@ and the measurements behind each one, and is worth reading before you build on t
   want different payloads.
 
 **Not in this version:** namespaces (a room-name prefix covers it), presence, middleware chains
-(auth is one hook), binary payloads (JSON only, with a codec seam reserved), server-initiated
+(auth is one hook), server-initiated
 streaming (a response shape only), and the Redis adapter.
 
 ## Compared with Socket.IO

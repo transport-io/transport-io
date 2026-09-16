@@ -3498,3 +3498,40 @@ count still one, and `closed` settled with the count at zero.
 **Reconsider when:** an application needs to refuse a peer without a QUIC session ever
 existing, at which point `authorize` gains a second return that maps to a CONNECT status,
 and the client-side code is given up for that peer.
+
+### D131. Bytes are bytes: a second codec, chosen by the slot in the contract
+The first outside application synced a Yjs document. Its updates are `Uint8Array`, and they
+crossed the wire base64 inside JSON: about a third more bytes, a helper on both sides, on a
+wire that was already binary. The README had reserved the codec seam since the start. This
+is the seam, opened for the one codec a real application asked for.
+
+**Decision.** `bytes()` is a schema: a Standard Schema whose validation is
+`value instanceof Uint8Array`, tagged so the session can see it. It fits any slot of any
+helper, `reliable(bytes())`, `rpc(schema, bytes())`, `streaming(bytes(), bytes())`, and the
+slot's codec follows the tag: `0x02`, the payload as it is, against `0x01` JSON for
+everything else. The codec is written into every frame and every datagram header, as the
+wire format always had room for, and the session encodes and decodes by the slot rather
+than by a global setting. Control frames stay JSON. A `DATAGRAM` frame's header on the
+fallback stays `0x01` and the datagram inside carries its own byte.
+
+The codec is not exchanged at handshake. §4.3's rule decides it: the handshake refuses
+what cannot be caught later and permits what can, and a codec disagreement is caught on
+every frame, so it is a per-message protocol error naming the event and the slot, closing
+the session as a contract disagreement should, rather than a fourth column in the event
+table and a wire change to the handshake.
+
+A payload is JSON or bytes, never a mix. Bytes nested in an object are the JSON they always
+were, base64 and all; the application that needs both puts them in two events, or two slots
+of one. The value handed to a handler is a copy, so no application holds a view into a
+buffer the decoder reuses.
+
+**Measured.** Over a loopback, a reliable emit, an unreliable one on both transports, a
+broadcast, a call in both directions, a mixed call and a stream of bytes all arrive as the
+bytes sent, as `Uint8Array`, with a zero offset into a buffer of their own length. A
+session declaring `bytes()` that receives JSON for that event closes with the event and the
+slot in the reason. A codec byte of `0x03` is refused as unsupported by both the frame
+decoder and the datagram decoder.
+
+**Reconsider when:** an application needs bytes and JSON in one payload, at which point a
+third codec, MessagePack, is the reserved `codec-msgpack` feature token, and it is costed
+against what that application actually sends.

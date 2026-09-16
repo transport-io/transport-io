@@ -2,8 +2,16 @@
  * One side of a session. Both the server's view of a peer and the client's view of the
  * server are this class - the handshake is symmetric, and so is everything after it.
  */
-import { decodePayload, encodePayload, validate } from './codec.ts'
-import type { EventTable } from './contract.ts'
+import {
+  decodePayload,
+  decodeWith,
+  encodePayload,
+  encodeWith,
+  expectCodec,
+  slotCodec,
+  validate,
+} from './codec.ts'
+import type { EventEntry, EventTable } from './contract.ts'
 import { decodeDatagram, encodeDatagram, SequenceGate } from './datagram.ts'
 import { TransportError } from './errors.ts'
 import { encodeFrame, type Frame, FrameDecoder } from './framer.ts'
@@ -420,12 +428,13 @@ export class Session {
         'Add it to the contract, or check the spelling.',
       )
     }
-    const bytes = encodePayload(payload)
+    const codec = slotCodec(entry.def, 'payload')
+    const bytes = encodeWith(codec, payload)
     if (entry.lane === 'unreliable') {
       const seq = ((this.#sequences.get(entry.id) ?? 0) + 1) >>> 0 || 1
       this.#sequences.set(entry.id, seq)
       const dg = encodeDatagram(
-        { eventId: entry.id, origin: this.#origin, sequence: seq, payload: bytes },
+        { codec, eventId: entry.id, origin: this.#origin, sequence: seq, payload: bytes },
         this.#conn.maxDatagramSize(),
       )
       this.#dgQueue.push(dg, this.#now())
@@ -434,7 +443,7 @@ export class Session {
     }
     this.sendFrame({
       type: FrameType.EMIT,
-      codec: Codec.JSON,
+      codec,
       eventId: entry.id,
       payload: bytes,
     })
@@ -544,7 +553,11 @@ export class Session {
     }
     this.#openCalls++
     try {
-      return await this.#doCall(entry.id, encodePayload(payload), opts?.signal)
+      return await this.#doCall(
+        entry,
+        encodeWith(slotCodec(entry.def, 'payload'), payload),
+        opts?.signal,
+      )
     } catch (e) {
       // D18 removes the default call timeout on the grounds that `AbortSignal.timeout(ms)`
       // is the documented substitute, so aborting is the most-documented failure this
@@ -606,7 +619,11 @@ export class Session {
         `Reduce concurrency below ${MAX_CONCURRENT_CALL_STREAMS} and retry; the session stays open.`,
       )
     }
-    return this.#doStream(entry.id, encodePayload(payload), opts?.signal)
+    return this.#doStream(
+      entry,
+      encodeWith(slotCodec(entry.def, 'payload'), payload),
+      opts?.signal,
+    )
   }
 
   get openCalls(): number {
@@ -758,7 +775,8 @@ export class Session {
 
   // ------------------------------------------------------------------ calls
 
-  async #doCall(eventId: number, body: Uint8Array, signal?: AbortSignal): Promise<unknown> {
+  async #doCall(entry: EventEntry, body: Uint8Array, signal?: AbortSignal): Promise<unknown> {
+    const eventId = entry.id
     const stream = await this.#conn.openBidi()
     const writer = stream.writable.getWriter()
     const reader = stream.readable.getReader()
@@ -776,7 +794,7 @@ export class Session {
       await writer.write(
         encodeFrame({
           type: FrameType.CALL_REQUEST,
-          codec: Codec.JSON,
+          codec: slotCodec(entry.def, 'payload'),
           eventId,
           payload: body,
         }),
@@ -812,7 +830,8 @@ export class Session {
           'A responder must write exactly one CALL_RESPONSE or one CALL_ERROR.',
         )
       }
-      return decodePayload(first.payload)
+      expectCodec(entry.name, 'returns', slotCodec(entry.def, 'returns'), first.codec)
+      return decodeWith(first.codec, first.payload)
     } finally {
       signal?.removeEventListener('abort', onAbort)
     }
@@ -830,7 +849,10 @@ export class Session {
    * credit sent from here (§6.6) is what lets the responder write another frame. Receive
    * buffering alone would not bound anything on the reference binding.
    */
-  #doStream(eventId: number, body: Uint8Array, signal?: AbortSignal): StreamResult<unknown> {
+  #doStream(entry: EventEntry, body: Uint8Array, signal?: AbortSignal): StreamResult<unknown> {
+    const eventId = entry.id
+    const requestCodec = slotCodec(entry.def, 'payload')
+    const yieldCodec = slotCodec(entry.def, 'yields')
     /**
      * What `cancel()` aborts. It is watched by the same listener as the caller's signal, so
      * cancelling from outside the loop takes the path an `AbortSignal` already takes:
@@ -861,7 +883,7 @@ export class Session {
         await writer.write(
           encodeFrame({
             type: FrameType.CALL_REQUEST,
-            codec: Codec.JSON,
+            codec: requestCodec,
             eventId,
             payload: body,
           }),
@@ -900,7 +922,8 @@ export class Session {
               )
             }
             if (f.type !== FrameType.CALL_RESPONSE) continue
-            yield decodePayload(f.payload)
+            expectCodec(entry.name, 'yields', yieldCodec, f.codec)
+            yield decodeWith(f.codec, f.payload)
             // Reached only when the consumer asks for the next element, so this
             // acknowledges consumption rather than arrival.
             taken++
@@ -1008,25 +1031,19 @@ export class Session {
     }
 
     try {
-      let value = decodePayload(request.payload)
+      expectCodec(entry.name, 'payload', slotCodec(entry.def, 'payload'), request.codec)
+      let value = decodeWith(request.codec, request.payload)
       if (this.#validateInbound) value = await validate(entry.def.payload, value)
 
       if (entry.def.yields !== undefined) {
-        await this.#serveStream(
-          handler as StreamHandler,
-          value,
-          entry.name,
-          writer,
-          controller,
-          {
-            readNext: async () => {
-              const r = await reader.read()
-              return r.done ? undefined : (r.value as Uint8Array)
-            },
-            decoder,
-            streaming,
+        await this.#serveStream(handler as StreamHandler, value, entry, writer, controller, {
+          readNext: async () => {
+            const r = await reader.read()
+            return r.done ? undefined : (r.value as Uint8Array)
           },
-        )
+          decoder,
+          streaming,
+        })
         return
       }
 
@@ -1034,12 +1051,13 @@ export class Session {
         signal: controller.signal,
         peer: this.#peer,
       })
+      const returnsCodec = slotCodec(entry.def, 'returns')
       await writer.write(
         encodeFrame({
           type: FrameType.CALL_RESPONSE,
-          codec: Codec.JSON,
+          codec: returnsCodec,
           eventId: EVENT_ID_NOT_APPLICABLE,
-          payload: encodePayload(result),
+          payload: encodeWith(returnsCodec, result),
         }),
       )
       await writer.close()
@@ -1062,7 +1080,7 @@ export class Session {
   async #serveStream(
     handler: StreamHandler,
     payload: unknown,
-    name: string,
+    entry: EventEntry,
     writer: WritableStreamDefaultWriter<Uint8Array>,
     controller: AbortController,
     inbound: {
@@ -1073,6 +1091,8 @@ export class Session {
       streaming: boolean
     },
   ): Promise<void> {
+    const name = entry.name
+    const yieldCodec = slotCodec(entry.def, 'yields')
     const produced = handler(payload, { signal: controller.signal, peer: this.#peer })
     if (
       produced === null ||
@@ -1167,9 +1187,9 @@ export class Session {
           writer.write(
             encodeFrame({
               type: FrameType.CALL_RESPONSE,
-              codec: Codec.JSON,
+              codec: yieldCodec,
               eventId: EVENT_ID_NOT_APPLICABLE,
-              payload: encodePayload(next.value),
+              payload: encodeWith(yieldCodec, next.value),
             }),
           ),
           aborted,
@@ -1350,7 +1370,7 @@ export class Session {
       )
     }
     if (frame.type === FrameType.EMIT) {
-      await this.#deliver(frame.eventId, frame.payload, this.#origin)
+      await this.#deliver(frame.eventId, frame.payload, this.#origin, frame.codec)
       return
     }
     if (frame.type === FrameType.DATAGRAM) {
@@ -1382,7 +1402,7 @@ export class Session {
       try {
         const dg = decodeDatagram(bytes)
         if (!this.#gate.accept(dg.origin, dg.eventId, dg.sequence, this.#now())) return
-        await this.#deliver(dg.eventId, dg.payload, dg.origin)
+        await this.#deliver(dg.eventId, dg.payload, dg.origin, dg.codec)
       } catch {
         // A malformed datagram is discarded. The lane already permits loss, so raising a
         // session-level fault over one bad packet would be a worse trade.
@@ -1390,12 +1410,18 @@ export class Session {
     })()
   }
 
-  async #deliver(eventId: number, payload: Uint8Array, from: number): Promise<void> {
+  async #deliver(
+    eventId: number,
+    payload: Uint8Array,
+    from: number,
+    codec: number,
+  ): Promise<void> {
     const entry = this.#table.byId(eventId)
     if (entry === undefined) return // peers on adjacent contracts legitimately differ
+    expectCodec(entry.name, 'payload', slotCodec(entry.def, 'payload'), codec)
     const handlers = this.#handlers.get(entry.name)
     if (handlers === undefined || handlers.size === 0) return
-    let value = decodePayload(payload)
+    let value = decodeWith(codec, payload)
     if (this.#validateInbound) value = await validate(entry.def.payload, value)
     for (const h of handlers) h(value, { from })
   }

@@ -49,3 +49,27 @@ positions at pointer rate.
 
 Any [Standard Schema](https://standardschema.dev) validator works: zod, valibot, arktype.
 The library depends on none of them. `examples/react` defines its contract with zod.
+
+## Bytes
+
+A payload that is already bytes stays bytes. `bytes()` declares a slot whose value is a
+`Uint8Array` on both ends and travels on the wire as it is, under its own codec, never
+base64 inside JSON. A Yjs update, an image chunk, a compressed blob:
+
+```ts standalone
+import { bytes, defineContract, type MapOf, reliable, rpc, streaming } from 'transport-io'
+import { z } from 'zod'
+
+export const contract = defineContract({
+  update: reliable(bytes()),
+  snapshot: rpc(z.object({ since: z.number() }), bytes()),
+  chunks: streaming(bytes(), bytes()),
+})
+
+export interface AppMap extends MapOf<typeof contract> {}
+```
+
+It fits any slot of any helper, beside a schema or a type in the others. A payload is JSON
+or bytes, never a mix: bytes inside an object are still JSON. Sending anything but a
+`Uint8Array` to a bytes slot fails before the wire with `WT_VALIDATION_FAILED`, and what a
+handler receives is a copy it owns. The size caps are the frame's, as for any payload.

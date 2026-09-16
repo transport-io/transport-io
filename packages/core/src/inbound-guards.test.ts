@@ -102,7 +102,13 @@ describe('a datagram arriving before the handshake is discarded', () => {
     const id = table.byName('cursor')?.id as number
     theirs.sendDatagram(
       encodeDatagram(
-        { eventId: id, origin: 0x99, sequence: 1, payload: encodePayload({ x: 1 }) },
+        {
+          codec: Codec.JSON,
+          eventId: id,
+          origin: 0x99,
+          sequence: 1,
+          payload: encodePayload({ x: 1 }),
+        },
         1200,
       ),
     )

@@ -31,6 +31,7 @@ import {
 } from './handshake.ts'
 import { OriginAllocator } from './origin.ts'
 import {
+  Codec,
   DATAGRAM_HEADER_BYTES,
   DATAGRAM_TTL_MS,
   MAX_SESSION_HOSTS,
@@ -188,7 +189,7 @@ describe('unreliable lane', () => {
   test('oversized is refused by us, because the transport reports success and discards', () => {
     const payload = new Uint8Array(maxDatagramPayload(1024) + 1)
     try {
-      encodeDatagram({ eventId: 1, origin: 2, sequence: 3, payload }, 1024)
+      encodeDatagram({ codec: Codec.JSON, eventId: 1, origin: 2, sequence: 3, payload }, 1024)
       throw new Error('expected a throw')
     } catch (e) {
       expect((e as TransportError).code).toBe('WT_DATAGRAM_TOO_LARGE')
@@ -204,7 +205,7 @@ describe('unreliable lane', () => {
         fc.uint8Array({ minLength: 1, maxLength: 200 }),
         (eventId, origin, sequence, payload) => {
           const back = decodeDatagram(
-            encodeDatagram({ eventId, origin, sequence, payload }, 1024),
+            encodeDatagram({ codec: Codec.JSON, eventId, origin, sequence, payload }, 1024),
           )
           expect(back.eventId).toBe(eventId)
           expect(back.origin).toBe(origin)

@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test'
  *   reserved-field-zero
  *   length-minimum-nine
  *   zero-length-payload-rejected
- *   codec-must-be-json
+ *   codec-json-or-bytes
  */
 import fc from 'fast-check'
 import { TransportError } from './errors.ts'
@@ -289,15 +289,20 @@ describe('malformed input is refused with a code and a remedy', () => {
     expect(() => d.push(new Uint8Array(32))).toThrow(TransportError)
   })
 
-  test('an unsupported codec names the remedy', () => {
+  test('an unsupported codec names the remedy, and the two this version speaks both decode', () => {
     const bytes = encodeFrame(emit(new Uint8Array([1])))
-    bytes[5] = 0x02
+    bytes[5] = 0x03
     try {
       new FrameDecoder().push(bytes)
       throw new Error('expected a throw')
     } catch (e) {
       expect((e as TransportError).code).toBe('WT_UNSUPPORTED_CODEC')
       expect((e as TransportError).remedy).toContain('0x01')
+      expect((e as TransportError).remedy).toContain('0x02')
+    }
+    for (const codec of [Codec.JSON, Codec.BYTES]) {
+      const ok = encodeFrame({ ...emit(new Uint8Array([1])), codec })
+      expect(new FrameDecoder().push(ok)[0]?.codec).toBe(codec)
     }
   })
 

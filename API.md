@@ -76,6 +76,27 @@ object form below.
 
 Inbound payloads are validated; outbound are not.
 
+**Or bytes.** `bytes()` declares a slot whose value is a `Uint8Array` on both ends and bytes
+on the wire, under its own codec, never through JSON: a Yjs update, an image chunk,
+anything already encoded. It fits any slot of any helper, alone or beside a schema:
+
+```ts standalone
+import { bytes, defineContract, type MapOf, reliable, rpc, streaming } from 'transport-io'
+import { z } from 'zod'
+
+export const binary = defineContract({
+  update: reliable(bytes()),
+  snapshot: rpc(z.object({ since: z.number() }), bytes()),
+  chunks: streaming(bytes(), bytes()),
+})
+
+export interface BinaryMap extends MapOf<typeof binary> {}
+```
+
+A payload is JSON or bytes, never a mix: bytes inside an object are still JSON. Sending
+anything but a `Uint8Array` to a bytes slot fails before the wire with
+`WT_VALIDATION_FAILED`, and the value handed to a handler is a copy the application owns.
+
 ### 1.2 Event identity
 
 An event's wire id is the first four bytes of SHA-256 of its name, so **adding or removing

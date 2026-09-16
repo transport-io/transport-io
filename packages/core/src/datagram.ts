@@ -8,6 +8,8 @@ import {
 } from './protocol.ts'
 
 export interface Datagram {
+  /** §5.3: JSON or bytes, as the event's payload slot is declared. */
+  readonly codec: Codec
   readonly eventId: number
   readonly origin: number
   readonly sequence: number
@@ -51,7 +53,7 @@ export function encodeDatagram(dg: Datagram, reportedMax: number): Uint8Array {
 
   const out = new Uint8Array(DATAGRAM_HEADER_BYTES + dg.payload.byteLength)
   const view = new DataView(out.buffer)
-  view.setUint8(0, Codec.JSON)
+  view.setUint8(0, dg.codec)
   view.setUint32(1, dg.eventId, false)
   view.setUint32(5, dg.origin, false)
   view.setUint32(9, dg.sequence, false)
@@ -69,11 +71,11 @@ export function decodeDatagram(bytes: Uint8Array): Datagram {
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const codec = view.getUint8(0)
-  if (codec !== Codec.JSON) {
+  if (codec !== Codec.JSON && codec !== Codec.BYTES) {
     throw new TransportError(
       'WT_UNSUPPORTED_CODEC',
       `codec 0x${codec.toString(16).padStart(2, '0')} is not supported`,
-      'This version speaks JSON only. Send codec 0x01.',
+      'This version speaks JSON (0x01) and bytes (0x02). Send one of those.',
     )
   }
   const eventId = view.getUint32(1, false)
@@ -85,6 +87,7 @@ export function decodeDatagram(bytes: Uint8Array): Datagram {
     )
   }
   return {
+    codec,
     eventId,
     origin: view.getUint32(5, false),
     sequence: view.getUint32(9, false),

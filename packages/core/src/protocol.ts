@@ -66,7 +66,8 @@ export const STREAM_INITIAL_CREDIT = 32
 export const STREAM_CREDIT_REFILL = 16
 
 /** PROTOCOL.md §5.3. `0x00` is permanently reserved so a zero-filled buffer cannot parse. */
-export const Codec = { JSON: 0x01 } as const
+/** PROTOCOL.md §5.3 - JSON over UTF-8, or the application's bytes as they are. */
+export const Codec = { JSON: 0x01, BYTES: 0x02 } as const
 export type Codec = (typeof Codec)[keyof typeof Codec]
 
 /** PROTOCOL.md §5.4 - used by frames whose meaning comes from the stream, not the table. */

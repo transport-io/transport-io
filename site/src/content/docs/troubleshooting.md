@@ -167,8 +167,10 @@ declare the event on the reliable lane.
 
 ## WT_UNSUPPORTED_CODEC
 
-A frame declares a codec other than JSON, which is the only one this version speaks. Another
-implementation is sending it.
+A frame declares a codec other than the two this version speaks, JSON and bytes. Another
+implementation is sending it. A frame under the wrong one of those two for an event's slot,
+JSON where the contract says `bytes()` or the reverse, is `WT_PROTOCOL_ERROR` naming the
+event and the slot: the two sides have different contracts.
 
 ## WT_ROOM_NOT_JOINED
 

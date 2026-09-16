@@ -24,6 +24,8 @@ export {
 } from './client.ts'
 export {
   type AnyMap,
+  type BytesSchema,
+  bytes,
   type CallableOf,
   type Contract,
   defineContract,

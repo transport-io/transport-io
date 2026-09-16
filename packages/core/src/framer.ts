@@ -132,11 +132,11 @@ export class FrameDecoder {
         )
       }
       const codec = view.getUint8(5)
-      if (codec !== Codec.JSON) {
+      if (codec !== Codec.JSON && codec !== Codec.BYTES) {
         throw new TransportError(
           'WT_UNSUPPORTED_CODEC',
           `codec 0x${codec.toString(16).padStart(2, '0')} is not supported`,
-          'This version speaks JSON only. Send codec 0x01.',
+          'This version speaks JSON (0x01) and bytes (0x02). Send one of those.',
         )
       }
       if (view.getUint16(6, false) !== 0) {

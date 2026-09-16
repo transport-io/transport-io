@@ -11,7 +11,7 @@
  * observe a message slightly before remote ones.
  */
 import type { Adapter, Lane, PeerId } from './adapter.ts'
-import { encodePayload } from './codec.ts'
+import { encodePayload, encodeWith, slotCodec } from './codec.ts'
 import type { EventTable } from './contract.ts'
 import { encodeDatagram } from './datagram.ts'
 import { TransportError } from './errors.ts'
@@ -143,13 +143,15 @@ export class Hub {
         'Add it to the contract, or check the spelling.',
       )
     }
-    const body = encodePayload(payload)
+    const codec = slotCodec(entry.def, 'payload')
+    const body = encodeWith(codec, payload)
     const except = args.except ?? []
 
     const bytes =
       entry.lane === 'unreliable'
         ? encodeDatagram(
             {
+              codec,
               eventId: entry.id,
               origin: args.origin,
               sequence: this.#nextSeq(entry.id),
@@ -159,7 +161,7 @@ export class Hub {
           )
         : encodeFrame({
             type: FrameType.EMIT,
-            codec: Codec.JSON,
+            codec,
             eventId: entry.id,
             payload: body,
           })

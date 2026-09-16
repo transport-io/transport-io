@@ -17,7 +17,7 @@ import { describe, expect, test } from 'bun:test'
 import { Client } from './client.ts'
 import { defineContract, type MapOf, type$ } from './contract.ts'
 import { encodeDatagram } from './datagram.ts'
-import { DATAGRAM_QUEUE_MAX, DATAGRAM_TTL_MS } from './protocol.ts'
+import { Codec, DATAGRAM_QUEUE_MAX, DATAGRAM_TTL_MS } from './protocol.ts'
 import { createServer, type ServerPeer } from './server.ts'
 import { loopbackPair } from './transport/loopback.ts'
 import type { Connection } from './transport/types.ts'
@@ -218,7 +218,13 @@ describe('oversize is refused by us, because the transport will not say', () => 
   test('the encoder refuses before the transport can silently discard', () => {
     expect(() =>
       encodeDatagram(
-        { eventId: 1, origin: 1, sequence: 1, payload: new Uint8Array(2000) },
+        {
+          codec: Codec.JSON,
+          eventId: 1,
+          origin: 1,
+          sequence: 1,
+          payload: new Uint8Array(2000),
+        },
         1024,
       ),
     ).toThrow(/WT_DATAGRAM_TOO_LARGE/)

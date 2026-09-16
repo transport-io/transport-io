@@ -314,6 +314,35 @@ export function streaming(
   }
 }
 
+/**
+ * A payload that is bytes and stays bytes: a `Uint8Array` carried on the wire as it is,
+ * under codec `0x02` (PROTOCOL.md §5.3), never through JSON. For a Yjs update, an image
+ * chunk, anything already encoded. Validation is the one check that matters at the door,
+ * that the value is a `Uint8Array`; a size cap is the frame's, as for any payload.
+ */
+export interface BytesSchema extends StandardSchemaV1<Uint8Array, Uint8Array> {
+  readonly '~bytes': true
+}
+
+export function bytes(): BytesSchema {
+  return {
+    '~bytes': true,
+    '~standard': {
+      version: 1,
+      vendor: 'transport-io',
+      validate: (value: unknown) =>
+        value instanceof Uint8Array
+          ? { value }
+          : { issues: [{ message: 'expected bytes (a Uint8Array)' }] },
+    },
+  }
+}
+
+/** True for a slot declared with `bytes()`. */
+export function isBytes(schema: Schema): boolean {
+  return '~bytes' in schema
+}
+
 /** A types-only schema, for inference without runtime validation. */
 export function type$<T>(): StandardSchemaV1<unknown, T> {
   return {

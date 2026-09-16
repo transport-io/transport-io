@@ -61,6 +61,8 @@ Two parts, both required.
 (`{ lane, payload, returns }`) still works and is documented in API.md §1.3; use it only for
 a contract assembled programmatically.
 
+`bytes()` in any slot declares a `Uint8Array` carried as bytes on the wire, never through
+JSON: `reliable(bytes())`, `rpc(z.object({ since: z.number() }), bytes())`.
 `unreliable(payload?, { fallback: 'newest' })` declares what the event accepts on a fallback
 transport, which carries the reliable lane only: in order, with the oldest and the stale
 dropped at the sender as the datagram ring drops them. An unreliable event that declares

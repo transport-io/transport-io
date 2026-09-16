@@ -374,11 +374,23 @@ Receiving a reserved or contextually invalid type is a protocol error.
 |---|---|
 | `0x00` | reserved, invalid |
 | `0x01` | JSON, UTF-8 encoded |
-| `0x02`–`0xFF` | reserved |
+| `0x02` | bytes: the application's payload as it is, with no encoding |
+| `0x03`–`0xFF` | reserved |
 
-Version 0 peers MUST send `0x01` and MUST reject any other value with
-<!-- norm: codec-must-be-json -> packages/core/src/framer.test.ts -->
+Version 0 peers MUST send `0x01` or `0x02` and MUST reject any other value with
+<!-- norm: codec-json-or-bytes -> packages/core/src/framer.test.ts -->
 `WT_UNSUPPORTED_CODEC`.
+
+The codec is a property of the event's slot in the contract, its payload, its `returns` or
+its `yields`, declared with `bytes()` for `0x02` and anything else for `0x01`. It is not
+exchanged at handshake, because it is caught on every frame: a receiver MUST treat a frame
+whose codec is not the one its contract declares for that event and slot as a protocol
+error, naming the event and the slot in the close reason.
+<!-- norm: codec-matches-the-slot -> packages/core/src/bytes.test.ts -->
+
+Control frames (`HANDSHAKE`, `JOIN`, `LEAVE`, `CALL_ERROR`, `CALL_CREDIT`) and the header of
+a `DATAGRAM` frame (§3.3) always carry `0x01`; the datagram inside a `DATAGRAM` frame carries
+its own codec byte, as any datagram does (§7.1).
 
 `0x00` is permanently reserved as invalid so that a zero-filled buffer can never parse as a
 valid frame. This is deliberate and cheap corruption detection.
