@@ -150,6 +150,10 @@ You do not have to memoise the handler. `useEvent` wraps it in an Effect Event, 
 subscription depends only on the client and the event name while the handler always sees the
 latest render's closure. Unsubscribing is wired to effect cleanup.
 
+Handlers attach to the client, not to a session. A component mounted before the connection
+opens receives everything from the first session, and from every session a reconnect
+produces, without doing anything about it.
+
 ## Calls
 
 State is a discriminated union rather than independent flags, so checking `status` narrows

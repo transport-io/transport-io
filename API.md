@@ -467,6 +467,9 @@ says why that session is on a fallback transport, and is `null` on a native one.
 **`getSnapshot()` returns the same reference until something changes**, so it is safe to hand
 to `useSyncExternalStore`.
 
+Handlers attach to the client, not to a session: `client.on` registered before `connect()`
+receives everything from the first session and from every session a reconnect produces.
+
 `client.onSession(cb)` runs `cb` once for every session the client gets, with the snapshot
 as it connected: the first, and each one a reconnect produces. It returns the unsubscribe.
 A reconnect is a new session, so this is where rooms are rejoined and what was missed is

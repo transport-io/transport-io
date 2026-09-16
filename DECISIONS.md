@@ -3653,3 +3653,31 @@ handled.
 
 **Reconsider when:** an application asks for a per-direction payload shape under one name,
 which is the tax itself, and belongs to the surface rework D107 defers to 1.0.
+
+### D135. Order on one peer's emit stream is call order, whichever API sends
+The first outside application did not return chat history from a call, because a call's
+response and the emit lane are different streams with no relative order. It sent history
+with `peer.emit` before `peer.join`, assuming `peer.emit` and a room broadcast share the
+peer's one outgoing emit stream. It worked, and the guide said nothing. It also noticed that
+`useEvent` handlers mounted before the connection opens receive everything, and that a
+room per identity is how one user is messaged across tabs. All three from that application.
+
+**Decision.** Confirmed and stated, with a test pinning each. Everything this node hands one
+peer on the reliable lane leaves on that peer's one emit stream in the order it was handed,
+whichever API handed it: `peer.emit`, a broadcast to a room the peer is in, and the join
+notification. The reason is in the code: `hub.broadcast` hands local members the frame
+before it awaits the adapter, `peer.emit` and the join notify write to the same
+`sendFrame`, and one `EmitQueue` per session drains to one stream. Two things have no order
+against that stream: a call's response, on its own stream, and a broadcast from another
+node, ordered with that node's broadcasts and not with this node's direct emits. Handlers
+attach to the client and are registered on every session it gets, so one mounted before
+`connect()` misses nothing. Messaging one user is a room per identity, `user:<id>`, joined
+at the door from `peer.data`, which reaches every tab where a peer id reaches one.
+
+**Measured.** Five `peer.emit`s, a join, five broadcasts: the client sees them in that
+order with the join notification between. A broadcast, a `peer.emit`, a broadcast, none
+awaited: delivered in call order. A handler registered before the first `connect()` receives
+from that session and from the next.
+
+**Reconsider when:** the adapter seam gains a second implementation, at which point the
+cross-node clause is measured against it rather than stated from the memory adapter.

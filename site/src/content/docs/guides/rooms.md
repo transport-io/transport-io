@@ -25,7 +25,7 @@ const contract = defineContract({
 })
 interface AppMap extends MapOf<typeof contract> {}
 
-declare const server: Server<AppMap>
+declare const server: Server<AppMap, { name: string }>
 declare const client: Client<AppMap>
 declare function allowed(room: string): boolean
 declare function resubscribe(): Promise<void>
@@ -75,6 +75,43 @@ server.to('lobby').except(peer.id).emit('cursor', pos)  // everyone but the send
 
 `except` is worth using on the unreliable lane. Echoing a peer's own cursor position back to
 it wastes bandwidth that a fresher frame could use.
+
+## Order
+
+Everything this node sends one peer on the reliable lane leaves on that peer's one emit
+stream in the order it was handed, whichever API handed it: `peer.emit`, a broadcast to a
+room the peer is in, and the join notification. So history sent with `peer.emit` before
+`peer.join` arrives before anything the room sends after the join, and a broadcast issued
+before a `peer.emit` arrives before it. Local members are handed a broadcast before the
+adapter is consulted, so awaiting the broadcast is not what orders it.
+
+Two things have no order against that stream. A call's response travels on its own stream,
+so returning history from a call and then joining the room is a race; send it with
+`peer.emit` instead. And a broadcast from another node arrives when the adapter delivers it,
+ordered with that node's other broadcasts and not with this node's direct emits. The
+unreliable lane has no order at all.
+
+## Messaging one user
+
+There is no API for it, and none is needed. A room per identity handles several tabs where
+a peer id cannot, since each tab is its own peer:
+
+```ts
+server.onSession((peer) => {
+  void peer.join(`user:${peer.data.name}`)
+})
+
+export function whisper(to: string, from: string, body: string): Promise<void> {
+  // The recipient's tabs, and the sender's other tabs.
+  void server.to(`user:${from}`).emit('chat', { body })
+  return server.to(`user:${to}`).emit('chat', { body })
+}
+
+export const online = (name: string): boolean => server.memberCount(`user:${name}`) > 0
+```
+
+`peer.data.name` is what [`authorize`](/guides/authorize/) returned at the door.
+`memberCount` counts this node's members only, so `online` is an answer for one process.
 
 ## Knowing a peer left
 
