@@ -3681,3 +3681,106 @@ from that session and from the next.
 
 **Reconsider when:** the adapter seam gains a second implementation, at which point the
 cross-node clause is measured against it rather than stated from the memory adapter.
+
+### D136. Presence as a lane, recorded from a real application and not built
+The first outside application, a shared board, showed who is online and where their cursors
+are, and wrote both by hand: cursors on the unreliable lane, an online list rebuilt by
+polling `memberCount` every two seconds against a set of names. Its notes argue that this
+library is the natural home for presence because it already has both lanes and already drops
+stale datagrams, where Socket.IO has nothing and Yjs solves it with a separate awareness
+protocol. That is the strongest case in the notes for something this library does not have.
+This entry came from that application, not from us.
+
+**What it would be.** Short-lived per-peer state on the unreliable lane, keyed by peer, with
+the newest frame winning and a stale one dropped as the datagram ring already drops it;
+joins and leaves on the reliable lane; everything a peer published cleared when its session
+closes, which `onDisconnecting` now makes a few lines. The shape the notes describe is one
+event pair declared once, `presence: { state: schema }`, with the library keeping the last
+state per peer per room and handing a component the map.
+
+**Why not now.** The pieces it would compose are all new in this release, `peer.data`,
+`onDisconnecting`, direction, bytes, and none has a second application behind it. A lane
+built on them now would fix their shapes before a second application has pushed on them.
+
+**Reconsider when:** a second application writes the same poll, or the first reports what
+its hand-rolled version cost after a month. The design then starts from the awareness
+protocol's vocabulary, since that is what a Yjs application would migrate from.
+
+### D137. Rate and size limits declared in the contract, recorded and not built
+From the same application: after sign-in, a client could send document updates of up to a
+megabyte as fast as it liked and the server applied every one. Its notes propose limits
+declared beside the lane, `reliable(schema, { rate: '20/s' })`, enforced before the handler
+runs, and observe that Socket.IO has nothing here beyond a buffer size. This entry came from
+that application, not from us.
+
+**What exists.** The frame caps in PROTOCOL.md §5.3 bound size per frame type, and the
+256-frame emit bound and `WT_TOO_MANY_STREAMS` bound a peer's pressure on the session. None
+of them is per event, and none is a rate.
+
+**Why not now.** A rate limit is a policy with a clock, a window and an answer for the excess
+(drop, reject, close), and the contract has so far declared only what is true of the data.
+Putting a policy in it is a decision about what the contract is for, and it is not made in
+the same week as five other surface changes.
+
+**Reconsider when:** an application reports abuse it could not stop with a handler that
+counts, at which point the first shape is a per-event size cap, which is a property of the
+data, and a rate stays a handler's concern until a second report.
+
+### D138. A Yjs binding, recorded and not built
+The application synced a Yjs document in about twenty lines: updates on the reliable lane,
+awareness on datagrams, a full sync on connect. Its notes name that as the first candidate
+for an `@transport-io/yjs` package, and observe that Socket.IO has only community providers.
+This entry came from that application, not from us.
+
+**Why not now.** Twenty lines of an application is not yet a package's worth of decisions,
+and the binding would sit on `bytes()`, which shipped in this release with one user. A
+provider that is wrong about resync after a reconnect is worse than the twenty lines.
+
+**Reconsider when:** a second application writes the same twenty lines, or the first
+publishes its version and the shape has stopped moving.
+
+### D139. A Vite plugin for development, recorded and not built
+Under Vite, `transport-io dev` prints a page URL that is not the page, a Vite proxy entry is
+needed for the manifest path, and the command's HTTP server takes no extra routes, which is
+why the application ran a second server for its API. Its notes propose `transport-io/vite`,
+serving the manifest from Vite's dev server and starting the server entry, or an exported
+request handler any Node server could mount. This entry came from that application, not
+from us.
+
+**What changed instead.** The command now prints the manifest URL rather than a page URL
+when it serves no page, and says the page is the other dev server's to serve and proxy.
+
+**Why not now.** A plugin is a dependency on Vite's plugin API and a release cadence tied to
+it; the request handler is smaller and framework-neutral. Neither is built until one is
+asked for twice.
+
+**Reconsider when:** a second application reports the proxy entry, at which point the
+request handler ships first, as `serveDevManifest(req, res)` from the CLI's own server, and
+the plugin is a thin call to it.
+
+### D140. Room member lists and join or leave events, recorded and not built
+The notes list `fetchSockets()` and adapter events as things Socket.IO has. `memberCount` is
+a number for a health line and cannot see another node; a member list would need to be one
+either. This entry came from that application, not from us.
+
+**Why not now.** A list that is true across nodes is a query on the adapter, and the adapter
+seam has one implementation, in memory. A list that is true on one node is what presence
+(D136) would carry, correctly scoped to the application's own identity rather than to peer
+ids that identify nobody.
+
+**Reconsider when:** the Redis adapter exists, at which point membership queries are designed
+against it and not against memory.
+
+### D141. A configurable idle timeout on `listenHttp3`, recorded and not built
+The application noticed a client that exited without closing stayed in its online list for
+about fifteen seconds, until QUIC's idle timeout fired, and asked for a knob. Its notes
+call it a knob rather than a gap. This entry came from that application, not from us.
+
+**Why not now.** The QUIC idle timeout is the binding's, and the binding exposes it as a
+server option this library does not surface; a knob surfaced without a measurement of what
+the binding does at the low end would be a number in a document that proves nothing. The
+WebSocket mapping's deadline (D126) is a constant for the same reason.
+
+**Reconsider when:** an application reports a case where fifteen seconds is the problem,
+at which point the option is surfaced on both listeners together, with the floor the binding
+tolerates measured first.
