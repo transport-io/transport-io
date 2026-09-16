@@ -1,5 +1,27 @@
 # @transport-io/react
 
+## 0.4.0
+
+### Minor Changes
+
+- 66bcaf9: `useCall`'s function resolves to the answer, the way TanStack Query's `mutateAsync` does,
+  and rejects with the `TransportError` on failure, with `WT_ABORTED` when superseded or
+  unmounted, and with `WT_LANE_UNAVAILABLE` on a fallback session; a caller that ignores the
+  promise reads the failure from the state and sees no unhandled rejection.
+  `createHooks<M>({ fallback: false })` says the application has no fallback, so `useClient()`
+  is the `Client` with `call` and `stream` on it and `useNative()` is the same client; a
+  fallback client mounted under those hooks throws on first use.
+
+### Patch Changes
+
+- Updated dependencies [0b7dd16]
+- Updated dependencies [388870e]
+- Updated dependencies [1ea9b71]
+- Updated dependencies [4e08ed0]
+- Updated dependencies [5786184]
+- Updated dependencies [ad4ce02]
+  - transport-io@0.11.0
+
 ## 0.3.2
 
 ### Patch Changes

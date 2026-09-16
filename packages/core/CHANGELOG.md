@@ -1,5 +1,47 @@
 # transport-io
 
+## 0.11.0
+
+### Minor Changes
+
+- 0b7dd16: A listener decides each peer at the door: `listenHttp3`, `listenDev` and `listenWebSocket`
+  take `authorize`, which receives the request's path, query and peer address (the WebSocket
+  one its headers too) before the session is accepted. What it returns is `peer.data`, typed
+  by the second type argument of `createServer<M, D>` and assignable; `null` closes the
+  session as `WT_UNAUTHORIZED` (close code 1007) before the server's frame 0, so a refused
+  peer never receives the event table, and the client's `connect()` rejects with that code and
+  the server's reason. A WebTransport URL may now carry a query string, which is where a
+  browser puts a token. A departure is visible twice: `server.onDisconnecting((peer, info) =>
+  …)` runs before the peer leaves its rooms, and `peer.closed` settles after.
+- 388870e: `bytes()` declares a payload, a `returns` or a `yields` slot whose value is a `Uint8Array`
+  on both ends and bytes on the wire, under codec `0x02`, never base64 inside JSON. It fits any
+  helper beside a schema or a type in the other slots, on every lane and on the fallback. A
+  frame under the wrong codec for a slot is a protocol error naming the event and the slot.
+- 4e08ed0: `fromServer(reliable<T>())` and `fromClient(unreliable<T>())` say which side sends an
+  event. The other side's `emit` refuses it in the types, the sender's `on` cannot listen for
+  it, a caller with no compiler is refused at `emit` as `WT_VALIDATION_FAILED`, and a peer that
+  sends it the wrong way anyway is dropped and counted in `stats().directionDropped`. `MapOf`
+  carries the direction as `from`; `SentBy<M, side>` and `ReceivedBy<M, side>` name what each
+  side may send and receive. A call or a stream takes no direction.
+- ad4ce02: `client.onSession(cb)` runs once for every session the client gets, the first and each one
+  a reconnect produces, with the snapshot as it connected. `new Client({ reconnect: { minMs,
+  maxMs } })` reconnects on its own after a connected session closes, with a wait that doubles
+  from `minMs` to `maxMs` on each failed attempt and is randomised; off unless given, every
+  attempt starting from the native connector, the first `connect()` never retried, and
+  `disconnect()` stopping it. A reconnect is still a new session.
+
+### Patch Changes
+
+- 1ea9b71: `transport-io dev` prints the address it binds, `http://127.0.0.1:<port>`, rather than
+  `localhost`, which a browser may resolve to `::1`. With no static directory it prints the
+  manifest URL a page served elsewhere needs proxied, instead of a page URL that serves
+  nothing.
+- 5786184: A port another process holds is refused before anything binds, as `WT_PORT_IN_USE` naming
+  the port. `listenHttp3` probes its UDP port, because the QUIC binding binds a held port
+  without a word and the server then never hears a session; `listenWebSocket` and the dev
+  command report the same code for a held TCP port, and the dev command checks both loopback
+  addresses, since a server on `::` alone lets `127.0.0.1` bind beside it.
+
 ## 0.10.0
 
 ### Minor Changes
