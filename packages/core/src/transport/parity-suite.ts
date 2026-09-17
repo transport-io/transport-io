@@ -10,7 +10,7 @@ const randomPort = (): number => 40000 + Math.floor(Math.random() * 20000)
  * find out which ways the alternative gets them wrong.
  */
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { createHash, X509Certificate } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,7 +19,7 @@ import { join } from 'node:path'
 import { Client } from '../client.ts'
 import { defineContract, type MapOf, type$ } from '../contract.ts'
 import type { TransportError } from '../errors.ts'
-import type { Connection } from './types.ts'
+import type { CloseInfo, Connection } from './types.ts'
 
 const contract = defineContract({
   chat: { lane: 'reliable', payload: type$<{ body: string }>() },
@@ -64,34 +64,62 @@ export interface UnderTest {
 // do with the code - an orphan from a previous killed run still holding the socket, which
 // cost an hour to diagnose once already.
 
-const dir = mkdtempSync(join(tmpdir(), 'parity-'))
-execFileSync('openssl', [
-  'ecparam',
-  '-name',
-  'prime256v1',
-  '-genkey',
-  '-noout',
-  '-out',
-  join(dir, 'k.pem'),
-])
-execFileSync('openssl', [
-  'req',
-  '-new',
-  '-x509',
-  '-key',
-  join(dir, 'k.pem'),
-  '-out',
-  join(dir, 'c.pem'),
-  '-days',
-  '14',
-  '-subj',
-  '/CN=localhost',
-  '-addext',
-  'subjectAltName=DNS:localhost,IP:127.0.0.1',
-])
-const cert = readFileSync(join(dir, 'c.pem'), 'utf8')
-const privKey = readFileSync(join(dir, 'k.pem'), 'utf8')
-const certificateHash = createHash('sha256').update(new X509Certificate(cert).raw).digest()
+interface Minted {
+  readonly dir: string
+  readonly certPath: string
+  readonly keyPath: string
+  readonly cert: string
+  readonly privKey: string
+  readonly certificateHash: Uint8Array
+}
+let minted: Minted | undefined
+/** Minted on first use, so a transport that needs no certificate never runs openssl. */
+function certificate(): Minted {
+  if (minted !== undefined) return minted
+  const dir = mkdtempSync(join(tmpdir(), 'parity-'))
+  const keyPath = join(dir, 'k.pem')
+  const certPath = join(dir, 'c.pem')
+  execFileSync('openssl', [
+    'ecparam',
+    '-name',
+    'prime256v1',
+    '-genkey',
+    '-noout',
+    '-out',
+    keyPath,
+  ])
+  execFileSync(
+    'openssl',
+    [
+      'req',
+      '-new',
+      '-x509',
+      '-key',
+      keyPath,
+      '-out',
+      certPath,
+      '-days',
+      '14',
+      '-subj',
+      '/CN=localhost',
+      '-addext',
+      'subjectAltName=DNS:localhost,IP:127.0.0.1',
+    ],
+    { stdio: 'ignore' },
+  )
+  const cert = readFileSync(certPath, 'utf8')
+  minted = {
+    dir,
+    certPath,
+    keyPath,
+    cert,
+    privKey: readFileSync(keyPath, 'utf8'),
+    certificateHash: createHash('sha256').update(new X509Certificate(cert).raw).digest(),
+  }
+  // At exit and not at the end of a case: two cases in one process share the certificate.
+  process.on('exit', () => rmSync(dir, { recursive: true, force: true }))
+  return minted
+}
 
 const settle = async (ms = 400): Promise<void> => {
   await new Promise((r) => setTimeout(r, ms))
@@ -106,6 +134,7 @@ const settle = async (ms = 400): Promise<void> => {
  * deployment would do it. Splitting by process is also better isolation.
  */
 export async function runParity(t: UnderTest): Promise<void> {
+  const { cert, privKey, certificateHash } = certificate()
   const { createServer } = await import('../server.ts')
   const server = createServer<AppMap>({ contract })
   await server.listen()
@@ -200,7 +229,302 @@ export async function runParity(t: UnderTest): Promise<void> {
 
   client.disconnect()
   listener.stop()
-  rmSync(dir, { recursive: true, force: true })
+}
+
+/**
+ * The abrupt case: the peer dies with no close handshake, and the survivor has to notice.
+ *
+ * The suite above closes every session politely, which is why it never asked this. The
+ * WebTransport specification rejects `closed` when a session ends abruptly; two of three
+ * adapters passed that rejection across the seam, where everything waits with `.then()`,
+ * so a browser said `connected` to a killed server for as long as anyone watched, and never
+ * reconnected. The rule is that `closed` resolves, always (`closed.ts`), and this is where
+ * each transport is held to it: a peer that can really be killed, the connection's `closed`
+ * resolving inside a bound, the client's status leaving `connected`, and no rejection left
+ * unhandled on the way.
+ */
+export interface KillablePeer {
+  connect: () => Promise<Connection>
+  /** Ends the peer with no close handshake: SIGKILL for a process, `drop()` for a loopback. */
+  kill: () => void
+}
+
+export interface AbruptUnderTest {
+  readonly name: string
+  /**
+   * The longest this transport may take to notice its peer is gone. Absolute, and set per
+   * transport from a measurement: a QUIC stack learns it from its idle timeout, a socket
+   * from the kernel closing it, the loopback at once.
+   */
+  readonly noticeWithinMs: number
+  /** Brings up a peer serving the suite's contract, somewhere it can be killed. */
+  peer: () => Promise<KillablePeer>
+}
+
+type Settled =
+  | { readonly how: 'resolved'; readonly info: CloseInfo }
+  | { readonly how: 'rejected'; readonly cause: unknown }
+  | { readonly how: 'never' }
+
+export async function runAbruptDrop(t: AbruptUnderTest): Promise<void> {
+  const unhandled: unknown[] = []
+  const onUnhandled = (reason: unknown): void => {
+    unhandled.push(reason)
+  }
+  process.on('unhandledRejection', onUnhandled)
+
+  const peer = await t.peer()
+  let conn: Connection | undefined
+  const client = new Client<AppMap>({
+    contract,
+    origin: 0xf0000002,
+    connect: async () => {
+      conn = await peer.connect()
+      return conn
+    },
+  })
+  try {
+    await client.connect()
+    assert.equal(client.getSnapshot().status, 'connected', `${t.name}: connected`)
+    assert.ok(conn !== undefined)
+
+    // Live before it dies, so what follows is a drop and not a session that never worked.
+    const chat: string[] = []
+    client.on('chat', (p) => chat.push(p.body))
+    await settle(300)
+    client.emit('chat', { body: 'before' })
+    await settle(300)
+    assert.deepEqual(chat, ['before'], `${t.name}: the session carried an emit before the kill`)
+
+    const killedAt = Date.now()
+    peer.kill()
+    let bound: ReturnType<typeof setTimeout> | undefined
+    const settled = await Promise.race<Settled>([
+      conn.closed.then(
+        (info) => ({ how: 'resolved', info }),
+        (cause: unknown) => ({ how: 'rejected', cause }),
+      ),
+      new Promise<Settled>((resolve) => {
+        bound = setTimeout(() => resolve({ how: 'never' }), t.noticeWithinMs)
+      }),
+    ])
+    clearTimeout(bound)
+    assert.equal(
+      settled.how,
+      'resolved',
+      `${t.name}: closed must resolve after the peer is killed; within ${t.noticeWithinMs} ms it ${
+        settled.how === 'rejected' ? `rejected with ${String(settled.cause)}` : 'did not settle'
+      }`,
+    )
+    console.log(`  ${t.name}: noticed the killed peer after ${Date.now() - killedAt} ms`)
+    // No session close code crossed the wire, so none is reported: a transport's own code
+    // for a lost connection must not arrive looking like one of §10.2's.
+    if (settled.how === 'resolved') {
+      assert.equal(
+        settled.info.code,
+        0,
+        `${t.name}: a lost connection reported close code ${settled.info.code}, which no peer sent`,
+      )
+    }
+
+    await settle(100)
+    const after = client.getSnapshot()
+    assert.equal(after.status, 'closed', `${t.name}: the client's status left connected`)
+    assert.equal(after.sessionId, null, `${t.name}: the dead session is no longer the client's`)
+    assert.throws(
+      () => client.emit('chat', { body: 'after' }),
+      (e: unknown) => (e as TransportError).code === 'WT_SESSION_CLOSED',
+      `${t.name}: an emit after the drop is refused, not queued for a dead peer`,
+    )
+    assert.deepEqual(unhandled, [], `${t.name}: no rejection was left unhandled`)
+  } finally {
+    process.off('unhandledRejection', onUnhandled)
+    client.disconnect()
+    peer.kill()
+  }
+}
+
+/**
+ * A peer in a process of its own, which is the only way to kill one honestly. The test file
+ * is its own fixture: run with `PARITY_PEER` set it is the peer (`servePeer`, `connectPeer`)
+ * and registers no tests, so no fixture file ships in the package beside this suite.
+ */
+async function spawnSelf(
+  testFile: string,
+  role: 'server' | 'client',
+  port: number,
+): Promise<ChildProcess> {
+  const { certPath, keyPath, certificateHash } = certificate()
+  const child = spawn(process.execPath, [testFile], {
+    env: {
+      ...process.env,
+      PARITY_PEER: role,
+      PARITY_PORT: String(port),
+      PARITY_CERT: certPath,
+      PARITY_KEY: keyPath,
+      PARITY_HASH: Buffer.from(certificateHash).toString('hex'),
+    },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  })
+  await new Promise<void>((resolve, reject) => {
+    child.stdout?.on('data', (d: Buffer) => {
+      if (String(d).includes('parity-peer ready')) resolve()
+    })
+    child.once('exit', (code) => reject(new Error(`the peer exited early, code ${code}`)))
+  })
+  return child
+}
+
+export async function spawnPeer(
+  testFile: string,
+  connect: UnderTest['connect'],
+): Promise<KillablePeer> {
+  const port = randomPort()
+  const child = await spawnSelf(testFile, 'server', port)
+  const { certificateHash } = certificate()
+  return {
+    connect: () => connect({ url: `https://127.0.0.1:${port}/`, certificateHash }),
+    kill: () => {
+      child.kill('SIGKILL')
+    },
+  }
+}
+
+/** Which peer this process is, when `spawnSelf` started it; `undefined` in the test run. */
+export function peerRole(): 'server' | 'client' | undefined {
+  const role = process.env.PARITY_PEER
+  return role === 'server' || role === 'client' ? role : undefined
+}
+
+/** Held open until killed, which is the point of it. */
+function stayAlive(): void {
+  console.log('parity-peer ready')
+  setInterval(() => undefined, 60_000)
+}
+
+/** The child's half of `spawnPeer`: the suite's server on the transport under test. */
+export async function servePeer(listen: UnderTest['listen']): Promise<void> {
+  const { createServer } = await import('../server.ts')
+  const server = createServer<AppMap>({ contract })
+  await server.listen()
+  server.onSession((peer) => {
+    void peer.join('lobby')
+    peer.on('chat', (p) => void server.to('lobby').emit('chat', p))
+  })
+  const listener = await listen({
+    port: Number(process.env.PARITY_PORT),
+    host: '127.0.0.1',
+    cert: readFileSync(process.env.PARITY_CERT as string, 'utf8'),
+    privKey: readFileSync(process.env.PARITY_KEY as string, 'utf8'),
+  })
+  void (async () => {
+    for await (const conn of listener.sessions())
+      void server.accept(conn).catch(() => undefined)
+  })().catch(() => undefined)
+  stayAlive()
+}
+
+/** The child's half of the other direction: a client that connects and then says nothing. */
+export async function connectPeer(connect: UnderTest['connect']): Promise<void> {
+  const client = new Client<AppMap>({
+    contract,
+    origin: 0xf0000003,
+    connect: () =>
+      connect({
+        url: `https://127.0.0.1:${process.env.PARITY_PORT}/`,
+        certificateHash: Buffer.from(process.env.PARITY_HASH as string, 'hex'),
+      }),
+  })
+  await client.connect()
+  stayAlive()
+}
+
+/**
+ * The same case with the server as the survivor, and a server that sends nothing while it
+ * waits. That second half is the one that matters: a transport whose stack learns of a dead
+ * peer only when it has something unacknowledged in flight passes this with a chatty server
+ * and holds a killed client's session for ever with a quiet one, which is what the reference
+ * binding did. Its listener sends a liveness probe because of what this measured.
+ */
+export interface AbruptClientUnderTest {
+  readonly name: string
+  readonly noticeWithinMs: number
+  readonly testFile: string
+  listen: UnderTest['listen']
+}
+
+export async function runAbruptClientDrop(t: AbruptClientUnderTest): Promise<void> {
+  const { cert, privKey } = certificate()
+  const { createServer } = await import('../server.ts')
+  const server = createServer<AppMap>({ contract })
+  await server.listen()
+  let closed: Promise<CloseInfo> | undefined
+  server.onSession((peer) => {
+    void peer.join('lobby')
+    closed = peer.closed
+  })
+  const port = randomPort()
+  const listener = await t.listen({ port, host: '127.0.0.1', cert, privKey })
+  void (async () => {
+    for await (const conn of listener.sessions())
+      void server.accept(conn).catch(() => undefined)
+  })().catch(() => undefined)
+
+  const child = await spawnSelf(t.testFile, 'client', port)
+  try {
+    await settle(300)
+    assert.equal(server.memberCount('lobby'), 1, `${t.name}: the client is in the room`)
+    assert.ok(closed !== undefined)
+
+    const killedAt = Date.now()
+    child.kill('SIGKILL')
+    let bound: ReturnType<typeof setTimeout> | undefined
+    const settled = await Promise.race<Settled>([
+      closed.then(
+        (info) => ({ how: 'resolved', info }),
+        (cause: unknown) => ({ how: 'rejected', cause }),
+      ),
+      new Promise<Settled>((resolve) => {
+        bound = setTimeout(() => resolve({ how: 'never' }), t.noticeWithinMs)
+      }),
+    ])
+    clearTimeout(bound)
+    assert.equal(
+      settled.how,
+      'resolved',
+      `${t.name}: peer.closed must resolve after the client is killed, on a server that sends nothing; within ${t.noticeWithinMs} ms it ${
+        settled.how === 'rejected' ? `rejected with ${String(settled.cause)}` : 'did not settle'
+      }`,
+    )
+    console.log(
+      `  ${t.name}: the server noticed the killed client after ${Date.now() - killedAt} ms`,
+    )
+    assert.equal(server.memberCount('lobby'), 0, `${t.name}: the room forgot the dead peer`)
+  } finally {
+    child.kill('SIGKILL')
+    listener.stop()
+  }
+}
+
+/**
+ * The suite's server in this process, for a transport with no process to kill. The contract
+ * stays in this file: `isolatedDeclarations` cannot emit one, and a second copy would drift.
+ */
+export async function localPeer(): Promise<{
+  accept: (conn: Connection) => void
+  members: () => number
+}> {
+  const { createServer } = await import('../server.ts')
+  const server = createServer<AppMap>({ contract })
+  await server.listen()
+  server.onSession((peer) => {
+    void peer.join('lobby')
+    peer.on('chat', (p) => void server.to('lobby').emit('chat', p))
+  })
+  return {
+    accept: (conn) => void server.accept(conn).catch(() => undefined),
+    members: () => server.memberCount('lobby'),
+  }
 }
 
 export { randomPort }

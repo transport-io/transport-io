@@ -135,6 +135,34 @@ emits on the order of 200 tokens per second, so the bounded path still carries a
 hundred times what the workload this exists for can produce. Both numbers are measured over
 localhost, where a credit round trip is nearly free.
 
+## A vanished peer is noticed late, and a quiet reference server never noticed one
+
+A peer that closes is gone at once. A peer that vanishes, a killed process, a closed laptop,
+a dead network, sends no close, and the survivor learns of it from its transport.
+
+Measured on loopback, the peer killed with SIGKILL, in the parity suite's abrupt case:
+
+| survivor | transport | noticed after |
+|---|---|---|
+| client | Chromium, against the reference server | 0.1 s here; 9 s in the application that reported it |
+| client | reference binding, Node | 21 s |
+| client | `@moq/web-transport` | 30 s |
+| client or server | WebSocket fallback | at once, the kernel closes the socket |
+| server, sending to the dead peer | reference binding | 7 s |
+| server, sending nothing | reference binding | never, watched for 240 s |
+
+The last row is the binding: its QUIC stack gives up on a peer only when something it sent
+goes unacknowledged, and a server with nothing to say sent nothing. The killed client stayed
+a session, in its rooms, with `peer.closed` unsettled. **This library does not rely on it.**
+A session from `listenHttp3` or `listenDev` sends an empty datagram every 15 seconds, which a
+receiver discards (PROTOCOL.md §7.2), so a quiet server notices a vanished client within
+about 25 seconds: measured at 21. On a real network the first row is slower, since loopback
+answers a dead port at once and a dead path answers nothing.
+
+`closed` reports a lost connection as code `0` with a reason beginning `connection lost`.
+The binding reports a lost connection exactly as it reports a clean close, so the code alone
+cannot tell a peer that left from one that vanished.
+
 ## A session is capped at 256 concurrent streams
 
 `call()` and `stream()` share it, and the 257th open is refused with `WT_TOO_MANY_STREAMS`

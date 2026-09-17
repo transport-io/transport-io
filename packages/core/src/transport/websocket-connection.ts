@@ -35,6 +35,7 @@ import {
   WS_KEEPALIVE_INTERVAL_MS,
 } from '../protocol.ts'
 import { type OwnedTimer, OwnedTimers } from '../timers.ts'
+import { lost } from './closed.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
 
 /**
@@ -112,7 +113,12 @@ export class WebSocketConnection implements Connection {
       this.#closing = true
       this.#timers.clearAll()
       this.#endInbound()
-      this.#settleClosed({ code: fromWebSocketCloseCode(ev.code), reason: ev.reason })
+      const code = fromWebSocketCloseCode(ev.code)
+      this.#settleClosed(
+        code === undefined
+          ? lost(`WebSocket close ${ev.code}${ev.reason === '' ? '' : `, ${ev.reason}`}`)
+          : { code, reason: ev.reason },
+      )
     })
     socket.addEventListener('error', () => {
       // A close event follows every error, and that is the one report `closed` makes.
@@ -276,12 +282,16 @@ export function toWebSocketCloseCode(code: number): number {
   return code === CloseCode.WT_NO_ERROR ? WS_CLOSE_NORMAL : WS_CLOSE_OFFSET + code
 }
 
-/** The inverse, with the socket's own codes (a lost connection is 1006) passed through as they are. */
-export function fromWebSocketCloseCode(code: number): number {
+/**
+ * The inverse. `undefined` for a code the socket produced itself, 1006 for a lost connection
+ * or 1001 for a page going away: no peer sent a session close code, and passed through as
+ * they were those two read as `WT_RELIABILITY_REFUSED` and `WT_CONTRACT_MISMATCH`.
+ */
+export function fromWebSocketCloseCode(code: number): number | undefined {
   if (code === WS_CLOSE_NORMAL) return CloseCode.WT_NO_ERROR
   if (code >= WS_CLOSE_OFFSET + 1000 && code <= WS_CLOSE_OFFSET + 1999)
     return code - WS_CLOSE_OFFSET
-  return code
+  return undefined
 }
 
 /** Whole characters only, so a cut never leaves half a code point on the wire. */

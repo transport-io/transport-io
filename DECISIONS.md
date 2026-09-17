@@ -3784,3 +3784,72 @@ WebSocket mapping's deadline (D126) is a constant for the same reason.
 **Reconsider when:** an application reports a case where fifteen seconds is the problem,
 at which point the option is surfaced on both listeners together, with the floor the binding
 tolerates measured first.
+
+### D142. `closed` resolves, always, and the parity suite kills a peer to prove it
+The first outside application, on 0.11.0, killed its server and watched the page say
+`connected` for over fifty seconds and never reconnect. The WebTransport specification
+rejects a session's `closed` when the session ends with no close from the peer. The browser
+adapter mapped it with `.then()` and no rejection handler, so the seam's `closed` rejected,
+and everything above the seam waits on it with `.then()`: the session to release, the client
+to change status and schedule a reconnect. None of it ran. The moq adapter had the handler.
+The browser and reference adapters did not, and the parity suite never asked, because every
+session in it closes politely. This entry came from that application.
+
+**Decision.** The rule belongs to the seam and is stated on it: `Connection.closed` resolves
+when the connection ends, however it ends, and never rejects. One mapping, `closedOf` in
+`transport/closed.ts`, turns a platform session's `closed` into the seam's, and every adapter
+over a platform session uses it, the loopback included. A lost connection reports
+`WT_NO_ERROR` and a reason beginning `connection lost`, because no close code was received
+and the reference binding reports a lost connection exactly as it reports a clean close, so
+a flag saying which it was would be true on three transports and a guess on the fourth. The
+WebSocket mapping passed the socket's own close codes through as session codes, and the
+numbers overlap: a lost socket's 1006 read as `WT_RELIABILITY_REFUSED`, a page going away's
+1001 as `WT_CONTRACT_MISMATCH`. They are no session code now.
+
+**The part that matters more than the fix.** The parity suite has an abrupt case, in both
+directions. `runAbruptDrop` brings up a peer in a process of its own, kills it with SIGKILL,
+and asserts the connection's `closed` resolves inside a bound, the client's status leaves
+`connected`, no close code is invented, and no rejection is left unhandled.
+`runAbruptClientDrop` kills a client under a server that sends nothing. The test file is its
+own fixture: run with `PARITY_PEER` set it serves or connects and registers no tests. The
+loopback can lose its connection, `drop()` on the pair's link, with a platform-shaped
+`closed` underneath that rejects as the specification says, so the case asks it the same
+question. The browser's member is `e2e/abrupt-drop.spec.ts`: a real page, a killed server, a
+restart on the same port, and the reconnect.
+
+**Measured.** With the rejection handler removed from `closedOf`, the loopback case fails
+with "closed must resolve" and the browser case fails with "the page never left connected",
+which is the report. With it, Chromium noticed the killed server after 0.1 s on loopback
+and reconnected to the restarted one; the reference binding's Node client after 21 s; moq
+after 30 s; the WebSocket at once. `sessions()` on the reference listener also awaited a
+session's `ready` unguarded, and the binding hands a session over before it is ready, so one
+client that failed its opening handshake would have ended the accept loop for every later
+one. Guarded.
+
+**Reconsider when:** a transport is added. It gets a test file that runs all three cases,
+or a recorded reason it cannot, as moq has for the direction that ends by stopping a listener.
+
+### D143. The reference listener probes for liveness, because its stack never gave up on a silent peer
+Found by the abrupt case in D142 when it was pointed the other way. A Node client killed
+under a server on the reference binding was still a session 240 seconds later: in its rooms,
+counted by `memberCount`, `peer.closed` unsettled. The same kill under a server that was
+sending to that peer was noticed after 7 seconds. The binding's QUIC stack gives up on a
+peer when something it sent goes unacknowledged, and never otherwise, so a server with
+nothing to say holds every client that vanished until it next speaks to it. The application
+that reported "about fifteen seconds" in D141 had a server that was sending.
+
+**Decision.** A session from `listenHttp3` or `listenDev` sends an empty datagram every
+15000 ms, the WebSocket mapping's keepalive interval. It lives in the adapter, with the
+binding's other defects. It needs nothing from the peer and no protocol version: PROTOCOL.md
+§7.2 now says a datagram shorter than its header carries no event and is discarded silently,
+which is what every receiver already did with a malformed one, and that an implementation
+may send an empty one for this reason. A client needs no probe: every client transport
+noticed a killed server on its own.
+
+**Measured.** A quiet server notices a killed client 21 s after the kill with the probe,
+never without. A probe every 2 s, 8 s. A Chromium page held a session across a probe and
+carried on.
+
+**Reconsider when:** the binding surfaces its idle timeout, at which point the probe is
+redundant and D141's knob has something to turn; or an application needs a vanished peer
+noticed faster than 25 seconds, which is the same request as D141 with a number attached.

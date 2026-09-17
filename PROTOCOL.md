@@ -154,7 +154,10 @@ on the unreliable lane cannot close the session as `WT_PEER_TOO_SLOW`.
 Session close codes MUST be carried as the table says. A peer that closes treats the session
 <!-- norm: websocket-close-code-offset -> packages/core/src/transport/websocket.test.ts -->
 as closed at once rather than waiting for the closing handshake, which a peer that has stopped
-reading may never complete.
+reading may never complete. A WebSocket close code outside the table is the socket's own,
+1006 for a lost connection or 1001 for a page going away, and is not a session close code:
+the numbers overlap §10.2, where 1006 is `WT_RELIABILITY_REFUSED`. The session ended with no
+code (§11).
 
 TCP reports a dead path late or never, so the mapping carries its own liveness. A peer MUST
 send an empty binary message once the keepalive interval has passed with nothing sent, and
@@ -580,6 +583,13 @@ itself.
 
 A zero-length payload is a protocol error, as on streams (§5.1).
 
+A datagram shorter than the fixed overhead carries no event. A receiver MUST discard it
+<!-- norm: short-datagram-discarded -> packages/core/src/datagram-lane.test.ts -->
+silently, and the session stays open. An implementation MAY send a zero-length datagram as a
+liveness probe: a QUIC stack that gives up on a peer only when something it sent goes
+unacknowledged never gives up on a silent one, and an empty datagram is something sent. The
+reference server sends one every 15000 ms on each session.
+
 ### 7.3 Sequence
 
 **Origin** identifies the peer that produced the datagram. It is stamped once by the
@@ -888,3 +898,11 @@ this.
 When a session closes, all its streams are closed and all pending calls reject. A peer that
 detects its counterpart has gone MUST NOT attempt to reuse any stream from that session.
 <!-- norm: session-streams-not-reused -> packages/core/src/reserved-and-limits.test.ts -->
+
+A session also ends when its connection is lost: a killed process, a dead path, no close from
+the peer and so no §10.2 code. The WebTransport API reports that by rejecting the session's
+`closed` promise, where a close resolves it. An implementation MUST treat the two alike: the
+<!-- norm: lost-connection-ends-session -> packages/core/src/transport-parity-loopback.test.ts -->
+session is over, pending calls reject, and the application is told. It reports
+`WT_NO_ERROR`, since no code was received, and a transport's own code for a lost connection
+is never reported as a §10.2 code.

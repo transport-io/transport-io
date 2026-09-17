@@ -4,7 +4,19 @@
  */
 import { test } from 'node:test'
 import { connectMoq, listenMoq } from './transport/moq.node.ts'
-import { randomPort, runParity } from './transport/parity-suite.ts'
+import {
+  peerRole,
+  randomPort,
+  runAbruptDrop,
+  runParity,
+  servePeer,
+  spawnPeer,
+} from './transport/parity-suite.ts'
+
+// Run with `PARITY_PEER` set, this file is the peer the abrupt case kills, and its tests
+// are skipped.
+const isPeer = peerRole() !== undefined
+if (peerRole() === 'server') await servePeer(listenMoq)
 
 // SKIPPED for a now-understood reason: `NapiServer.close()` deadlocks. See D71.
 //
@@ -35,5 +47,19 @@ test.skip('moq: both lanes, a call, an abort and an oversized datagram', {
     lanes: 'all',
     propagatesAbortToHandler: false,
     connect: connectMoq,
+  })
+})
+
+// The abrupt case runs, because the peer it kills is the only listener and nobody stops a
+// killed process: the deadlock above is never reached. The server as the survivor is not
+// asked of this transport, since that case ends by stopping a listener in this process.
+test('moq: a peer killed with no close handshake is noticed', {
+  timeout: 90_000,
+  skip: isPeer,
+}, async () => {
+  await runAbruptDrop({
+    name: 'moq',
+    noticeWithinMs: 45_000,
+    peer: () => spawnPeer(import.meta.filename, connectMoq),
   })
 })

@@ -18,6 +18,7 @@
 import { createRequire } from 'node:module'
 import { TransportError } from '../errors.ts'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
+import { closedOf } from './closed.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
 
 interface MoqSend {
@@ -156,10 +157,7 @@ class MoqConnection implements Connection {
 
   constructor(session: MoqSession) {
     this.#s = session
-    this.closed = session
-      .closed()
-      .then((i) => ({ code: i.closeCode, reason: i.reason }))
-      .catch(() => ({ code: 0, reason: 'closed' }))
+    this.closed = closedOf(session.closed())
   }
 
   async openEmitStream(): Promise<WritableStream<Uint8Array>> {

@@ -69,5 +69,13 @@ export interface Connection {
   kind(): Transport
 
   close(code: number, reason: string): void
+  /**
+   * Resolves when the connection ends, however it ends, and never rejects. The session and
+   * the client both wait on it with `.then()`, so a rejection here is a page that says
+   * `connected` to a server that is gone. A connection lost with no close from the peer
+   * resolves as `WT_NO_ERROR` with a reason that says so; adapters over a platform session
+   * get that from `closedOf` in `closed.ts`, and the parity suite's abrupt case holds every
+   * transport to it.
+   */
   readonly closed: Promise<CloseInfo>
 }

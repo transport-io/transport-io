@@ -284,8 +284,9 @@ export async function saveIt(): Promise<number> {
 }
 ```
 
-**There is no default timeout.** A dead peer is detected by the QUIC idle timeout, which
-closes the session and rejects every pending call. For a slow but live responder:
+**There is no default timeout.** A peer that vanishes with no close is noticed by the
+transport, within about 30 seconds; the session then closes and every pending call rejects.
+For a slow but live responder:
 
 ```ts
 export async function saveWithDeadline(): Promise<number> {
@@ -708,6 +709,9 @@ A departure is visible twice. `server.onDisconnecting((peer, info) => …)` runs
 connection has closed and before the peer leaves its rooms, so `peer.rooms` still says where
 it was. `peer.closed` is a promise that settles after the rooms are left, so a
 `memberCount` read after it reflects the departure. `info` is the close code and reason.
+A peer that vanishes with no close, a killed tab or a dead network, departs the same way
+once the transport notices, which takes up to 25 seconds over WebTransport: code `0`, and a
+reason that begins `connection lost`.
 
 ```ts
 export function watchDepartures(server: Server<AppMap>): void {
@@ -823,6 +827,11 @@ up. Core degrades rather than crashing.
 
 A node receiving its own publish back is normal, and core dedupes by originating node
 rather than relying on the adapter to suppress it.
+
+The same entry has `loopbackPair()`, an in-memory pair of connections for a test with no
+server process: one goes to `server.accept`, the other is what a client's `connect` returns.
+The third element is the link, and `link.drop()` loses the connection with no close from
+either side, which is how to test what your application does when a peer vanishes.
 
 ---
 

@@ -28,7 +28,6 @@ import {
 } from './protocol.ts'
 import { Session } from './session.ts'
 import { loopbackPair } from './transport/loopback.ts'
-import type { Connection } from './transport/types.ts'
 
 const contract = defineContract({
   chat: { lane: 'reliable', payload: type$<{ body: string }>() },
@@ -90,7 +89,7 @@ describe('the payload cap is per frame type, as §5.3 says', () => {
 
 describe('a datagram arriving before the handshake is discarded', () => {
   test('it is not decoded and delivered', async () => {
-    const [ours, theirs]: [Connection, Connection] = loopbackPair(1200)
+    const [ours, theirs] = loopbackPair(1200)
     theirs.onEmitStream(() => {}) // never sends a handshake back
     const table = await buildEventTable(contract)
     const session = new Session(ours, { table, origin: 1 })

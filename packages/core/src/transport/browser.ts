@@ -9,6 +9,7 @@ import { Client, type ClientOptions } from '../client.ts'
 import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
 import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
+import { closedOf } from './closed.ts'
 import { handshakeFailure, probe, probeTarget } from './probe.ts'
 import type { BidiStream, CloseInfo, Connection } from './types.ts'
 
@@ -36,7 +37,9 @@ class BrowserConnection implements Connection {
 
   constructor(s: PlatformSession) {
     this.#s = s
-    this.closed = s.closed.then((i) => ({ code: i.closeCode ?? 0, reason: i.reason ?? '' }))
+    // The platform rejects `closed` when the session ends with no close from the peer. The
+    // seam never does; see `closed.ts`.
+    this.closed = closedOf(s.closed)
   }
 
   openEmitStream(): Promise<WritableStream<Uint8Array>> {

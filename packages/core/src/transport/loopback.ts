@@ -5,8 +5,31 @@
  *
  * Anything that depends on real unreliability belongs in a *.node.test.ts against the
  * actual transport.
+ *
+ * It can lose the connection as well as close it. `close()` is the handshake: the peer
+ * learns the code and the reason. `drop()` on the link is a killed process or a dead path:
+ * nobody is told anything, every open stream errors, and the platform-shaped `closed`
+ * underneath rejects, as the WebTransport specification says a session's does. The seam's
+ * `closed` is that promise through `closedOf`, the mapping every adapter uses, so the abrupt
+ * case in the parity suite asks this transport the same question it asks the others.
  */
+import { closedOf } from './closed.ts'
 import type { BidiStream, CloseInfo, Connection, Transport } from './types.ts'
+
+/** A byte pipe whose controller is kept, so a drop can error both of its ends. */
+function pipe(track: Set<TransformStreamDefaultController<Uint8Array>>): {
+  readable: ReadableStream<Uint8Array>
+  writable: WritableStream<Uint8Array>
+} {
+  let controller!: TransformStreamDefaultController<Uint8Array>
+  const stream = new TransformStream<Uint8Array, Uint8Array>({
+    start(c) {
+      controller = c
+    },
+  })
+  track.add(controller)
+  return stream
+}
 
 class Side implements Connection {
   peer!: Side
@@ -19,22 +42,28 @@ class Side implements Connection {
   readonly #pendingEmit: ReadableStream<Uint8Array>[] = []
   readonly #pendingBidi: BidiStream[] = []
   readonly #pendingDatagrams: Uint8Array[] = []
-  #resolveClosed!: (info: CloseInfo) => void
+  #resolveClosed!: (info: { closeCode: number; reason: string }) => void
+  #rejectClosed!: (cause: Error) => void
   #closedFlag = false
   readonly closed: Promise<CloseInfo>
   #maxDatagram: number
   readonly #kind: Transport
+  /** Every pipe this side opened, so a drop can error them. */
+  readonly #pipes = new Set<TransformStreamDefaultController<Uint8Array>>()
 
   constructor(maxDatagram: number, kind: Transport) {
     this.#maxDatagram = maxDatagram
     this.#kind = kind
-    this.closed = new Promise<CloseInfo>((res) => {
-      this.#resolveClosed = res
-    })
+    this.closed = closedOf(
+      new Promise<{ closeCode: number; reason: string }>((res, rej) => {
+        this.#resolveClosed = res
+        this.#rejectClosed = rej
+      }),
+    )
   }
 
   async openEmitStream(): Promise<WritableStream<Uint8Array>> {
-    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
+    const { readable, writable } = pipe(this.#pipes)
     queueMicrotask(() => this.peer.#acceptEmit(readable))
     return writable
   }
@@ -49,8 +78,8 @@ class Side implements Connection {
   }
 
   async openBidi(): Promise<BidiStream> {
-    const up = new TransformStream<Uint8Array, Uint8Array>()
-    const down = new TransformStream<Uint8Array, Uint8Array>()
+    const up = pipe(this.#pipes)
+    const down = pipe(this.#pipes)
     queueMicrotask(() =>
       this.peer.#acceptBidi({ readable: up.readable, writable: down.writable }),
     )
@@ -96,10 +125,33 @@ class Side implements Connection {
   close(code: number, reason: string): void {
     if (this.#closedFlag) return
     this.#closedFlag = true
-    const info = { code, reason }
-    this.#resolveClosed(info)
+    this.#resolveClosed({ closeCode: code, reason })
     queueMicrotask(() => this.peer.close(code, reason))
   }
+
+  /** The connection is gone and nobody said so: streams error, the platform `closed` rejects. */
+  drop(): void {
+    if (this.#closedFlag) return
+    this.#closedFlag = true
+    const gone = new Error('connection lost')
+    for (const c of this.#pipes) {
+      try {
+        c.error(gone)
+      } catch {
+        // Already closed or errored, which is where it was going.
+      }
+    }
+    this.#pipes.clear()
+    this.#rejectClosed(gone)
+  }
+}
+
+export interface LoopbackLink {
+  /**
+   * Loses the connection with no close from either side, which is what a killed peer looks
+   * like from the survivor. Both ends settle, since in one process both ends are observed.
+   */
+  drop(): void
 }
 
 /**
@@ -110,10 +162,19 @@ class Side implements Connection {
 export function loopbackPair(
   maxDatagram = 1024,
   kind: Transport = 'webtransport',
-): [Connection, Connection] {
+): [Connection, Connection, LoopbackLink] {
   const a = new Side(maxDatagram, kind)
   const b = new Side(maxDatagram, kind)
   a.peer = b
   b.peer = a
-  return [a, b]
+  return [
+    a,
+    b,
+    {
+      drop: () => {
+        a.drop()
+        b.drop()
+      },
+    },
+  ]
 }

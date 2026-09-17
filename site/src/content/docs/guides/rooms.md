@@ -121,6 +121,10 @@ promise that settles after the rooms are let go, so a `memberCount` read after i
 reflects the departure. [Authenticating a peer](/guides/authorize/) has both with a presence
 example.
 
+A peer that closes departs at once. A peer that vanishes, a killed tab or a dead network,
+departs when the transport notices, up to 25 seconds later over WebTransport, with close code
+`0` and a reason that begins `connection lost`. Until then it is still in its rooms.
+
 ## A reconnect is a new session
 
 Room membership does not survive a reconnect. Pending calls reject.

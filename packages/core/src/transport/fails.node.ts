@@ -12,12 +12,17 @@
  *   - oversized and blocked datagrams are accepted, discarded, and reported as success
  *   - `WebTransportError` omits the specification's `streamErrorCode`, so a reset code is
  *     recoverable only by parsing a message string
+ *   - its server never learns that a silent peer is gone: a killed client was still a
+ *     session 240 s later on a server that sent nothing, and gone 8 s after one that sent
+ *     anything, so a listener's session sends a liveness probe
  */
 import { Http3Server, quicheLoaded, WebTransport } from '@fails-components/webtransport'
 import { Client, type ClientOptions } from '../client.ts'
 import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
 import { CloseCode, DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
+import { OwnedTimers } from '../timers.ts'
+import { closedOf } from './closed.ts'
 import { assertUdpPortFree } from './port.node.ts'
 import { handshakeFailure, probe, probeTarget } from './probe.ts'
 import type { Authorize, BidiStream, CloseInfo, Connection, ConnectRequest } from './types.ts'
@@ -41,19 +46,34 @@ type AnySession = {
   readonly userData?: { path?: string }
 }
 
+/**
+ * How often a listener's session sends an empty datagram. The stack gives up on a peer once
+ * something it sent goes unacknowledged, about 8 s later, and never otherwise, so a server
+ * with nothing to say has to say nothing on purpose. A receiver discards a datagram shorter
+ * than its header (PROTOCOL.md §7.2), so the probe needs no cooperation from the peer. The
+ * same interval as the WebSocket mapping's keepalive.
+ */
+const LIVENESS_PROBE_MS = 15_000
+const PROBE = new Uint8Array(0)
+
 class FailsConnection implements Connection {
   readonly #session: AnySession
   readonly closed: Promise<CloseInfo>
   readonly data: unknown
+  readonly #timers = new OwnedTimers()
   #datagramWriter: WritableStreamDefaultWriter<Uint8Array> | undefined
 
-  constructor(session: AnySession, data?: unknown) {
+  constructor(session: AnySession, opts: { data?: unknown; probeMs?: number } = {}) {
     this.#session = session
-    this.data = data
-    this.closed = session.closed.then((info) => ({
-      code: info.closeCode ?? 0,
-      reason: info.reason ?? '',
-    }))
+    this.data = opts.data
+    // The binding rejects `closed` for a session that fails before it is connected, and the
+    // specification rejects it for any abrupt end. The seam never does; see `closed.ts`.
+    this.closed = closedOf(session.closed)
+    if (opts.probeMs !== undefined) {
+      // Does not hold a process open, and ends with the session whichever side ended it.
+      this.#timers.every(opts.probeMs, () => this.sendDatagram(PROBE)).unref()
+      void this.closed.then(() => this.#timers.clearAll())
+    }
   }
 
   async openEmitStream(): Promise<WritableStream<Uint8Array>> {
@@ -256,10 +276,20 @@ export async function listenHttp3<D = undefined>(
         const { value, done } = await reader.read()
         if (done) return
         if (value === undefined) continue
-        await value.ready
+        // A session that fails before it is ready rejects both `ready` and `closed`. Thrown
+        // from here it would end this generator, and with it every later accept.
+        void value.closed.catch(() => undefined)
+        try {
+          await value.ready
+        } catch {
+          continue
+        }
         const verdict = await decide(value, opts.authorize)
         if (!verdict.accepted) continue
-        yield new FailsConnection(value, verdict.data) as Connection & { readonly data?: D }
+        yield new FailsConnection(value, {
+          data: verdict.data,
+          probeMs: LIVENESS_PROBE_MS,
+        }) as Connection & { readonly data?: D }
       }
     },
   }

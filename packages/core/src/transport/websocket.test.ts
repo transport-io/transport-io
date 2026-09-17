@@ -112,9 +112,21 @@ describe('the close-code mapping', () => {
     expect(fromWebSocketCloseCode(4003)).toBe(CloseCode.WT_PEER_TOO_SLOW)
   })
 
-  test("the socket's own codes pass through, since a lost connection is not one of ours", () => {
-    expect(fromWebSocketCloseCode(1006)).toBe(1006)
-    expect(fromWebSocketCloseCode(1001)).toBe(1001)
+  test("the socket's own codes are no session close code: 1006 must not read as WT_RELIABILITY_REFUSED", () => {
+    expect(fromWebSocketCloseCode(1006)).toBeUndefined()
+    expect(fromWebSocketCloseCode(1001)).toBeUndefined()
+    expect(fromWebSocketCloseCode(1007)).toBeUndefined()
+  })
+
+  test('a lost connection settles closed with no session close code, and says what the socket said', async () => {
+    const socket = new FakeSocket()
+    const conn = new WebSocketConnection(socket)
+    // 1006 is what every platform reports for a socket that ended with no close frame.
+    socket.close(1006, '')
+    expect(await conn.closed).toEqual({
+      code: CloseCode.WT_NO_ERROR,
+      reason: 'connection lost: WebSocket close 1006',
+    })
   })
 
   test('a reason is cut to the cap on a character boundary, never inside one', () => {

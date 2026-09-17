@@ -12,6 +12,7 @@
  *
  *   sender-checks-datagram-size-first
  *   drop-causes-counted-separately
+ *   short-datagram-discarded
  */
 import { describe, expect, test } from 'bun:test'
 import { Client } from './client.ts'
@@ -203,6 +204,31 @@ describe('loss, duplication and reordering on the wire', () => {
     await settle()
     // Reliable and ordered, whatever the datagram path is doing.
     expect(chat).toEqual(['a', 'b', 'c'])
+  })
+})
+
+// norm: short-datagram-discarded
+describe('a datagram shorter than its header is a liveness probe, or nothing', () => {
+  test('an empty datagram, and a truncated one, are discarded and the session carries on', async () => {
+    const server = createServer<AppMap>({ contract })
+    await server.listen()
+    const [serverSide, clientSide] = loopbackPair()
+    const client = new Client<AppMap>({ contract, connect: async () => clientSide })
+    const got: number[] = []
+    client.on('cursor', (p) => got.push(p.n))
+    const [peer] = await Promise.all([server.accept(serverSide), client.connect()])
+
+    // What the reference listener sends every interval, straight onto the connection.
+    serverSide.sendDatagram(new Uint8Array(0))
+    serverSide.sendDatagram(new Uint8Array(12))
+    await settle()
+    expect(client.getSnapshot().status).toBe('connected')
+    expect(got).toEqual([])
+
+    peer.emit('cursor', { n: 5 })
+    await settle()
+    expect(got).toEqual([5])
+    client.disconnect()
   })
 })
 

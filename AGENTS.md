@@ -331,7 +331,9 @@ the rejoin goes. `new Client({ reconnect: { minMs, maxMs } })` reconnects on its
 connected session closes, with a randomised doubling wait; off unless given, and the first
 `connect()` is not retried.
 
-**There is no default call timeout.** Peer death is caught by the QUIC idle timeout. Use
+**There is no default call timeout.** A peer that vanishes with no close is noticed by the
+transport within about 30 s: the session closes, pending calls reject, and on the server the
+peer departs with close code `0` and a reason beginning `connection lost`. Use
 `AbortSignal.timeout(ms)` for a slow but live responder.
 
 **Chrome and Firefox over WebTransport.** Safari establishes a session and then never sends,
