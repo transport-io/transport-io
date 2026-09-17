@@ -69,7 +69,47 @@ export const contract = defineContract({
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-It fits any slot of any helper, beside a schema or a type in the others. A payload is JSON
-or bytes, never a mix: bytes inside an object are still JSON. Sending anything but a
-`Uint8Array` to a bytes slot fails before the wire with `WT_VALIDATION_FAILED`, and what a
-handler receives is a copy it owns. The size caps are the frame's, as for any payload.
+It fits any slot of any helper, beside a schema or a type in the others. Sending anything
+but a `Uint8Array` to a bytes slot fails before the wire with `WT_VALIDATION_FAILED`, and what
+a handler receives is a copy it owns. The size caps are the frame's, as for any payload.
+
+**A slot is all bytes or all JSON.** There is no object with a `Uint8Array` field in it: put
+one in a JSON payload and it is serialised as JSON, index by index. A call has two slots and
+they may differ, which covers a request that describes and a response that carries,
+`snapshot` above. An emit has one slot, so a message that needs both halves is two events:
+the JSON half first, then the bytes.
+
+```ts standalone
+import { bytes, type Client, defineContract, type MapOf, reliable, type Server } from 'transport-io'
+import { z } from 'zod'
+
+export const contract = defineContract({
+  updateFor: reliable(z.object({ doc: z.string(), by: z.string() })),
+  update: reliable(bytes()),
+})
+
+export interface AppMap extends MapOf<typeof contract> {}
+
+export function send(client: Client<AppMap>, doc: string, by: string, update: Uint8Array): void {
+  client.emit('updateFor', { doc, by })
+  client.emit('update', update)
+}
+
+declare function apply(doc: string, by: string, update: Uint8Array): void
+
+export function receive(server: Server<AppMap>): void {
+  server.onSession((peer) => {
+    let next: { doc: string; by: string } | undefined
+    peer.on('updateFor', (header) => {
+      next = header
+    })
+    peer.on('update', (update) => {
+      if (next !== undefined) apply(next.doc, next.by, update)
+    })
+  })
+}
+```
+
+Both events are on the reliable lane, which delivers one sender's emits in the order they
+were made, so the header a handler holds is the one its bytes came with. When the JSON half
+never changes, a document id, make it the room and send only the bytes.

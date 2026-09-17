@@ -165,3 +165,35 @@ describe('the wire and the contract must agree on the codec', () => {
     expect(code).toBe('WT_UNSUPPORTED_CODEC')
   })
 })
+
+describe('a message that needs both halves is two events', () => {
+  test('a JSON header then its bytes, from one sender, arrive as that pair every time', async () => {
+    const both = defineContract({
+      updateFor: reliable<{ doc: string }>(),
+      update: reliable(bytes()),
+    })
+    interface BothMap extends MapOf<typeof both> {}
+    const [serverSide, clientSide] = loopbackPair()
+    const server = createServer<BothMap>({ contract: both })
+    await server.listen()
+    const applied: string[] = []
+    server.onSession((peer) => {
+      let next: { doc: string } | undefined
+      peer.on('updateFor', (header) => {
+        next = header
+      })
+      peer.on('update', (update) => {
+        applied.push(`${next?.doc}:${update[0]}`)
+      })
+    })
+    const client = new Client<BothMap>({ contract: both, connect: async () => clientSide })
+    await Promise.all([server.accept(serverSide), client.connect()])
+    for (let i = 0; i < 20; i++) {
+      client.emit('updateFor', { doc: `d${i}` })
+      client.emit('update', Uint8Array.of(i))
+    }
+    await wait(30)
+    expect(applied).toEqual(Array.from({ length: 20 }, (_, i) => `d${i}:${i}`))
+    client.disconnect()
+  })
+})
