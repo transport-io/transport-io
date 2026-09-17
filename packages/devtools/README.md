@@ -5,6 +5,11 @@ network panel shows nothing useful for WebTransport: no frames, no streams. This
 in the page, along with the one thing no other tool has: which messages this client dropped,
 and why.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/transport-io/transport-io/main/assets/devtools/page-dark.png">
+  <img alt="The chat example with the devtools panel open along the bottom: a bar with the connection and its drop counters, a list of frames with dropped datagrams in the accent colour, and a side column with one open stream and the drops by event." src="https://raw.githubusercontent.com/transport-io/transport-io/main/assets/devtools/page-light.png" width="880">
+</picture>
+
 ```bash
 npm install @transport-io/devtools
 ```
@@ -84,6 +89,11 @@ what already happened.
 | `stale` | A datagram waited 150 ms in the queue and was discarded unsent. |
 | `stale rx` | A duplicate or out-of-order datagram arrived and was not handed to your handler. |
 | `direction` | The server sent an event the contract says only a client sends. |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/transport-io/transport-io/main/assets/devtools/drops-dark.png">
+  <img alt="The panel after a burst of pointer events: the overflow counter is above zero, the list alternates dropped and sent cursor datagrams, and the side column says cursor overflow-dropped with the same count." src="https://raw.githubusercontent.com/transport-io/transport-io/main/assets/devtools/drops-light.png" width="760">
+</picture>
 
 A dim row is on the unreliable lane. The
 [guide](https://transport-io.github.io/transport-io/guides/devtools/) has every column and

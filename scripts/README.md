@@ -52,6 +52,24 @@ production bundle whether or not a panel is ever opened. The bundler and the com
 esbuild and fflate, pinned by the lockfile, so the figure is the same on a laptop and in CI;
 Bun's bundler and zlib are neither. See D149.
 
+## `render-devtools-screenshots.node.ts` - the panel's pictures, from real traffic
+
+`npm run render:devtools`. Two real clients on `examples/chat` over real QUIC, in both colour
+schemes: pointers move, a message goes out and comes back, a burst of pointer events overflows
+the library's own datagram queue so `overflowDropped` is a real number, and a stream is open
+while the pictures are taken. Three per scheme, written to `assets/devtools/`, where the
+package README points and where the site's `prebuild` copies them from. It refuses to capture a page
+that renders a filesystem path, or a text colour under 4.5 to 1 against its ground. A changed
+panel is one command from a changed screenshot, where a picture made by hand goes stale
+without anybody noticing. `E2E_BROWSER` names a Chromium when Playwright has none installed.
+
+## `bench-devtools-paint.node.ts` - what the panel costs the page under it
+
+The chat example with both pointers driven at a fixed rate, and the browser's own main-thread
+counters over 10 s windows: no panel, panel closed, panel open. It is how the first panel was
+found to cost 170 to 190 ms a second while dropping no frame, and how the one that shipped was
+held to between 1 and 34. See D150.
+
 ## `check-retired-claims.ts` - a claim found false stays false
 
 One sentence about the React package survived three documentation sweeps: each sweep was a

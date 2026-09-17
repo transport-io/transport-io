@@ -5,8 +5,8 @@
   "scripts": {
     "build": "astro build",
     "dev": "astro dev",
-    "prebuild": "mkdir -p public src/assets && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg && cp ../assets/demo/two-streams.png src/assets/",
-    "predev": "mkdir -p public src/assets && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg && cp ../assets/demo/two-streams.png src/assets/",
+    "prebuild": "mkdir -p public src/assets/devtools && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg && cp ../assets/demo/two-streams.png src/assets/ && cp ../assets/devtools/*.png src/assets/devtools/",
+    "predev": "mkdir -p public src/assets/devtools && cp ../assets/brand/transport-io-mark-ink.svg public/favicon.svg && cp ../assets/demo/two-streams.png src/assets/ && cp ../assets/devtools/*.png src/assets/devtools/",
     "preview": "astro preview"
   },
   "dependencies": {

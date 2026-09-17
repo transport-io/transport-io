@@ -1,0 +1,40 @@
+---
+/**
+ * A screenshot in both schemes. Two `picture` elements and a rule that hides one, because the
+ * site's scheme is `data-theme` on the root, which a reader can set against their system, and
+ * a `source` with `prefers-color-scheme` would follow the system and not the page. A hidden
+ * lazy image is never fetched, so a reader downloads the one they see.
+ */
+import type { ImageMetadata } from 'astro'
+
+interface Props {
+  readonly light: ImageMetadata
+  readonly dark: ImageMetadata
+  readonly alt: string
+}
+const { light, dark, alt } = Astro.props
+---
+
+<figure class="tio-shot tio-shot-themed not-content">
+  <picture class="tio-when-light">
+    <img
+      src={light.src}
+      width={light.width}
+      height={light.height}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+    />
+  </picture>
+  <picture class="tio-when-dark">
+    <img
+      src={dark.src}
+      width={dark.width}
+      height={dark.height}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+    />
+  </picture>
+  <figcaption><slot /></figcaption>
+</figure>

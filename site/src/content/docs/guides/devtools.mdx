@@ -3,9 +3,26 @@ title: Devtools
 description: See the frames, the streams and the drops, which no browser panel shows for WebTransport, and log them with the same seam the panel uses.
 ---
 
+import Shot from '../../../components/Shot.astro'
+import dropsDark from '../../../assets/devtools/drops-dark.png'
+import dropsLight from '../../../assets/devtools/drops-light.png'
+import framesDark from '../../../assets/devtools/frames-dark.png'
+import framesLight from '../../../assets/devtools/frames-light.png'
+import pageDark from '../../../assets/devtools/page-dark.png'
+import pageLight from '../../../assets/devtools/page-light.png'
+
 Chrome's network panel shows nothing useful for a WebTransport session: no frames, no
 streams. `@transport-io/devtools` is a panel in the page that shows both, and the drops that
 `stats()` counts, by event.
+
+<Shot
+  light={pageLight}
+  dark={pageDark}
+  alt="The chat example with the devtools panel open along the bottom of the page. The panel's bar reads connected on webtransport with its counters, and below it a list of frames: datagrams, dropped datagrams in the accent colour, a chat message going out and coming back, and a stream's open, request and responses. A side column lists one open stream and the drops by event."
+>
+  The panel under the chat example, over real QUIC. Every row is a frame that crossed the
+  wire, or a datagram this client dropped.
+</Shot>
 
 ```bash
 npm install @transport-io/devtools
@@ -94,6 +111,15 @@ A closed panel still records, so opening it shows what already happened.
 
 ## The rows
 
+<Shot
+  light={framesLight}
+  dark={framesDark}
+  alt="The frame list close up, with the columns time, dir, lane, kind, event, stream, size, seq and preview. Two overflow-dropped rows in the accent colour sit between dim datagram rows, then a chat emit out and the same message in, then a say stream on stream 2: open, request, and one response per word."
+>
+  Drops in the accent, datagrams dim, and a <code>stream()</code> from its <code>open</code>{' '}
+  to its responses, all on stream 2.
+</Shot>
+
 One row for every frame in and out, newest last. A divider marks each new session, since a
 reconnect is one. A dim row is on the unreliable lane. A row in the accent colour is a drop.
 
@@ -123,6 +149,15 @@ reconnect is one. A dim row is on the unreliable lane. A row in the accent colou
 | the four drops | The table below. |
 
 ## The drop counters
+
+<Shot
+  light={dropsLight}
+  dark={dropsDark}
+  alt="The panel in a narrow window after a burst of pointer events. The bar's overflow counter is above zero and in the accent colour while the other counters read zero, the list alternates dropped and sent cursor datagrams, and the side column says cursor overflow-dropped with the same count."
+>
+  A burst of pointer events outran the datagram queue, so <code>overflow</code> is not zero,
+  and the list and the side column both say the drops were <code>cursor</code>.
+</Shot>
 
 The bar along the top has the counters from `client.stats()`, for the current session. They
 start again with each session. Next to them, **Drops by event** says which event each drop

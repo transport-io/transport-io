@@ -515,6 +515,20 @@ mobile-starlight-toc .dropdown {
   background: #fff;
 }
 
+/* A screenshot per scheme, and only the page's own scheme shown. See Shot.astro. */
+.tio-shot-themed {
+  margin-block: 1.5rem;
+}
+
+.tio-shot-themed img {
+  background: none;
+}
+
+:root[data-theme='light'] .tio-when-dark,
+:root[data-theme='dark'] .tio-when-light {
+  display: none;
+}
+
 .tio-shot figcaption {
   margin-top: 0.75rem;
   font-size: var(--tio-15);

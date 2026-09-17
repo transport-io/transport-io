@@ -153,7 +153,7 @@ const COMPILED_DOCS = [
   'site/src/content/docs/guides/reconnect.md',
   'site/src/content/docs/guides/fallback.md',
   'site/src/content/docs/guides/react.md',
-  'site/src/content/docs/guides/devtools.md',
+  'site/src/content/docs/guides/devtools.mdx',
   'site/src/content/docs/troubleshooting.md',
   'packages/react/README.md',
   'packages/devtools/README.md',
