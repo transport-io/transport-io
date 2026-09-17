@@ -75,6 +75,15 @@ if (lanes !== null) {
 declare const plain: Client<DeclaredMap>
 expectTypeOf(plain.call('save', { text: 'x' })).toEqualTypeOf<Promise<{ n: number }>>()
 
+// --- observing is not a lane, so both kinds of client have it, and a record is read-only ---
+expectTypeOf(client.observe).toEqualTypeOf(plain.observe)
+client.observe((record) => {
+  expectTypeOf(record.event).toEqualTypeOf<string | null>()
+  expectTypeOf(record.stream).toEqualTypeOf<number | null>()
+  // @ts-expect-error a record is shared between subscribers, so nobody edits it
+  record.preview = null
+})
+
 // --- one declared and one not: the error names only the one that is not ---
 const point = type$<{ x: number; y: number }>()
 const mixed = defineContract({

@@ -40,13 +40,18 @@ export class DatagramQueue<T> {
     this.#ttlMs = ttlMs
   }
 
-  /** Never throws and never blocks: dropping is this lane's advertised contract. */
-  push(item: T, now: number): void {
+  /**
+   * Never throws and never blocks: dropping is this lane's advertised contract. Returns what
+   * overflow pushed out, so an observer can be told which item it was.
+   */
+  push(item: T, now: number): T | undefined {
+    let evicted: T | undefined
     if (this.#items.length >= this.#max) {
-      this.#items.shift()
+      evicted = this.#items.shift()?.item
       this.#overflowDropped++
     }
     this.#items.push({ item, at: now })
+    return evicted
   }
 
   /** Drop everything, for a session that is going away with frames still queued. */
@@ -59,15 +64,21 @@ export class DatagramQueue<T> {
    *
    * `limit` caps how many fresh items leave; the rest stay queued with their original
    * timestamps, so a later drain still judges their age from when they were pushed. The
-   * WebSocket mapping uses it to take only as many as the emit lane has room for.
+   * WebSocket mapping uses it to take only as many as the emit lane has room for. `expired`
+   * is told each item the TTL discarded.
    */
-  drain(now: number, limit: number = Number.POSITIVE_INFINITY): T[] {
+  drain(
+    now: number,
+    limit: number = Number.POSITIVE_INFINITY,
+    expired?: (item: T) => void,
+  ): T[] {
     const out: T[] = []
     let taken = 0
     while (taken < this.#items.length) {
       const q = this.#items[taken] as Queued<T>
       if (now - q.at >= this.#ttlMs) {
         this.#staleDropped++
+        expired?.(q.item)
         this.#items.splice(taken, 1)
         continue
       }

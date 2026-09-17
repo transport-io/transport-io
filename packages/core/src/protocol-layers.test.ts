@@ -271,6 +271,17 @@ describe('backpressure', () => {
     expect(q.stats().overflowDropped).toBe(0)
   })
 
+  test('both drops say which item went, so an observer can name it', () => {
+    const q = new DatagramQueue<string>(2, 150)
+    expect(q.push('a', 0)).toBeUndefined()
+    expect(q.push('b', 0)).toBeUndefined()
+    expect(q.push('c', 1000)).toBe('a')
+
+    const expired: string[] = []
+    expect(q.drain(1000, undefined, (item) => expired.push(item))).toEqual(['c'])
+    expect(expired).toEqual(['b'])
+  })
+
   test('emit lane never drops - it disconnects instead', () => {
     const q = new EmitQueue<number>(3)
     q.push(1)

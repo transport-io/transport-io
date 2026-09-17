@@ -170,6 +170,7 @@ client.disconnect()
 | `on(event, handler)` | Returns an unsubscribe function. There is no `off()`. |
 | `subscribe(cb)` / `getSnapshot()` | For `useSyncExternalStore`. `getSnapshot` is referentially stable. |
 | `stats()` | Per-peer drop counters. |
+| `observe(observer, opts?)` | One `FrameRecord` per frame in and out, per call stream opening and closing, and per drop `stats()` counts. Returns an unsubscribe. Off unless something subscribes, and one subscription covers every session a reconnect produces. A record is `{ at, session, kind, dir, lane, event, stream, size, sequence, preview }`, all numbers and strings, never a payload; `{ preview: true }` adds the first 256 bytes of each payload as a string, to that subscriber only. |
 | `withFallback<M>(opts)` | `ClientOptions` plus `fallback`, a connector for a reliable-only transport: `() => connectWebSocket({ url })`. Native first on every connect; the fallback on `WT_NO_SUPPORT`, on a failed WebTransport handshake when the WebSocket connects, and on `WT_HANDSHAKE_TIMEOUT` over WebTransport (Safari, 5 s), else the WebTransport error. Returns `FallbackClient<M>`: no `call()` or `stream()`; they live on `native`, which is `null` on a fallback session. Compiles only when every unreliable event declares a fallback, and the error names the event. |
 
 `ClientState` is `{ status, sessionId, rooms, lastError, refused, transport, fallbackReason }`
@@ -336,7 +337,9 @@ it.
 discarded for you. Loss is never reported. `stats()` returns
 `overflowDropped` (a burst outran the 64-frame ring), `staleDropped` (a frame aged past its
 150 ms TTL while queued) and `staleReceived` (a duplicate or out-of-order arrival) - all of
-them **our** counters, never the network's.
+them **our** counters, never the network's. `client.observe()` says which event each drop
+was: a record of kind `overflow-dropped`, `stale-dropped`, `stale-received` or
+`direction-dropped` follows the record of the frame it discarded.
 
 **The emit lane blocks across rooms.** One stream per direction carries every room, so a
 busy room delays a quiet one to the same peer. Calls and datagrams are isolated.

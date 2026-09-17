@@ -4096,3 +4096,107 @@ the hold count back at one, since at two it would stay connected with nobody hol
 alone takes the hold to two. No `reconnect()` method: the pair is two lines, it is neutral
 on the count, and it is the same two lines with or without React.
 
+
+### D149. A client can be observed: one record per frame, off unless subscribed, its bytes pinned
+Chrome's network panel shows nothing useful for WebTransport: no frames, no streams. A
+WebSocket has a frames tab and this has nothing, so an application on this library could see
+`getSnapshot()` and the counters in `stats()` and no individual message. A devtools panel
+needs more than that, and so would a logger. The question was the seam, and it was reported
+on and approved before any interface existed.
+
+**Where it attaches.** Three candidates. A wrapper round the `Connection` sees bytes, so it
+would decode the emit stream a second time, and it sees no drop at all, since all four happen
+above it. The `Client` sees `emit` calls and delivered events: no frame nobody listens for,
+no credit, no stream, no drop. The `Session` sees every frame already decoded, which stream
+it was on, and every drop, and it lasts one connection. So records are produced in the
+session and the subscription lives on the client, which hands its one composed observer to
+every session it builds. `client.observe(observer, { preview })` returns the unsubscribe, and
+one subscription covers every session a reconnect produces.
+
+**A record** is ten fields: `at`, `session`, `kind`, `dir`, `lane`, `event`, `stream`, `size`,
+`sequence`, `preview`. `kind` is one per frame type, `datagram`, `open` and `close` for a call
+stream, and one per drop named after its `stats()` counter. `stream` is 0 for the emit
+stream, a number counted by the session for a call stream, and `null` for a datagram; it is
+not the QUIC stream id, because the seam's `BidiStream` is a readable and a writable and the
+platform exposes no id. A response carries event id 0 on the wire and the record names its
+call anyway, which only the session can do. A drop is a second record after the frame's own,
+never a replacement, so "arrived" and "discarded" are both countable.
+
+**Every field is a number, a name the event table owns, or a fresh string.** Measured, with
+`bench/observe-retention.node.ts`, a full ring of 1,000 after 5,000 inbound frames of 64 KiB,
+heap after GC against before the run: nobody observing -3.7 MB, the records with previews on
+-3.3 MB, a ring of decoded payloads +62.9 MB, and a ring of
+`JSON.stringify(payload).slice(0, 256)` +62.9 MB. The last is the finding: a sliced string
+keeps its parent, so the thing that looks like a preview retains the payload it was cut
+from. The preview is therefore decoded from the first 256 bytes, never sliced from a string,
+off unless the subscription asks, and handed only to the subscriber that asked, so a logger
+does not start receiving payloads because a panel is open.
+
+**The cost at rest is one branch per frame and it is not measurable.** Every site asks
+`#tap !== undefined` and builds nothing otherwise. Interleaved A/B over the loopback, one
+process per run, 11 rounds, five samples of 96,000 frames each, e288d12 against the finished
+seam, median ns per frame: unreliable out 1489 and 1470, unreliable in 1442 and 1428, reliable out
+2430 and 2443, reliable in 2414 and 2417. The interquartile spread is 20 to 50 ns, so the
+differences, two down and two up, are noise. Observing without previews is inside the same
+spread; with previews it is 23 to 75 ns a frame. `bench/observe-cost.node.ts` is the bench. The
+existing `stream-credit-window` bench over real QUIC, lengthened to 30,000 elements in both
+copies, 7 rounds, against the prototype: 50,366 elements a second before and 50,405 with.
+
+**The cost when observing.** The record path alone, record built and written into a ring of
+1,000: 25 ns, and 50 to 81 ns with a preview, flat from a 30-byte payload to a 64 KiB one
+because of the cap. At 50,000 records a second over real QUIC the prototype cost 0.5% of
+throughput, and 1.1% with previews. `examples/chat` sends one datagram per `pointermove`
+with no throttle; headless Brave 152 delivered 581 `pointermove` events a second with input
+injected at 1,117 a second, and at that rate the seam with previews costs 31 microseconds of
+CPU a second. A hand on a real display was not measured.
+
+**What it does cost is bytes, and they are pinned.** A class's methods do not tree-shake, so
+the seam ships in every production bundle, including every one that never opens a panel.
+`scripts/check-bundle-size.ts` bundles what a browser application imports from the built
+`dist`, minified and gzipped: 12,803 bytes at e288d12 and 13,810 with the seam, so 1,007.
+It was 1,146 as first written. What came out: the record helper owns the WebSocket wrapping
+of a datagram, where three sites and two helpers each knew it; the streaming generator
+reaches private members through `self`, not through four closures; subscribers are composed
+by one function with one path; the kinds are an array indexed by frame type, held to the
+constants by a test; a dropped datagram is named by `decodeDatagram`, not by a second copy of
+the header layout; and a test-only getter went, its test asking the behaviour instead.
+Responder-side records were measured on their own at 33 bytes and kept, since the seam is
+complete or it is not a seam. The gate's ceiling is 13,810 and may only go down. The bundler
+and the compressor are esbuild and fflate, pinned by the lockfile and independent of the
+platform: Bun's bundler runs at different versions on a laptop and in CI, and zlib's output
+differs between processor architectures. The agreed line was 1 KB and the instruction was to
+stop above it. 1,007 is under 1,024 and over 1,000, so it is recorded here as it is.
+
+**What an observer cannot see.** The network's loss, the datagrams the transport swallows,
+and what the server dropped on its way to this client, which is `peer.stats()` on the server.
+A gap in `sequence` is not loss: the hub numbers an event across every room, so a gap can be
+a broadcast this peer was not part of. The records carry the sequence and nothing interprets
+it.
+
+**The panel.** Its own package, `@transport-io/devtools`, with two entries. `.` is
+framework-free: a store, which is a ring of 1,000, pause, a filter, the open streams derived
+from `open` and `close`, and the counters from `stats()`; and `mountPanel(target, client)`,
+plain DOM in a shadow root, painting once per animation frame, returning the unmount.
+`./react` is a component that takes the client as a prop and calls `mountPanel` in an effect,
+so React renders no row and the package needs nothing from `@transport-io/react`. Not inside
+the React package, because the vanilla panel would sit behind a React peer dependency and
+`examples/chat` could not use it. Not a core subpath, because panel cosmetics would move the
+version of the package whose changelog is the wire. No loading by environment: nothing in
+core or the React package imports it, the application mounts it, the component renders
+`null` unless `process.env.NODE_ENV` is `development`, and `mountPanel` reads no environment
+at all. A realtime library that attaches something in development on its own is how a
+heisenbug gets made.
+
+**Version one shows** the frame list, the open streams, the snapshot's status and transport,
+and the drop counters with a per-event breakdown, with a pause, a filter by event or lane,
+and copying the visible rows to the clipboard, because this project runs on field reports
+and "copy these forty rows" is what someone does when they open an issue. No export to a
+file, no server-side observation, no payload beyond the preview, no interpretation of gaps,
+no production mode. The paint is bounded by design and is measured before the package ships:
+the chat example at a real pointer rate, panel open against panel closed.
+
+**Reconsider when:** a server needs the same view, which is `observe` on `Server` or
+`ServerPeer` over the session's existing `observe(tap)` plus two sites in the hub's fan-out,
+which sends bytes it encoded once and so bypasses `sendFrame`; or an application needs a
+kind of drop `stats()` does not count, a malformed datagram or one that arrived before the
+handshake, which is a new counter first and a new kind second.

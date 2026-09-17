@@ -12,14 +12,16 @@ import {
   validate,
 } from './codec.ts'
 import type { Direction, EventEntry, EventTable } from './contract.ts'
-import { decodeDatagram, encodeDatagram, SequenceGate } from './datagram.ts'
+import { type Datagram, decodeDatagram, encodeDatagram, SequenceGate } from './datagram.ts'
 import { errorForClose, TransportError } from './errors.ts'
 import { encodeFrame, type Frame, FrameDecoder } from './framer.ts'
 import { buildHandshake, type Negotiated, negotiate, parseHandshake } from './handshake.ts'
+import { FRAME_KINDS, type FrameKind, previewOf, type Tap } from './observe.ts'
 import {
   CLOSE_REASON_MAX_BYTES,
   CloseCode,
   Codec,
+  DATAGRAM_HEADER_BYTES,
   EVENT_ID_NOT_APPLICABLE,
   FALLBACK_UNRELIABLE_LOW_WATER,
   FrameType,
@@ -28,6 +30,7 @@ import {
   ResetCode,
   SEQUENCE_STATE_RETENTION_MS,
   STREAM_CREDIT_REFILL,
+  STREAM_FRAME_OVERHEAD_BYTES,
   STREAM_INITIAL_CREDIT,
 } from './protocol.ts'
 import { DatagramQueue, EmitQueue, PeerTooSlowError, type QueueStats } from './queue.ts'
@@ -272,6 +275,13 @@ export class Session {
   readonly #opened: Promise<void>
   readonly #side: Direction | undefined
   #directionDropped = 0
+  /**
+   * Who is observing, or nobody. Every site that reports asks `#tap !== undefined` first, so
+   * a session nobody observes pays one branch per frame and builds nothing. See D149.
+   */
+  #tap: Tap | undefined
+  /** Call streams this session has opened or accepted, which is what numbers them. */
+  #streams = 0
 
   /** Resolves when both sides have exchanged a valid handshake. */
   readonly ready: Promise<Negotiated>
@@ -304,6 +314,88 @@ export class Session {
 
   get origin(): number {
     return this.#origin
+  }
+
+  /** One observer or none. The client composes its subscribers into the one it hands over. */
+  observe(tap: Tap | undefined): void {
+    this.#tap = this.#disposed ? undefined : tap
+  }
+
+  #note(
+    kind: FrameKind,
+    dir: 'in' | 'out',
+    lane: 'reliable' | 'unreliable',
+    event: string | null,
+    stream: number | null,
+    size: number,
+    sequence: number | null = null,
+    codec = 0,
+    payload?: Uint8Array,
+  ): void {
+    const tap = this.#tap
+    if (tap === undefined) return
+    // A datagram travels on no stream, except on the WebSocket mapping, where a frame on the
+    // emit stream wraps it (§3.3) and its bytes on the wire are the frame's.
+    const wrapped = lane === 'unreliable' && this.#conn.kind() !== 'webtransport'
+    // `composeTap` built this observer, and it does not throw.
+    tap.observer({
+      at: this.#now(),
+      session: tap.session,
+      kind,
+      dir,
+      lane,
+      event,
+      stream: wrapped ? 0 : stream,
+      size: wrapped ? size + STREAM_FRAME_OVERHEAD_BYTES : size,
+      sequence,
+      preview: tap.preview && payload !== undefined ? previewOf(codec, payload) : null,
+    })
+  }
+
+  /** A call stream opening or closing. `dir` is who opened it. */
+  #mark(kind: 'open' | 'close', dir: 'in' | 'out', stream: number, entry?: EventEntry): void {
+    this.#note(kind, dir, 'reliable', entry?.name ?? null, stream, 0)
+  }
+
+  /** A frame on a stream. A response carries event id 0, so the call's entry is passed in. */
+  #see(dir: 'in' | 'out', stream: number, frame: Frame, entry?: EventEntry): void {
+    const kind = FRAME_KINDS[frame.type]
+    if (kind === undefined) return
+    this.#note(
+      kind,
+      dir,
+      'reliable',
+      (entry ?? this.#table.byId(frame.eventId))?.name ?? null,
+      stream,
+      STREAM_FRAME_OVERHEAD_BYTES + frame.payload.byteLength,
+      null,
+      frame.codec,
+      frame.payload,
+    )
+  }
+
+  /** A datagram the queue let go of, named from its own header. */
+  #seeDropped(kind: FrameKind, bytes: Uint8Array): void {
+    const dg = decodeDatagram(bytes)
+    const event = this.#table.byId(dg.eventId)?.name ?? null
+    this.#note(kind, 'out', 'unreliable', event, null, bytes.byteLength, dg.sequence)
+  }
+
+  /** A datagram that arrived, and a second record when the sequence gate refused it. */
+  #seeDatagram(size: number, dg: Datagram, fresh: boolean): void {
+    const event = this.#table.byId(dg.eventId)?.name ?? null
+    this.#note(
+      'datagram',
+      'in',
+      'unreliable',
+      event,
+      null,
+      size,
+      dg.sequence,
+      dg.codec,
+      dg.payload,
+    )
+    if (!fresh) this.#note('stale-received', 'in', 'unreliable', event, null, size, dg.sequence)
   }
 
   /**
@@ -392,17 +484,14 @@ export class Session {
 
       // Frame 0 of the emit stream. In-order delivery within a stream makes early traffic
       // impossible by construction, so there is no race to guard.
-      await Promise.race([
-        writer.write(
-          encodeFrame({
-            type: FrameType.HANDSHAKE,
-            codec: Codec.JSON,
-            eventId: EVENT_ID_NOT_APPLICABLE,
-            payload: encodePayload(buildHandshake(this.#table)),
-          }),
-        ),
-        deadline,
-      ])
+      const hello: Frame = {
+        type: FrameType.HANDSHAKE,
+        codec: Codec.JSON,
+        eventId: EVENT_ID_NOT_APPLICABLE,
+        payload: encodePayload(buildHandshake(this.#table)),
+      }
+      if (this.#tap !== undefined) this.#see('out', 0, hello)
+      await Promise.race([writer.write(encodeFrame(hello)), deadline])
       this.#handshakeSent = true
       this.#flushEmits()
 
@@ -540,7 +629,23 @@ export class Session {
         { codec, eventId: entry.id, origin: this.#origin, sequence: seq, payload: bytes },
         this.#conn.maxDatagramSize(),
       )
-      this.#dgQueue.push(dg, this.#now())
+      if (this.#tap !== undefined) {
+        this.#note(
+          'datagram',
+          'out',
+          'unreliable',
+          entry.name,
+          null,
+          dg.byteLength,
+          seq,
+          codec,
+          bytes,
+        )
+      }
+      const evicted = this.#dgQueue.push(dg, this.#now())
+      if (evicted !== undefined && this.#tap !== undefined) {
+        this.#seeDropped('overflow-dropped', evicted)
+      }
       this.#flushDatagrams()
       return
     }
@@ -751,14 +856,18 @@ export class Session {
       return
     }
     this.#inboundCalls++
+    // The peer opened it and has not said what for yet: the request that follows names it.
+    const n = ++this.#streams
+    if (this.#tap !== undefined) this.#mark('open', 'in', n)
     // Owned here rather than inside `#serveCall` so that its removal has exactly one home.
     // `#serveCall` returns from eight places, and a set entry leaked from any of them is a
     // controller that never gets collected.
     const controller = new AbortController()
     this.#inflight.add(controller)
-    void this.#serveCall(stream, controller).finally(() => {
+    void this.#serveCall(stream, controller, n).finally(() => {
       this.#inflight.delete(controller)
       this.#inboundCalls--
+      if (this.#tap !== undefined) this.#mark('close', 'in', n)
     })
   }
 
@@ -768,6 +877,7 @@ export class Session {
 
   /** Used by the hub to forward an already-encoded frame without re-encoding per peer. */
   sendFrame(frame: Frame): void {
+    if (this.#tap !== undefined) this.#see('out', 0, frame)
     this.sendEncodedFrame(encodeFrame(frame))
   }
 
@@ -865,6 +975,8 @@ export class Session {
     this.#callHandlers.clear()
     this.#controlHandlers.clear()
     this.#writer = undefined
+    // The observer outlives this session, and must not be kept alive by it.
+    this.#tap = undefined
   }
 
   // ------------------------------------------------------------------ calls
@@ -872,6 +984,8 @@ export class Session {
   async #doCall(entry: EventEntry, body: Uint8Array, signal?: AbortSignal): Promise<unknown> {
     const eventId = entry.id
     const stream = await this.#conn.openBidi()
+    const n = ++this.#streams
+    if (this.#tap !== undefined) this.#mark('open', 'out', n, entry)
     const writer = stream.writable.getWriter()
     const reader = stream.readable.getReader()
 
@@ -885,14 +999,14 @@ export class Session {
     signal?.addEventListener('abort', onAbort, { once: true })
 
     try {
-      await writer.write(
-        encodeFrame({
-          type: FrameType.CALL_REQUEST,
-          codec: slotCodec(entry.def, 'payload'),
-          eventId,
-          payload: body,
-        }),
-      )
+      const request: Frame = {
+        type: FrameType.CALL_REQUEST,
+        codec: slotCodec(entry.def, 'payload'),
+        eventId,
+        payload: body,
+      }
+      if (this.#tap !== undefined) this.#see('out', n, request, entry)
+      await writer.write(encodeFrame(request))
       // Half-close: FIN ends the request while the read side stays open.
       await writer.close()
 
@@ -902,7 +1016,10 @@ export class Session {
         const { value, done } = await reader.read()
         if (done) break
         if (value === undefined) continue
-        for (const f of decoder.push(value)) responses.push(f)
+        for (const f of decoder.push(value)) {
+          if (this.#tap !== undefined) this.#see('in', n, f, entry)
+          responses.push(f)
+        }
       }
 
       signal?.throwIfAborted()
@@ -928,6 +1045,7 @@ export class Session {
       return decodeWith(first.codec, first.payload)
     } finally {
       signal?.removeEventListener('abort', onAbort)
+      if (this.#tap !== undefined) this.#mark('close', 'out', n, entry)
     }
   }
 
@@ -958,9 +1076,13 @@ export class Session {
       this.#openCalls--
     }
     this.#openCalls++
+    // The generator below has no `this` of its own, and private names are lexical.
+    const self = this
 
     async function* run(): AsyncGenerator<unknown> {
       const stream = await open()
+      const n = ++self.#streams
+      if (self.#tap !== undefined) self.#mark('open', 'out', n, entry)
       const writer = stream.writable.getWriter()
       const reader = stream.readable.getReader()
       let ended = false
@@ -974,14 +1096,14 @@ export class Session {
       cancelled.signal.addEventListener('abort', onAbort, { once: true })
 
       try {
-        await writer.write(
-          encodeFrame({
-            type: FrameType.CALL_REQUEST,
-            codec: requestCodec,
-            eventId,
-            payload: body,
-          }),
-        )
+        const request: Frame = {
+          type: FrameType.CALL_REQUEST,
+          codec: requestCodec,
+          eventId,
+          payload: body,
+        }
+        if (self.#tap !== undefined) self.#see('out', n, request, entry)
+        await writer.write(encodeFrame(request))
         // No FIN here, unlike a call. The write side stays open for the life of the stream
         // because it carries the credit the responder spends. §6.2.
 
@@ -991,14 +1113,14 @@ export class Session {
           const owed = taken - acknowledged
           if (owed < STREAM_CREDIT_REFILL) return
           acknowledged = taken
-          await writer.write(
-            encodeFrame({
-              type: FrameType.CALL_CREDIT,
-              codec: Codec.JSON,
-              eventId: EVENT_ID_NOT_APPLICABLE,
-              payload: encodePayload({ credit: owed }),
-            }),
-          )
+          const credit: Frame = {
+            type: FrameType.CALL_CREDIT,
+            codec: Codec.JSON,
+            eventId: EVENT_ID_NOT_APPLICABLE,
+            payload: encodePayload({ credit: owed }),
+          }
+          if (self.#tap !== undefined) self.#see('out', n, credit, entry)
+          await writer.write(encodeFrame(credit))
         }
 
         const decoder = new FrameDecoder()
@@ -1007,6 +1129,7 @@ export class Session {
           if (done) break
           if (value === undefined) continue
           for (const f of decoder.push(value)) {
+            if (self.#tap !== undefined) self.#see('in', n, f, entry)
             if (f.type === FrameType.CALL_ERROR) {
               const b = decodePayload(f.payload) as { code?: string; message?: string }
               throw new TransportError(
@@ -1041,6 +1164,7 @@ export class Session {
         // responder is still producing and has to be told.
         if (!ended) reset()
         released()
+        if (self.#tap !== undefined) self.#mark('close', 'out', n, entry)
       }
     }
 
@@ -1049,7 +1173,7 @@ export class Session {
     })
   }
 
-  async #serveCall(stream: BidiStream, controller: AbortController): Promise<void> {
+  async #serveCall(stream: BidiStream, controller: AbortController, n: number): Promise<void> {
     const reader = stream.readable.getReader()
     const writer = stream.writable.getWriter()
     const decoder = new FrameDecoder()
@@ -1061,7 +1185,10 @@ export class Session {
         const { value, done } = await reader.read()
         if (done) break // the initiator half-closed: the request is complete
         if (value === undefined) continue
-        for (const f of decoder.push(value)) if (request === undefined) request = f
+        for (const f of decoder.push(value)) {
+          if (this.#tap !== undefined) this.#see('in', n, f)
+          if (request === undefined) request = f
+        }
         // A streaming initiator never sends FIN: its write side carries credit for the
         // life of the stream. Waiting for `done` here would hang for ever.
         if (
@@ -1087,18 +1214,24 @@ export class Session {
     void writer.closed.catch(() => controller.abort())
 
     if (request === undefined || request.type !== FrameType.CALL_REQUEST) {
-      await this.#failCall(writer, 'WT_PROTOCOL_ERROR', 'expected a CALL_REQUEST frame')
+      await this.#failCall(writer, n, 'WT_PROTOCOL_ERROR', 'expected a CALL_REQUEST frame')
       return
     }
     if (this.#negotiated === undefined) {
       // A call racing the handshake resets its own stream, not the session.
-      await this.#failCall(writer, 'WT_HANDSHAKE_INCOMPLETE', 'the handshake has not completed')
+      await this.#failCall(
+        writer,
+        n,
+        'WT_HANDSHAKE_INCOMPLETE',
+        'the handshake has not completed',
+      )
       return
     }
     const entry = this.#table.byId(request.eventId)
     if (entry === undefined) {
       await this.#failCall(
         writer,
+        n,
         'WT_UNKNOWN_EVENT',
         `event id ${request.eventId} is not in the contract`,
       )
@@ -1111,8 +1244,10 @@ export class Session {
       // guaranteed one on this side of the wire.
       await this.#failCall(
         writer,
+        n,
         'WT_PROTOCOL_ERROR',
         `event '${entry.name}' is on the unreliable lane and is not callable`,
+        entry,
       )
       return
     }
@@ -1120,8 +1255,10 @@ export class Session {
     if (handler === undefined) {
       await this.#failCall(
         writer,
+        n,
         'WT_UNKNOWN_EVENT',
         `no handler registered for '${entry.name}'`,
+        entry,
       )
       return
     }
@@ -1132,7 +1269,7 @@ export class Session {
       if (this.#validateInbound) value = await validate(entry.def.payload, value)
 
       if (entry.def.yields !== undefined) {
-        await this.#serveStream(handler as StreamHandler, value, entry, writer, controller, {
+        await this.#serveStream(handler as StreamHandler, value, entry, writer, controller, n, {
           readNext: async () => {
             const r = await reader.read()
             return r.done ? undefined : (r.value as Uint8Array)
@@ -1148,18 +1285,18 @@ export class Session {
         peer: this.#peer,
       })
       const returnsCodec = slotCodec(entry.def, 'returns')
-      await writer.write(
-        encodeFrame({
-          type: FrameType.CALL_RESPONSE,
-          codec: returnsCodec,
-          eventId: EVENT_ID_NOT_APPLICABLE,
-          payload: encodeWith(returnsCodec, result),
-        }),
-      )
+      const response: Frame = {
+        type: FrameType.CALL_RESPONSE,
+        codec: returnsCodec,
+        eventId: EVENT_ID_NOT_APPLICABLE,
+        payload: encodeWith(returnsCodec, result),
+      }
+      if (this.#tap !== undefined) this.#see('out', n, response, entry)
+      await writer.write(encodeFrame(response))
       await writer.close()
     } catch (e) {
       const code = e instanceof TransportError ? e.code : 'WT_HANDLER_ERROR'
-      await this.#failCall(writer, code, e instanceof Error ? e.message : String(e))
+      await this.#failCall(writer, n, code, e instanceof Error ? e.message : String(e), entry)
     }
   }
 
@@ -1179,6 +1316,7 @@ export class Session {
     entry: EventEntry,
     writer: WritableStreamDefaultWriter<Uint8Array>,
     controller: AbortController,
+    n: number,
     inbound: {
       // A closure rather than the reader itself: the Node and DOM spellings of
       // `ReadableStreamDefaultReader` differ, and this only ever needs the next chunk.
@@ -1197,8 +1335,10 @@ export class Session {
     ) {
       await this.#failCall(
         writer,
+        n,
         'WT_HANDLER_ERROR',
         `the handler for '${name}' declares \`yields\` but did not return an async iterable`,
+        entry,
       )
       return
     }
@@ -1238,6 +1378,7 @@ export class Session {
             const chunk = await inbound.readNext()
             if (chunk === undefined) break
             for (const f of inbound.decoder.push(chunk)) {
+              if (this.#tap !== undefined) this.#see('in', n, f, entry)
               if (f.type !== FrameType.CALL_CREDIT) continue
               const b = decodePayload(f.payload) as { credit?: number }
               if (typeof b.credit === 'number' && b.credit > 0) {
@@ -1279,17 +1420,14 @@ export class Session {
         if (controller.signal.aborted) break
         credit--
         await writer.ready
-        await Promise.race([
-          writer.write(
-            encodeFrame({
-              type: FrameType.CALL_RESPONSE,
-              codec: yieldCodec,
-              eventId: EVENT_ID_NOT_APPLICABLE,
-              payload: encodeWith(yieldCodec, next.value),
-            }),
-          ),
-          aborted,
-        ])
+        const response: Frame = {
+          type: FrameType.CALL_RESPONSE,
+          codec: yieldCodec,
+          eventId: EVENT_ID_NOT_APPLICABLE,
+          payload: encodeWith(yieldCodec, next.value),
+        }
+        if (this.#tap !== undefined) this.#see('out', n, response, entry)
+        await Promise.race([writer.write(encodeFrame(response)), aborted])
       }
       if (!controller.signal.aborted) await writer.close()
     } catch (e) {
@@ -1297,7 +1435,7 @@ export class Session {
       // nothing left to write a CALL_ERROR onto anyway.
       if (!controller.signal.aborted) {
         const code = e instanceof TransportError ? e.code : 'WT_HANDLER_ERROR'
-        await this.#failCall(writer, code, e instanceof Error ? e.message : String(e))
+        await this.#failCall(writer, n, code, e instanceof Error ? e.message : String(e), entry)
       }
     } finally {
       controller.signal.removeEventListener('abort', nudge)
@@ -1310,18 +1448,20 @@ export class Session {
 
   async #failCall(
     writer: WritableStreamDefaultWriter<Uint8Array>,
+    n: number,
     code: string,
     message: string,
+    entry?: EventEntry,
   ): Promise<void> {
     try {
-      await writer.write(
-        encodeFrame({
-          type: FrameType.CALL_ERROR,
-          codec: Codec.JSON,
-          eventId: EVENT_ID_NOT_APPLICABLE,
-          payload: encodePayload({ code, message: message.slice(0, 1024) }),
-        }),
-      )
+      const failure: Frame = {
+        type: FrameType.CALL_ERROR,
+        codec: Codec.JSON,
+        eventId: EVENT_ID_NOT_APPLICABLE,
+        payload: encodePayload({ code, message: message.slice(0, 1024) }),
+      }
+      if (this.#tap !== undefined) this.#see('out', n, failure, entry)
+      await writer.write(encodeFrame(failure))
       await writer.close()
     } catch {
       // The peer already went away; nothing left to report to.
@@ -1340,8 +1480,14 @@ export class Session {
     this.#flushScheduled = true
     this.#schedule(() => {
       this.#flushScheduled = false
+      const expired =
+        this.#tap === undefined
+          ? undefined
+          : (dg: Uint8Array): void => this.#seeDropped('stale-dropped', dg)
       if (this.#conn.kind() === 'webtransport') {
-        for (const dg of this.#dgQueue.drain(this.#now())) this.#conn.sendDatagram(dg)
+        for (const dg of this.#dgQueue.drain(this.#now(), undefined, expired)) {
+          this.#conn.sendDatagram(dg)
+        }
         return
       }
       // §3.3: on a transport with no datagrams the emit lane carries them, each wrapped in a
@@ -1351,7 +1497,7 @@ export class Session {
       // completes; see `#flushEmits`.
       const room = FALLBACK_UNRELIABLE_LOW_WATER - this.#emitQueue.depth
       if (room <= 0) return
-      for (const dg of this.#dgQueue.drain(this.#now(), room)) {
+      for (const dg of this.#dgQueue.drain(this.#now(), room, expired)) {
         this.sendFrame({
           type: FrameType.DATAGRAM,
           codec: Codec.JSON,
@@ -1450,6 +1596,8 @@ export class Session {
   }
 
   async #onFrame(frame: Frame): Promise<void> {
+    // As it arrives, before the hold: a record says what crossed the wire and when.
+    if (this.#tap !== undefined) this.#see('in', 0, frame)
     if (frame.type === FrameType.HANDSHAKE) {
       const peer = parseHandshake(decodePayload(frame.payload))
       const n = negotiate(buildHandshake(this.#table), peer)
@@ -1501,7 +1649,9 @@ export class Session {
       try {
         if (this.#open !== undefined) await this.#opened
         const dg = decodeDatagram(bytes)
-        if (!this.#gate.accept(dg.origin, dg.eventId, dg.sequence, this.#now())) return
+        const fresh = this.#gate.accept(dg.origin, dg.eventId, dg.sequence, this.#now())
+        if (this.#tap !== undefined) this.#seeDatagram(bytes.byteLength, dg, fresh)
+        if (!fresh) return
         await this.#deliver(dg.eventId, dg.payload, dg.origin, dg.codec)
       } catch {
         // A malformed datagram is discarded. The lane already permits loss, so raising a
@@ -1521,6 +1671,17 @@ export class Session {
     // Declared as sent by this side, so an inbound one is the peer sending the wrong way.
     if (this.#side !== undefined && entry.def.from === this.#side) {
       this.#directionDropped++
+      if (this.#tap !== undefined) {
+        const reliable = entry.lane === 'reliable'
+        this.#note(
+          'direction-dropped',
+          'in',
+          entry.lane,
+          entry.name,
+          reliable ? 0 : null,
+          payload.byteLength + (reliable ? STREAM_FRAME_OVERHEAD_BYTES : DATAGRAM_HEADER_BYTES),
+        )
+      }
       return
     }
     expectCodec(entry.name, 'payload', slotCodec(entry.def, 'payload'), codec)

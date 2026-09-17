@@ -586,6 +586,55 @@ fallback sends a keepalive after 15 s with nothing sent and closes after 45 s wi
 received, so a dead TCP path is noticed within that; keep any proxy's idle timeout above
 15 s.
 
+### 2.6 Observing frames
+
+`client.observe(observer, options?)` calls `observer` with one record for every frame in and
+out, every call stream opening and closing, and every drop `stats()` counts. It returns the
+unsubscribe. Subscribe once, before or after `connect()`: the subscription carries over to
+every session a reconnect produces. A client nobody observes builds no records. A fallback
+client has it too.
+
+```ts
+import type { FrameRecord } from 'transport-io'
+
+export function logDrops(client: Client<AppMap>): () => void {
+  return client.observe((record: FrameRecord) => {
+    if (record.kind.endsWith('-dropped') || record.kind === 'stale-received') {
+      console.warn(`${record.kind}: ${record.event} #${record.sequence}`)
+    }
+  })
+}
+```
+
+| Field | |
+| --- | --- |
+| `at` | The client's clock, in milliseconds. |
+| `session` | 1 for the first session, 2 for the next. A reconnect is a new session. |
+| `kind` | `handshake`, `emit`, `datagram`, `request`, `response`, `error`, `credit`, `join`, `leave`; `open` and `close` for a call stream; `overflow-dropped`, `stale-dropped`, `stale-received` and `direction-dropped`, each named after the `stats()` counter it explains. |
+| `dir` | `in` or `out`. For `open` and `close`, which side opened the stream. |
+| `lane` | From the contract, so a datagram on a fallback session is still `unreliable`. |
+| `event` | The event's name. `null` for a frame that carries no event. A response names its call. |
+| `stream` | 0 is the emit stream, and everything on a fallback session. 1 and up is a call stream, numbered in the order this session's streams open, and is not the QUIC stream id. `null` for a datagram. |
+| `size` | Bytes on the wire, header included. 0 for `open` and `close`. |
+| `sequence` | A datagram's sequence number. `null` otherwise. |
+| `preview` | `null` unless asked for. |
+
+**A drop is a second record, never a replacement.** A datagram that overflowed the ring was
+<!-- norm: drop-is-a-second-record -> packages/core/src/observe.test.ts -->
+recorded as `datagram` when it was emitted, and `overflow-dropped` follows with the same
+`sequence`. The records show this client's own drops: the network's loss, and what the server
+dropped on its way here, are not visible from this side. A gap in `sequence` is not proof of
+loss either, since the server numbers an event across every room and this client may not have
+been in all of them.
+
+**A record holds no payload.** `{ preview: true }` adds the first 256 bytes of each JSON
+payload as text, or the first 32 bytes of a `bytes()` payload as hex. Only a subscriber that
+asks receives one, whoever else is subscribed, so a logger does not start seeing payloads
+because a panel is open.
+
+An observer runs inside the session, once per frame, so it does one cheap thing: append to a
+bounded list, bump a counter. One that throws is ignored.
+
 ---
 
 ## 3. Server

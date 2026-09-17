@@ -17,6 +17,12 @@ import {
   type StreamableOf,
 } from './contract.ts'
 import { errorForClose, RefusedError, TransportError } from './errors.ts'
+import {
+  composeTap,
+  type FrameObserver,
+  type ObserveOptions,
+  type Subscriber,
+} from './observe.ts'
 import { CloseCode, FrameType } from './protocol.ts'
 import { Session, type SessionStats, type StreamResult } from './session.ts'
 import { OwnedTimers } from './timers.ts'
@@ -130,6 +136,9 @@ export class Client<M extends AnyMap = Registered> {
   /** Failed attempts since the last connected session, which sets the next wait. */
   #attempt = 0
   readonly #onSession = new Set<(state: ClientState) => void>()
+  readonly #observers = new Set<Subscriber>()
+  /** Sessions this client has adopted, which is what numbers them for an observer. */
+  #sessions = 0
 
   constructor(opts: ClientOptions) {
     this.#opts = opts
@@ -259,6 +268,28 @@ export class Client<M extends AnyMap = Registered> {
     return this.#session?.stats()
   }
 
+  /**
+   * One record for every frame in and out, every call stream opening and closing, and every
+   * drop `stats()` counts, on this session and on each one a reconnect produces. Off unless
+   * something subscribes: a client nobody observes builds no records. A record holds no
+   * payload, and `preview: true` adds the first bytes of each as a string. Returns the
+   * unsubscribe.
+   */
+  observe(observer: FrameObserver, options?: ObserveOptions): () => void {
+    const subscriber = { observer, preview: options?.preview === true }
+    this.#observers.add(subscriber)
+    this.#tap()
+    return () => {
+      this.#observers.delete(subscriber)
+      this.#tap()
+    }
+  }
+
+  /** Hands the current session its observer, composed from whoever subscribes now. */
+  #tap(): void {
+    this.#session?.observe(composeTap([...this.#observers], this.#sessions))
+  }
+
   async #doConnect(): Promise<void> {
     this.#patch({ status: 'connecting', lastError: null, refused: null })
     const generation = this.#generation
@@ -378,6 +409,8 @@ export class Client<M extends AnyMap = Registered> {
       return
     }
     this.#session = session
+    this.#sessions++
+    this.#tap()
 
     for (const [event, handlers] of this.#handlers) {
       for (const h of handlers) session.on(event, (p) => h(p))

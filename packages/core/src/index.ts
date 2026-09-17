@@ -59,6 +59,13 @@ export { maxDatagramPayload } from './datagram.ts'
 export { RefusedError, TransportError, type TransportErrorCode } from './errors.ts'
 export { encodeFrame, type Frame, FrameDecoder, maxPayloadFor } from './framer.ts'
 export {
+  type FrameKind,
+  type FrameObserver,
+  type FrameRecord,
+  type ObserveOptions,
+  PREVIEW_MAX_BYTES,
+} from './observe.ts'
+export {
   CloseCode,
   Codec,
   DATAGRAM_CONSERVATIVE_PAYLOAD_MAX,
