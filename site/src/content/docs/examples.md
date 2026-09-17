@@ -16,6 +16,9 @@ a name assigned by a call, `/say some words` streaming the reply a word at a tim
 slider that makes the server drop a share of your cursor frames so the other window watches
 the unreliable lane lose them while chat arrives one for one.
 
+Served from your own machine, `/` also mounts the [devtools panel](/guides/devtools/): the
+button in the corner opens it, and every frame, stream and drop on this page shows up in it.
+
 `/agents.html` runs two streaming calls at once and lets you stop either one. Stopping one
 resets its QUIC stream: the server's generator ends where it stood, and the other stream does
 not lose a token.

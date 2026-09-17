@@ -41,6 +41,10 @@ hash the pages pin, and prints the URL. `--static web` is required: without it t
 serves the first of `public`, `web/dist`, `web` and `dist` that exists, and after the build
 that is `web/dist`, which has no page in it.
 
+The chat page mounts the [devtools panel](https://transport-io.github.io/transport-io/guides/devtools/)
+when it is served from your own machine: the **transport-io** button in the corner opens it,
+and it lists every frame below as it crosses the wire.
+
 Open **two** windows on `/`. Type in one; it appears in both. Move the pointer in
 one; the dot moves in the other, and the drop counters in the header climb under load.
 Drag the loss slider up in one window and keep moving: the other window's cursor count

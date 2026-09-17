@@ -48,4 +48,5 @@ change at a time, and ends at the React example in the repository.
 [Deploying](/guides/deploy/) is what a server needs from a platform, and
 [Certificates](/guides/certificates/) is which certificate it ends up on.
 [React](/guides/react/) is the binding, if that is what you are building in.
+[Devtools](/guides/devtools/) is a panel that shows the frames, the streams and the drops.
 [Limitations](/limitations/) is worth reading before you commit to this.
