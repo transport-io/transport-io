@@ -456,6 +456,19 @@ session; a caller that ignores the promise sees the failure in the state and no 
 rejection. React 19.2 or newer. The guide is at
 https://transport-io.github.io/transport-io/guides/react/.
 
+## Devtools
+
+`@transport-io/devtools` is a panel in the page: every frame in and out, the call streams
+open now, the connection, and the drops `stats()` counts, by event, with pause, a filter and
+copying the visible rows as text. A browser's network panel shows none of it for WebTransport.
+`mountPanel(client, options?)` from `@transport-io/devtools` is plain DOM, returns the
+unmount, and reads no environment: call it behind your own condition. `<TransportDevtools
+client={client} />` from `@transport-io/devtools/react` renders `null` unless
+`process.env.NODE_ENV` is `development`. Options for both: `open`, `preview`, `capacity`
+(1,000), `visibleRows` (200), `target`. Nothing mounts either one for you. It reads
+`client.observe()`, which a logger can read too. The guide is at
+https://transport-io.github.io/transport-io/guides/devtools/.
+
 ## Not implemented
 
 Namespaces, presence, middleware chains, binary codecs, the Redis adapter.

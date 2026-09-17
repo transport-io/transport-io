@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": [],
+    "jsx": "react-jsx"
+  },
+  "include": ["src"],
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/*.test-d.ts"],
+  "references": [
+    {
+      "path": "../core"
+    }
+  ]
+}

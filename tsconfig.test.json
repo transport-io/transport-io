@@ -7,7 +7,8 @@
     "composite": false,
     "types": ["bun"],
     "declarationMap": false,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "lib": ["es2023", "dom", "dom.iterable"]
   },
   "include": [
     "packages/*/src/**/*.test.ts",

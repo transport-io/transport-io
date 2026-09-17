@@ -1,0 +1,255 @@
+/**
+ * The panel in a DOM: what it shows, that it paints only while open, and that a string a
+ * peer controls is never markup.
+ */
+import { afterEach, describe, expect, test } from 'bun:test'
+import type { ClientState, FrameObserver, FrameRecord, SessionStats } from 'transport-io'
+import { mountPanel } from './panel.ts'
+import type { ObservableClient } from './store.ts'
+
+const connected: ClientState = Object.freeze({
+  status: 'connected',
+  sessionId: 's-7',
+  rooms: [],
+  lastError: null,
+  refused: null,
+  transport: 'webtransport',
+  fallbackReason: null,
+})
+
+function fake(): { client: ObservableClient; push: (r?: Partial<FrameRecord>) => void } {
+  const observers = new Set<FrameObserver>()
+  const stats: SessionStats = {
+    queueDepth: 2,
+    overflowDropped: 3,
+    staleDropped: 0,
+    staleReceived: 0,
+    directionDropped: 0,
+  }
+  let n = 0
+  return {
+    client: {
+      observe: (o) => {
+        observers.add(o)
+        return () => void observers.delete(o)
+      },
+      subscribe: () => () => undefined,
+      getSnapshot: () => connected,
+      stats: () => stats,
+    },
+    push: (r = {}) => {
+      const record: FrameRecord = {
+        at: ++n,
+        session: 1,
+        kind: 'emit',
+        dir: 'in',
+        lane: 'reliable',
+        event: 'chat',
+        stream: 0,
+        size: 20,
+        sequence: null,
+        preview: null,
+        ...r,
+      }
+      for (const o of observers) o(record)
+    },
+  }
+}
+
+/** Frames the test runs by hand, which is also how "paints once per frame" is asserted. */
+function frames(): { schedule: (run: () => void) => () => void; tick: () => void } {
+  let queued: (() => void)[] = []
+  return {
+    schedule: (run) => {
+      queued.push(run)
+      return () => {
+        queued = queued.filter((q) => q !== run)
+      }
+    },
+    tick: () => {
+      const now = queued
+      queued = []
+      for (const run of now) run()
+    },
+  }
+}
+
+const unmounts: (() => void)[] = []
+afterEach(() => {
+  for (const u of unmounts.splice(0, unmounts.length)) u()
+})
+
+function mount(options: Parameters<typeof mountPanel>[1] = {}): {
+  root: ShadowRoot
+  push: (r?: Partial<FrameRecord>) => void
+  tick: () => void
+  unmount: () => void
+} {
+  const c = fake()
+  const f = frames()
+  const unmount = mountPanel(c.client, { schedule: f.schedule, ...options })
+  unmounts.push(unmount)
+  const host = document.querySelector('[data-transport-io-devtools]')
+  const root = host?.shadowRoot
+  if (root === null || root === undefined) throw new Error('the panel did not mount')
+  return { root, push: c.push, tick: f.tick, unmount }
+}
+
+/** Oldest first, as they read on screen. The list is a reversed column in the document. */
+const dataRows = (root: ShadowRoot): HTMLElement[] =>
+  [...root.querySelectorAll<HTMLElement>('.rows .r')]
+    .filter((row) => !row.classList.contains('session'))
+    .reverse()
+
+const button = (root: ShadowRoot, label: string): HTMLButtonElement => {
+  const found = [...root.querySelectorAll('button')].find((b) =>
+    b.textContent?.startsWith(label),
+  )
+  if (found === undefined) throw new Error(`no button labelled ${label}`)
+  return found
+}
+
+describe('closed', () => {
+  test('it starts as a launcher, and paints no rows until it is opened', () => {
+    const p = mount()
+    p.push()
+    p.push()
+    p.tick()
+    expect(p.root.querySelector<HTMLElement>('.panel')?.hidden).toBe(true)
+    expect(dataRows(p.root)).toHaveLength(0)
+
+    button(p.root, 'transport-io').click()
+    expect(p.root.querySelector<HTMLElement>('.panel')?.hidden).toBe(false)
+    // What happened while it was closed is there when it opens.
+    expect(dataRows(p.root)).toHaveLength(2)
+  })
+
+  test('the launcher says how many were dropped, which is the reason to open it', () => {
+    const p = mount()
+    p.push({ kind: 'overflow-dropped', event: 'cursor', lane: 'unreliable' })
+    p.push({ kind: 'overflow-dropped', event: 'cursor', lane: 'unreliable' })
+    p.tick()
+    expect(button(p.root, 'transport-io').textContent).toContain('2 dropped')
+  })
+})
+
+describe('open', () => {
+  test('status, transport, session and the counters from stats()', () => {
+    const p = mount({ open: true })
+    const bar = p.root.querySelector('.bar')?.textContent ?? ''
+    expect(bar).toContain('connected on webtransport')
+    expect(bar).toContain('s-7')
+    expect(bar).toContain('queue 2')
+    expect(bar).toContain('overflow 3')
+    expect(bar).toContain('direction 0')
+  })
+
+  test('a row per record, a divider per session, and drops marked', () => {
+    const p = mount({ open: true })
+    p.push({ event: 'chat' })
+    p.push({ kind: 'stale-received', event: 'cursor', lane: 'unreliable', sequence: 4 })
+    p.push({ session: 2, kind: 'handshake', event: null })
+    p.tick()
+
+    const rows = dataRows(p.root)
+    expect(rows).toHaveLength(3)
+    expect(rows[1]?.dataset['drop']).toBe('true')
+    expect(rows[1]?.textContent).toContain('stale-received')
+    expect(p.root.querySelectorAll('.rows .session')).toHaveLength(2)
+    expect(p.root.querySelector('.side')?.textContent).toContain('cursor stale-received')
+  })
+
+  test('a burst appends its tail, and the list never grows past what it shows', () => {
+    const p = mount({ open: true, visibleRows: 10 })
+    for (let i = 0; i < 300; i++) p.push()
+    p.tick()
+    expect(dataRows(p.root).length).toBeLessThanOrEqual(10 + 8)
+    expect(dataRows(p.root).at(-1)?.textContent).toContain('00:00:00.300')
+
+    for (let i = 0; i < 5; i++) p.push()
+    p.tick()
+    expect(dataRows(p.root).at(-1)?.textContent).toContain('00:00:00.305')
+    expect(dataRows(p.root).length).toBeLessThanOrEqual(10 + 8)
+  })
+
+  test('rows are appended, not rebuilt: a painted row is the same element a frame later', () => {
+    const p = mount({ open: true })
+    p.push()
+    p.tick()
+    const first = dataRows(p.root)[0]
+    p.push()
+    p.tick()
+    expect(dataRows(p.root)[0]).toBe(first as HTMLElement)
+    expect(dataRows(p.root)).toHaveLength(2)
+  })
+
+  test('a preview a peer wrote is text, never markup', () => {
+    const p = mount({ open: true })
+    p.push({ preview: '<img src=x onerror=alert(1)>', event: '<b>bold</b>' })
+    p.tick()
+    expect(p.root.querySelector('.rows img')).toBeNull()
+    expect(p.root.querySelector('.rows b')).toBeNull()
+    expect(dataRows(p.root)[0]?.textContent).toContain('<img src=x onerror=alert(1)>')
+  })
+})
+
+describe('pause, filter, copy', () => {
+  test('pause freezes the rows and says how many it skipped', () => {
+    const p = mount({ open: true })
+    p.push()
+    p.tick()
+    button(p.root, 'Pause').click()
+    expect(button(p.root, 'Resume').textContent).toBe('Resume (0 skipped)')
+    p.push()
+    p.push()
+    p.tick()
+    expect(dataRows(p.root)).toHaveLength(1)
+    expect(button(p.root, 'Resume').textContent).toBe('Resume (2 skipped)')
+  })
+
+  test('the event filter lists what was seen, and choosing one rebuilds the list', () => {
+    const p = mount({ open: true })
+    p.push({ event: 'chat' })
+    p.push({ event: 'cursor', lane: 'unreliable', kind: 'datagram' })
+    p.tick()
+
+    const select = p.root.querySelector('select') as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).toEqual(['', 'chat', 'cursor'])
+    select.value = 'cursor'
+    select.dispatchEvent(new Event('change'))
+    // A click is painted at once, without waiting for the next paced paint.
+    expect(dataRows(p.root)).toHaveLength(1)
+    expect(dataRows(p.root)[0]?.textContent).toContain('cursor')
+  })
+
+  test('copy puts the visible rows on the clipboard as text', async () => {
+    const written: string[] = []
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (text: string) => void written.push(text) },
+    })
+    const p = mount({ open: true, visibleRows: 2 })
+    p.push({ event: 'a' })
+    p.push({ event: 'b' })
+    p.push({ event: 'c' })
+    p.tick()
+
+    button(p.root, 'Copy rows').click()
+    await Promise.resolve()
+    const lines = written[0]?.split('\n') ?? []
+    expect(lines[0]).toContain('transport-io devtools: connected, webtransport, s-7')
+    // Two header lines, the column names, then the two rows the list shows.
+    expect(lines).toHaveLength(5)
+    expect(lines[3]).toContain('\tb\t')
+    expect(lines[4]).toContain('\tc\t')
+  })
+})
+
+describe('unmounting', () => {
+  test('removes the host and stops observing', () => {
+    const p = mount({ open: true })
+    p.unmount()
+    expect(document.querySelector('[data-transport-io-devtools]')).toBeNull()
+    expect(() => p.push()).not.toThrow()
+  })
+})

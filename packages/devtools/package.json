@@ -1,0 +1,56 @@
+{
+  "name": "@transport-io/devtools",
+  "version": "0.0.0",
+  "description": "A devtools panel for transport-io: the frames, streams and drops no browser panel shows for WebTransport. Framework-free, with a React mount.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "author": "#V0ID <hey@v0id.me>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/transport-io/transport-io.git",
+    "directory": "packages/devtools"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": ">=19.2",
+    "react-dom": "^19.3.0",
+    "transport-io": "^0.12.1"
+  },
+  "peerDependencies": {
+    "react": ">=19.2",
+    "transport-io": "^0.12.1"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -125,6 +125,7 @@ export default defineConfig({
             { label: 'Certificates', slug: 'guides/certificates' },
             { label: 'The fallback', slug: 'guides/fallback' },
             { label: 'React', slug: 'guides/react' },
+            { label: 'Devtools', slug: 'guides/devtools' },
             { label: 'Registering the map', slug: 'guides/register' },
           ],
         },

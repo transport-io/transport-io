@@ -27,6 +27,12 @@ interface Published {
   readonly unpublishedTags: Readonly<Record<string, string>>
   /** Published with no tag. Same rule. */
   readonly untaggedVersions: Readonly<Record<string, string>>
+  /**
+   * Never published and never tagged: the two sides agree because both are empty, which the
+   * floors below would otherwise call a failure to look. It is checked, not assumed, and it
+   * may only be removed: the first tag or the first publish makes this flag the failure.
+   */
+  readonly unreleased?: true
 }
 
 const PACKAGES: readonly Published[] = [
@@ -49,6 +55,13 @@ const PACKAGES: readonly Published[] = [
     unpublishedTags: {},
     untaggedVersions: {},
   },
+  {
+    pkg: '@transport-io/devtools',
+    prefix: 'devtools-v',
+    unpublishedTags: {},
+    untaggedVersions: {},
+    unreleased: true,
+  },
 ]
 
 function gitTags(prefix: string): string[] {
@@ -69,6 +82,8 @@ async function registryVersions(pkg: string): Promise<string[]> {
   const res = await fetch(`https://registry.npmjs.org/${pkg.replace('/', '%2F')}`, {
     headers: { 'cache-control': 'no-cache' },
   })
+  // A name the registry has never heard of, which is what an unreleased package is.
+  if (res.status === 404) return []
   if (!res.ok) throw new Error(`registry returned HTTP ${res.status} for ${pkg}`)
   const doc = (await res.json()) as { versions?: Readonly<Record<string, unknown>> }
   return Object.keys(doc.versions ?? {})
@@ -79,6 +94,19 @@ const failures: string[] = []
 for (const entry of PACKAGES) {
   const tags = gitTags(entry.prefix)
   const published = await registryVersions(entry.pkg)
+
+  if (entry.unreleased === true) {
+    if (tags.length === 0 && published.length === 0) {
+      console.log(`tags: ${entry.pkg} - not released yet: no tag and nothing on the registry`)
+    } else {
+      failures.push(
+        `${entry.pkg} is recorded as unreleased and has ${tags.length} tag(s) and ` +
+          `${published.length} published version(s).\n` +
+          '    Remove `unreleased` from this file, so its tags and versions are compared.',
+      )
+    }
+    continue
+  }
 
   // Floors, because comparing two empty sets passes and says nothing. If either side comes
   // back empty the check failed to look, which is not the same as finding no divergence.

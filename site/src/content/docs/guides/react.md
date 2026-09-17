@@ -322,6 +322,13 @@ that calls one gets React's own error saying hooks are not available there. A ho
 outside the provider throws an error naming
 `TransportProvider` rather than reading a property of `undefined`.
 
+## Devtools
+
+`<TransportDevtools client={client} />` from `@transport-io/devtools/react` puts a panel in
+the page with the session's frames, streams and drops. It takes the client as a prop, renders
+`null` unless the build is a development one, and mounts nothing unless you render it. See
+[Devtools](/guides/devtools/).
+
 ## StrictMode
 
 Development mounts every component twice. Refcounting makes that safe, and it is worth
