@@ -28,16 +28,25 @@ than a patch.
 These are deliberate design positions rather than vulnerabilities. They are listed here so
 you can see them before depending on the library.
 
-**Nothing can stand in front of it, so the door is `authorize`.** The WebTransport
-endpoint is QUIC over UDP to your process: a proxy, a load balancer or a CDN in front of it
-terminates TLS and drops UDP, and no session arrives. A listener's `authorize` decides each
-peer from the request that opened the session, its path, query and peer address, before the
-session is accepted; on the WebSocket listener it sees the upgrade request's headers and
-cookies as well. A browser sends no cookies and no custom headers on a WebTransport request,
-so a token travels in the query string, and the page obtains that token over HTTPS. What
+**Nothing can stand in front of it, so the door is `authorize`.** The WebTransport endpoint is
+QUIC over UDP to your process: a proxy, a load balancer or a CDN in front of it terminates TLS
+and drops UDP, and no session arrives. A listener's `authorize` decides each peer from the
+request that opened the session, its path, query, peer address and headers, before the session
+is accepted; on the WebSocket listener the headers are the upgrade request's, cookies
+included. A browser sends no cookies and no custom headers on a WebTransport request, so a
+token travels in the query string, and the page obtains that token over HTTPS. What
 `authorize` returns is `peer.data`, checked by nobody after that: it is your value. This
 library keeps the query out of its own errors: a failed handshake names the origin and the
 path it dialled and nothing after them. A URL your own code logs is yours to scrub.
+
+**No origin is checked.** Some WebSocket libraries refuse an upgrade whose `Origin` is not
+the server's own, and this library has no such check on either listener. With no `authorize`, every
+peer is accepted, from any page and from anything that is not a page at all. `authorize` is
+handed the request's headers, and a browser puts the page's `origin` there on a WebTransport
+request, measured in Chromium, so an application that wants only its own pages to connect
+compares `headers.origin` in `authorize`. That stops another site's page from using a
+visitor's browser to reach your server. It does not stop a program, which sends whatever
+origin it likes: the token is what authenticates, and the origin check is beside it.
 
 **A token in the query is seen by more than your server, so it has to be short-lived.** When
 a handshake fails, the browser prints its own console error with the whole URL, query

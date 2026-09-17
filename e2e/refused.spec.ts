@@ -35,15 +35,17 @@ test('a refused page sees WT_UNAUTHORIZED and the reason, and a refused reconnec
   const cert = ensureCertificate(dir)
   let valid = 'first'
   const asked: string[] = []
+  const origins: (string | undefined)[] = []
   const listener = await listenHttp3<Who>({
     port: 0,
     host: '127.0.0.1',
     cert: cert.cert,
     privKey: cert.privKey,
     path: '/',
-    authorize: ({ query }) => {
+    authorize: ({ query, headers }) => {
       const token = query.get('token') ?? ''
       asked.push(token)
+      origins.push(headers['origin'])
       return token === valid ? { user: 'ann' } : refuse('expired')
     },
   })
@@ -93,6 +95,9 @@ test('a refused page sees WT_UNAUTHORIZED and the reason, and a refused reconnec
       status: 'closed',
       refused: { reason: 'expired' },
     })
+    // The library checks no origin, so an application that wants one checked does it here:
+    // the browser puts the page's origin on the request, and `authorize` is handed it.
+    expect(origins).toEqual([DEMO_ORIGIN])
 
     // On a reconnect: connected with a token that then stops being valid.
     asked.length = 0

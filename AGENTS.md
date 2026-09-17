@@ -231,7 +231,10 @@ client-initiated subscription, make it a `call` whose handler authorises the pay
 then joins `ctx.peer`.
 
 **The door is `authorize` on the listener**: `listenHttp3({ authorize: ({ path, query,
-peerAddress }) => data | null | refuse(reason) })`, run before the session is accepted.
+peerAddress, headers }) => data | null | refuse(reason) })`, run before the session is
+accepted. It is the only gate: the library checks no `Origin` and authenticates nothing on
+its own. A browser sends `origin` in `headers`, so compare it there if only your pages may
+connect.
 `null` or `refuse('expired')` closes the session as `WT_UNAUTHORIZED` before frame 0, so the
 peer receives the reason and never the event table. The reason is a short code, 1 to 123
 bytes, and `null` is `'refused'`. On the client `connect()` rejects with a `RefusedError`,

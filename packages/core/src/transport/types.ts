@@ -18,9 +18,10 @@ export interface CloseInfo {
 
 /**
  * What a listener knows about a peer before its session exists: the request that opened
- * it. A browser can put nothing but the path and the query on a WebTransport request, so
- * the query is where a token travels; the WebSocket mapping sees the upgrade request's
- * headers too.
+ * it. A page can put nothing but the path and the query on a WebTransport request, so the
+ * query is where a token travels. The browser adds `origin` itself, and both listeners hand
+ * `authorize` the request's headers; the WebSocket mapping's are the upgrade request's,
+ * cookies included. Nothing in this library reads `origin`: see SECURITY.md.
  */
 export interface ConnectRequest {
   /** The request path without its query. */

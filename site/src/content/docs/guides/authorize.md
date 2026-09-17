@@ -48,7 +48,7 @@ connection and let it expire soon after: a day is too long for anything real.
 
 ## The door
 
-`authorize` receives the request: `path`, `query`, and `peerAddress`. Return what you
+`authorize` receives the request: `path`, `query`, `peerAddress` and `headers`. Return what you
 learned, or refuse: `null`, or `refuse(reason)` to say why. The server's second type argument
 is what `authorize` returns, and every `peer.data` and `ctx.peer.data` carries it:
 

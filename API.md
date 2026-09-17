@@ -789,9 +789,11 @@ congestion, so no count here is the network's.
 ### 3.3 Who is connecting, and when they leave
 
 A listener decides each peer at the door with `authorize`, which receives the request that
-opened the session: its `path`, its `query`, the `peerAddress`, and on the WebSocket
-listener the upgrade `headers` too. A browser can put nothing but the path and the query on
-a WebTransport request, so the query is where a token travels. What `authorize` returns is
+opened the session: its `path`, its `query`, the `peerAddress` and its `headers`. A page can
+put nothing but the path and the query on a WebTransport request, so the query is where a
+token travels. The browser adds `origin` to the headers itself, and on the WebSocket listener
+they are the upgrade request's, cookies included. **No origin is checked for you**: if only
+your own pages may connect, compare `headers.origin` in `authorize`. What `authorize` returns is
 `peer.data`, typed by the server's second type argument. `null` refuses the peer, and
 `refuse(reason)` refuses it and says why.
 
