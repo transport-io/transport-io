@@ -1,5 +1,13 @@
 # @transport-io/react
 
+## 0.4.2
+
+### Patch Changes
+
+- Updated dependencies [6d2a7c2]
+- Updated dependencies [209f921]
+  - transport-io@0.13.0
+
 ## 0.4.1
 
 ### Patch Changes
