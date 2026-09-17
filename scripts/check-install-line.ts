@@ -41,7 +41,8 @@ import { join } from 'node:path'
 // whose file is gone, which is what `changeset version` leaves behind.
 const DOCS: string[] = execFileSync(
   'git',
-  ['ls-files', '--cached', '--others', '--exclude-standard', '*.md'],
+  // `.mdx` too: a guide that gains a component changes its extension and keeps its install line.
+  ['ls-files', '--cached', '--others', '--exclude-standard', '*.md', '*.mdx'],
   { encoding: 'utf8' },
 )
   .split('\n')
