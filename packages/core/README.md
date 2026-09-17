@@ -29,7 +29,7 @@ before you start.** It lists what this library will not do. Full documentation i
   the fallback reaches it after 5 seconds.
 - **The server needs a separate native install**, and its Linux prebuild needs glibc 2.38 -
   no default Node `-slim` image has it, and Alpine has no prebuild at all.
-  That package, the fourteen-day ECDSA rule for a pinned development certificate, and the
+  That package, the fourteen-day ECDSA rule for a pinned certificate, and the
   Safari gap are the same for Socket.IO's WebTransport transport: properties of the stack,
   not of this library.
 - **The protocol is v0 and unstable.** Both sides currently require an exact match.
@@ -39,5 +39,10 @@ npm install transport-io
 ```
 
 A git install does not work - the repository root is a private monorepo package.
+
+To see what a session is doing, frames, streams and drops, mount
+[`@transport-io/devtools`](https://www.npmjs.com/package/@transport-io/devtools) in the page.
+To put a server on a platform, read
+[Deploying](https://transport-io.github.io/transport-io/guides/deploy/) first.
 
 MIT © #V0ID

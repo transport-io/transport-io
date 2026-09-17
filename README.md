@@ -215,7 +215,7 @@ session on reconnect, keeps no buffer, and has rooms and an in-memory adapter.
 
 **What is the same.** Both servers need the same native QUIC package,
 `@fails-components/webtransport`, because Node has no WebTransport of its own. Both are bound
-by the same rule for a self-signed development certificate: ECDSA, at most fourteen days.
+by the same rule for a pinned self-signed certificate: ECDSA, at most fourteen days.
 Neither reaches Safari over WebTransport.
 
 The differences that can be checked in their source:
