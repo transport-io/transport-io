@@ -90,13 +90,22 @@ for you and stale arrivals are dropped rather than rendered as history, but loss
 reported to nobody because loss is the contract. Anything that cannot tolerate this belongs
 on the reliable lane, and the contract is where you say which.
 
-## It requires raw UDP ingress to your process
+## Only the WebTransport server needs UDP, and it needs it unproxied
 
-On the port you listen on. Unlike TCP, many managed platforms do not provide this. Verify
-your platform routes UDP before building on this library - it is the first thing to check
-when nothing connects, and no amount of application code works around it. A client that
+The rest of an application stays where it is. Pages, an API, a database and sign-in can sit
+behind any proxy or CDN, on any host. What is new is one process that a browser reaches over
+UDP, on the port it listens on, with nothing terminating the connection on the way: a proxy,
+a CDN or a managed load balancer terminates TLS and forwards TCP, and no session arrives. It
+is one small server, and its first deployment ran on the smallest shared machine its
+platform sold.
+
+What it asks of a platform is that UDP is routed to your process at all. Many managed
+platforms do not route it, and some route it only to an address of its own, so check that
+before building on this library, since no application code works around it. A client that
 reaches the server over TCP but not over QUIC reports `WT_UDP_UNREACHABLE`, which is the
 first thing to look for when nothing connects on a managed platform.
+[Deploying](https://transport-io.github.io/transport-io/guides/deploy/) has what a platform
+has to provide, and what the first deployment ran into.
 
 ## The emit lane blocks across rooms
 

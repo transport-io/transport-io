@@ -184,8 +184,9 @@ and the measurements behind each one, and is worth reading before you build on t
   declares it; calls and streams need WebTransport.
 - **Chrome and Firefox over WebTransport.** Safari cannot talk to a quiche-backed server;
   the fallback reaches it after 5 seconds.
-- **UDP has to reach your process.** No proxy in front of it, no CDN, and no load balancer
-  that forwards only TCP.
+- **Only the WebTransport server needs UDP**, unproxied: no CDN or TCP-only load balancer in
+  front. The rest of your application
+  [stays put](https://transport-io.github.io/transport-io/guides/deploy/).
 - **Reconnect is a new session.** Room membership does not survive it and pending calls
   reject. Resubscribing is the application's job.
 - **Datagrams may be dropped, duplicated or reordered**, and loss is not reported.
