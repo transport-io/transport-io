@@ -4253,6 +4253,17 @@ and stops the group. D151 is the fix.
 with the headless figures by more than the run-to-run spread, which here is about 10 ms a
 second; or an application reports the page underneath an open panel dropping frames, which
 these runs never did.
+**Note, 2026-09-17.** The first look at the panel in an application found it off the brand:
+a template's blues and greens, rounded corners, and a short list sitting at the bottom of a
+gap, because a reversed column packs to its end. It now follows `assets/brand/USAGE.txt` and
+the site: ink and bone in both schemes, by `prefers-color-scheme`, Plex Mono when the page has
+it and never fetched, hairlines, square corners, the mark and the wordmark in the launcher and
+the bar. A row is ink, a datagram is dim, and the accent is kept for a drop. The auto margin
+on the list's first child is what starts a short list under the header. A test reads the
+mark's two paths from the brand file, and holds the stylesheet to the twelve colours of the
+palette, no gradient, no shadow and no rounding. Measured again at 120 a second: 84.6 absent,
+74.7 closed, 90.1 open, so the restyle cost nothing.
+
 ### D151. The dev command passes SIGTERM, SIGINT and SIGHUP to its entry, and ends as the entry ended
 `transport-io dev <entry>` spawned the entry and installed no signal handler, so a signal
 sent to the command alone ended it and left the entry running with its UDP port held.

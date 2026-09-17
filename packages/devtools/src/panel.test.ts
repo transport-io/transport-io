@@ -153,6 +153,7 @@ describe('open', () => {
 
     const rows = dataRows(p.root)
     expect(rows).toHaveLength(3)
+    expect(rows[0]?.textContent).toContain('← in')
     expect(rows[1]?.dataset['drop']).toBe('true')
     expect(rows[1]?.textContent).toContain('stale-received')
     expect(p.root.querySelectorAll('.rows .session')).toHaveLength(2)
@@ -190,6 +191,73 @@ describe('open', () => {
     expect(p.root.querySelector('.rows img')).toBeNull()
     expect(p.root.querySelector('.rows b')).toBeNull()
     expect(dataRows(p.root)[0]?.textContent).toContain('<img src=x onerror=alert(1)>')
+  })
+})
+
+describe('the brand', () => {
+  test('the mark is the two paths of the brand file, filled with the text colour', async () => {
+    const asset = await Bun.file(
+      new URL('../../../assets/brand/transport-io-mark-currentcolor.svg', import.meta.url),
+    ).text()
+    const drawn = [...asset.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1] as string)
+    expect(drawn).toHaveLength(2)
+
+    const p = mount({ open: true })
+    // Once in the launcher and once in the bar, and never redrawn, recoloured or reseated.
+    const marks = [...p.root.querySelectorAll('.lockup svg')]
+    expect(marks).toHaveLength(2)
+    for (const svg of marks) {
+      const paths = [...svg.querySelectorAll('path')]
+      expect(paths.map((path) => path.getAttribute('d'))).toEqual(drawn)
+      expect(paths.every((path) => path.getAttribute('fill') === 'currentColor')).toBe(true)
+    }
+    expect(p.root.querySelector('.lockup')?.textContent).toBe('transport-io')
+  })
+
+  test('no gradient, no shadow, no rounding, and one accent per scheme', () => {
+    const p = mount()
+    const css = p.root.querySelector('style')?.textContent ?? ''
+    expect(css).not.toContain('gradient')
+    expect(css).not.toContain('shadow')
+    expect([...css.matchAll(/border-radius:\s*([^;]+);/g)].map((m) => m[1])).toEqual(['0'])
+    // The palette of assets/brand/USAGE.txt, dark then light, and no other colour anywhere.
+    const colours = [...new Set([...css.matchAll(/#[0-9a-f]{6}\b/g)].map((m) => m[0]))]
+    expect(colours.sort()).toEqual(
+      [
+        '#141210',
+        '#1d1a16',
+        '#e7e2d6',
+        '#9c9588',
+        '#33302a',
+        '#d9692c',
+        '#e4e0d6',
+        '#f3f1ea',
+        '#16130f',
+        '#6b655b',
+        '#cfc9bb',
+        '#c2551d',
+      ].sort(),
+    )
+  })
+})
+
+describe('the side lists', () => {
+  test('both say none before anything has happened', () => {
+    const p = mount({ open: true })
+    const side = p.root.querySelector('.side')?.textContent ?? ''
+    expect(side).toContain('Open streamsnone')
+    expect(side).toContain('none since the panel mounted')
+  })
+
+  test('one frame, then two frames', () => {
+    const p = mount({ open: true })
+    p.push({ kind: 'open', dir: 'out', stream: 1, event: 'ask', size: 0 })
+    p.push({ kind: 'request', dir: 'out', stream: 1, event: 'ask', size: 30 })
+    p.tick()
+    expect(p.root.querySelector('.side')?.textContent).toContain('#1 ask (out)1 frame, 30 B')
+    p.push({ kind: 'response', dir: 'in', stream: 1, event: 'ask', size: 12 })
+    p.tick()
+    expect(p.root.querySelector('.side')?.textContent).toContain('2 frames, 42 B')
   })
 })
 

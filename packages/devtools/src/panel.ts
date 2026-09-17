@@ -47,7 +47,7 @@ const PAINT_INTERVAL_MS = 100
  * the panel does not control. One element a row is a tenth of that. An event name longer
  * than its column is cut here and whole in what Copy rows produces.
  */
-const WIDTHS = [12, 3, 10, 17, 18, 6, 7, 7] as const
+const WIDTHS = [12, 5, 10, 17, 18, 6, 7, 7] as const
 
 function cell(text: string, width: number, right = false): string {
   const cut = text.length > width ? `${text.slice(0, width - 1)}…` : text
@@ -70,56 +70,93 @@ function line(
   ].join('  ')
 }
 
+/**
+ * The brand's own rules, from `assets/brand/USAGE.txt` and the site's stylesheet: ink and bone,
+ * one accent, IBM Plex Mono for labels, hairline rules, square corners, and no gradient, no
+ * shadow and no rounding anywhere. So nothing here is a colour that arrived with a template:
+ * a row is ink, a datagram is dim because there are many of them and they matter least, and
+ * the accent is kept for the one thing the panel exists to show, which is a drop.
+ *
+ * The face is Plex when the page has it and the system's monospace when it does not. A panel
+ * that fetched a font would be a panel that made a request from inside somebody's application.
+ */
 const STYLE = `
-:host { all: initial; }
-* { box-sizing: border-box; }
+:host {
+  all: initial;
+  --ground: #141210; --panel: #1d1a16; --ink: #e7e2d6; --dim: #9c9588; --line: #33302a;
+  --accent: #d9692c;
+}
+@media (prefers-color-scheme: light) {
+  :host {
+    --ground: #e4e0d6; --panel: #f3f1ea; --ink: #16130f; --dim: #6b655b; --line: #cfc9bb;
+    --accent: #c2551d;
+  }
+}
+* { box-sizing: border-box; border-radius: 0; }
 .launcher, .panel {
-  position: fixed; z-index: 2147483000; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo,
-  Consolas, monospace; color: #d7dae0; background: #16181d;
+  position: fixed; z-index: 2147483000; color: var(--ink); background: var(--ground);
+  font: 12px/1.5 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
 }
 .launcher {
-  right: 12px; bottom: 12px; border: 1px solid #2f343d; border-radius: 6px; padding: 6px 10px;
-  cursor: pointer; display: flex; gap: 8px; align-items: center;
+  right: 12px; bottom: 12px; border: 1px solid var(--ink); padding: 7px 10px; cursor: pointer;
+  display: flex; gap: 9px; align-items: center;
 }
-.launcher:hover { background: #1d2027; }
+.launcher:hover { background: var(--panel); }
+.lockup { display: inline-flex; gap: 8px; align-items: center; font-weight: 600;
+  letter-spacing: -0.01em; }
+.lockup svg { width: 16px; height: 16px; display: block; }
 .panel {
   left: 0; right: 0; bottom: 0; height: 42vh; min-height: 220px; display: flex;
-  flex-direction: column; border-top: 1px solid #2f343d; contain: layout paint style;
+  flex-direction: column; border-top: 1px solid var(--ink); contain: layout paint style;
 }
 [hidden] { display: none !important; }
 .bar {
-  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 6px 10px;
-  border-bottom: 1px solid #2f343d; background: #1b1e24;
+  display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 7px 12px;
+  border-bottom: 1px solid var(--line); background: var(--panel);
 }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; display: inline-block; }
-.dot[data-status="connected"] { background: #3fb950; }
-.dot[data-status="connecting"], .dot[data-status="closing"] { background: #d29922; }
-.dot[data-status="closed"] { background: #f85149; }
-.muted { color: #8b93a1; }
-.counter b { color: #d7dae0; font-weight: 600; }
-.counter[data-hot="true"] b { color: #f0883e; }
+.tools { background: var(--ground); gap: 6px 8px; }
+.dot { width: 8px; height: 8px; background: var(--dim); display: inline-block; }
+.dot[data-status="connected"] { background: var(--ink); }
+.dot[data-status="closed"] { background: var(--accent); }
+.status { display: inline-flex; gap: 8px; align-items: center; }
+.muted { color: var(--dim); }
+.counter b { color: var(--ink); font-weight: 600; }
+.counter[data-hot="true"] b { color: var(--accent); }
+.drops { color: var(--accent); }
 .spacer { flex: 1; }
 button, select {
-  font: inherit; color: inherit; background: #242830; border: 1px solid #2f343d;
-  border-radius: 4px; padding: 2px 8px; cursor: pointer;
+  font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line);
+  padding: 2px 10px; cursor: pointer; appearance: none; -webkit-appearance: none;
 }
-button:hover, select:hover { background: #2c313a; }
+select { padding-right: 24px; }
+/* The caret is a character, so nothing here has to be drawn. */
+.select { position: relative; display: inline-flex; }
+.select::after { content: '▾'; position: absolute; right: 8px; top: 2px; color: var(--dim);
+  pointer-events: none; }
+button:hover, select:hover { border-color: var(--ink); }
+button:focus-visible, select:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .body { flex: 1; min-height: 0; display: flex; }
 .frames { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.side { width: 300px; border-left: 1px solid #2f343d; overflow: auto; padding: 6px 10px; }
-.side h2 { font: inherit; color: #8b93a1; margin: 8px 0 4px; text-transform: uppercase;
-  letter-spacing: 0.04em; font-size: 11px; }
-.r { padding: 0 10px; white-space: pre; height: 18px; flex: none; overflow: hidden; }
-.head { color: #8b93a1; background: #1b1e24; }
+.side { width: 300px; border-left: 1px solid var(--line); overflow: auto; padding: 4px 12px 10px; }
+.side h2 { font: inherit; color: var(--dim); margin: 8px 0 4px; padding-bottom: 3px;
+  border-bottom: 1px solid var(--line); }
+.r { padding: 0 12px 0 10px; border-left: 2px solid transparent; white-space: pre; height: 18px;
+  flex: none; overflow: hidden; }
+.head { color: var(--dim); border-bottom: 1px solid var(--ink); height: 22px; line-height: 21px; }
 /* Newest first in the document and last on screen: a reversed column stays pinned to its end
-   while rows arrive, and stays where it is once somebody scrolls up to read, with no script. */
+   while rows arrive, and stays where it is once somebody scrolls up to read, with no script.
+   The first child is the row on screen last, and its auto margin takes the free space, so a
+   list shorter than the panel starts under the header and not at the bottom of a gap. */
 .rows { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column-reverse;
-  contain: strict; }
-.r[data-dir="out"] { color: #79b8ff; }
-.r[data-lane="unreliable"] { color: #d2a8ff; }
-.r[data-lane="unreliable"][data-dir="out"] { color: #b392f0; }
-.r[data-drop="true"] { background: #3a1f16; color: #f0883e; }
-.r.session { color: #8b93a1; border-top: 1px solid #2f343d; }
+  contain: strict; padding: 3px 0; scrollbar-color: var(--line) transparent; }
+.rows > :first-child { margin-bottom: auto; }
+.r[data-lane="unreliable"] { color: var(--dim); }
+.r[data-drop="true"] { color: var(--accent); border-left-color: var(--accent); }
+.r.session { color: var(--dim); border-top: 1px solid var(--line); margin-top: 3px; }
+/* The last child is the row on screen first. Under the header's own rule it needs none. */
+.rows > .session:last-child { border-top-color: transparent; margin-top: 0; }
 .row { display: flex; justify-content: space-between; gap: 8px; }
 `
 
@@ -142,6 +179,28 @@ function say(node: HTMLElement, text: string): void {
 /** The same, for the data attribute a style rule reads. */
 function mark(node: HTMLElement, key: string, value: string): void {
   if (node.dataset[key] !== value) node.dataset[key] = value
+}
+
+const SVG = 'http://www.w3.org/2000/svg'
+
+/**
+ * The mark and the wordmark, as `assets/brand/transport-io-mark-currentcolor.svg` and the
+ * lockup give them: the two paths unaltered, filled with the text colour, which is bone on
+ * the dark ground and ink on the light one, and the name in the semibold of the same face.
+ */
+function lockup(): HTMLElement {
+  const svg = document.createElementNS(SVG, 'svg')
+  svg.setAttribute('viewBox', '0 0 64 64')
+  svg.setAttribute('aria-hidden', 'true')
+  for (const d of ['M4 8 H42 V23 L27 32 L42 41 V56 H4 Z', 'M45 46 L62 40 L62 57 H45 Z']) {
+    const path = document.createElementNS(SVG, 'path')
+    path.setAttribute('d', d)
+    path.setAttribute('fill', 'currentColor')
+    svg.append(path)
+  }
+  const wrap = el('span', 'lockup')
+  wrap.append(svg, el('span', undefined, 'transport-io'))
+  return wrap
 }
 
 const isDrop = (r: FrameRecord): boolean =>
@@ -177,8 +236,8 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
   // ---------------------------------------------------------------- launcher
   const launcher = el('button', 'launcher')
   const launcherDot = el('span', 'dot')
-  const launcherDrops = el('span', 'muted')
-  launcher.append(launcherDot, el('span', undefined, 'transport-io'), launcherDrops)
+  const launcherDrops = el('span', 'drops')
+  launcher.append(lockup(), launcherDot, launcherDrops)
 
   // ---------------------------------------------------------------- panel
   const panel = el('section', 'panel')
@@ -194,7 +253,9 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
     ['directionDropped', 'direction'],
   ] as const
   const counters = new Map<string, { wrap: HTMLElement; value: HTMLElement }>()
-  bar.append(dot, status, session)
+  const state = el('span', 'status')
+  state.append(dot, status)
+  bar.append(lockup(), state, session)
   for (const [key, label] of counterNames) {
     const wrap = el('span', 'counter muted', `${label} `)
     const value = el('b', undefined, '0')
@@ -203,7 +264,7 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
     bar.append(wrap)
   }
 
-  const tools = el('div', 'bar')
+  const tools = el('div', 'bar tools')
   const pause = el('button', undefined, 'Pause')
   const clear = el('button', undefined, 'Clear')
   const copy = el('button', undefined, 'Copy rows')
@@ -220,7 +281,21 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
   }
   const held = el('span', 'muted')
   const close = el('button', undefined, 'Close')
-  tools.append(pause, clear, copy, eventFilter, laneFilter, held, el('span', 'spacer'), close)
+  const boxed = (select: HTMLSelectElement): HTMLElement => {
+    const box = el('span', 'select')
+    box.append(select)
+    return box
+  }
+  tools.append(
+    pause,
+    clear,
+    copy,
+    boxed(eventFilter),
+    boxed(laneFilter),
+    held,
+    el('span', 'spacer'),
+    close,
+  )
 
   const body = el('div', 'body')
   const frames = el('div', 'frames')
@@ -260,7 +335,7 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
       'r',
       line([
         clock(r.at),
-        r.dir,
+        r.dir === 'out' ? '→ out' : '← in',
         r.lane,
         r.kind,
         r.event ?? '',
@@ -327,7 +402,7 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
     const streamsKey = state.streams
       .map((s) => `${s.session}:${s.stream}:${s.event}:${s.frames}:${s.bytes}`)
       .join('|')
-    if (streamsKey !== streamsPainted) {
+    if (streamsKey !== streamsPainted || streamsList.childElementCount === 0) {
       streamsPainted = streamsKey
       streamsList.replaceChildren(
         ...(state.streams.length === 0
@@ -336,7 +411,11 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
               const row = el('div', 'row')
               row.append(
                 el('span', undefined, `#${s.stream} ${s.event ?? '?'} (${s.dir})`),
-                el('span', 'muted', `${s.frames} frames, ${s.bytes} B`),
+                el(
+                  'span',
+                  'muted',
+                  `${s.frames} ${s.frames === 1 ? 'frame' : 'frames'}, ${s.bytes} B`,
+                ),
               )
               return row
             })),
@@ -389,6 +468,9 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
     }
 
     say(pause, state.paused ? `Resume (${state.skipped} skipped)` : 'Pause')
+    const pressed = String(state.paused)
+    if (pause.getAttribute('aria-pressed') !== pressed)
+      pause.setAttribute('aria-pressed', pressed)
     say(held, `${state.rows.length} of ${state.held} held`)
     paintEvents(state)
     paintRows(state)
