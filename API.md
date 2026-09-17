@@ -207,10 +207,35 @@ export async function open(url: string): Promise<void> {
 | function | module | connection options |
 |---|---|---|
 | `browserClient<M>(options)` | `transport-io/browser-transport` | `url`, `certificateHash?`, `probe?` |
-| `devClient<M>(options)` | `transport-io/dev-transport` | `endpoint?` |
+| `devClient<M>(options)` | `transport-io/dev-transport` | `endpoint?`, `query?` |
 | `http3Client<M>(options)` | `transport-io/node-transport` | `url`, `certificateHash`, `probe?` |
 
 Each takes every `ClientOptions` field except `connect`, plus its transport's own options.
+
+`query` on `devClient` and `connectDev` is added to the WebTransport URL's query, which is
+where a listener's `authorize` reads a token (§3.3) and which the page cannot otherwise
+reach, since the URL comes from the dev manifest. An object, a `URLSearchParams`, or a
+function returning either, sync or async. The function is called on every attempt, the first
+and each reconnect, so a token refreshed since the last one is the one sent.
+
+```ts
+import { devClient, fetchDevManifest } from 'transport-io/dev-transport'
+
+declare function currentToken(): Promise<string>
+
+export const signedIn = await devClient<AppMap>({
+  contract,
+  reconnect: { minMs: 500, maxMs: 30_000 },
+  query: async () => ({ token: await currentToken() }),
+})
+
+export const manifest = await fetchDevManifest()
+```
+
+`fetchDevManifest(options?)` is the fetch `connectDev` makes, checked the same way: `{ sha256,
+url, expiresAt? }`, loopback only, `WT_CERT_EXPIRED` for a certificate past its validity. It
+is for development tooling that needs the hash or the URL without connecting. Outside a
+browser there is no page origin, so `endpoint` has to be an absolute loopback URL.
 
 **`M` is never inferred from `contract`** (D100). Omitting the argument falls to `Registered`:
 either the application registered a map, or the first `emit` fails with the sentence naming

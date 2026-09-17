@@ -93,3 +93,41 @@ test('the dev manifest publishes when the certificate expires', async ({ page })
   expect(expires).toBeGreaterThan(Date.now())
   expect(expires).toBeLessThan(Date.now() + 15 * 24 * 60 * 60 * 1000)
 })
+
+test('connectDev carries a query, asked for on each attempt, and the session connects', async ({
+  page,
+}) => {
+  // The query is the one place a browser can put a token, and the manifest supplies the URL,
+  // so without `query` a page had to refetch the manifest itself to add one.
+  await page.goto(DEMO_ORIGIN)
+  const result = await page.evaluate(async (origin) => {
+    const core = await import(`${origin}/_transport-io/index.js`)
+    const dev = await import(`${origin}/_transport-io/transport/dev.js`)
+    const asked: string[] = []
+    let token = 'first'
+    const client = new core.Client({
+      contract: core.defineContract({ chat: core.reliable() }),
+      connect: () =>
+        dev.connectDev({
+          query: async () => {
+            asked.push(token)
+            return { token }
+          },
+        }),
+    })
+    await client.connect()
+    const first = client.getSnapshot().status
+    client.disconnect()
+    token = 'second'
+    await client.connect()
+    const second = client.getSnapshot().status
+    client.disconnect()
+    const manifest = await dev.fetchDevManifest()
+    return { first, second, asked, url: manifest.url as string }
+  }, DEMO_ORIGIN)
+
+  expect(result.first).toBe('connected')
+  expect(result.second).toBe('connected')
+  expect(result.asked).toEqual(['first', 'second'])
+  expect(result.url).toMatch(/^https:\/\/127\.0\.0\.1:\d+\/$/)
+})

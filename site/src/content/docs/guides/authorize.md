@@ -78,8 +78,24 @@ export async function main(): Promise<void> {
 ```
 
 `listenDev` takes the same `authorize`, so the token flow works under `transport-io dev`.
-The WebSocket listener takes it too, and its request carries the upgrade's `headers`, cookies
-included, since that is an ordinary HTTP request.
+There the URL comes from the dev manifest, so `devClient` and `connectDev` take the query
+themselves. A function is called on every attempt, the first and each reconnect, so a token
+refreshed since the last one is the one sent:
+
+```ts file=dev-client.ts
+import { devClient } from 'transport-io/dev-transport'
+import { type AppMap, contract } from './contract.ts'
+
+declare function currentToken(): Promise<string>
+
+export const client = await devClient<AppMap>({
+  contract,
+  query: async () => ({ token: await currentToken() }),
+})
+```
+
+The WebSocket listener takes `authorize` too, and its request carries the upgrade's
+`headers`, cookies included, since that is an ordinary HTTP request.
 
 ## Refusing, with a reason
 

@@ -7,20 +7,37 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test'
 import { TransportError } from '../errors.ts'
-import { connectDev, DEV_ENDPOINT } from './dev.ts'
+import { connectDev, DEV_ENDPOINT, fetchDevManifest } from './dev.ts'
 
 type Globals = {
   location?: { hostname?: string }
   fetch?: typeof fetch
+  WebTransport?: unknown
 }
 const g = globalThis as Globals
 const originalFetch = g.fetch
+const originalWebTransport = g.WebTransport
 
 afterEach(() => {
   delete g.location
   if (originalFetch === undefined) delete g.fetch
   else g.fetch = originalFetch
+  if (originalWebTransport === undefined) delete g.WebTransport
+  else g.WebTransport = originalWebTransport
 })
+
+/** A WebTransport that connects, and remembers every URL it was dialled with. */
+function captureDials(): string[] {
+  const dialled: string[] = []
+  g.WebTransport = class {
+    readonly ready = Promise.resolve()
+    readonly closed = new Promise(() => {})
+    constructor(url: string) {
+      dialled.push(url)
+    }
+  }
+  return dialled
+}
 
 function servePage(hostname: string): void {
   g.location = { hostname }
@@ -146,5 +163,95 @@ describe('the endpoint is fixed so neither side configures it', () => {
       const err = await connectDev().catch((e: unknown) => e)
       expect((err as TransportError).message).toContain('WebTransport URL')
     }
+  })
+})
+
+describe('the query is where a token travels, and connectDev can carry one', () => {
+  const manifest = { sha256: [1, 2, 3], url: 'https://127.0.0.1:4433/' }
+
+  test('an object and a URLSearchParams both reach the WebTransport URL', async () => {
+    servePage('localhost')
+    serveManifest(manifest)
+    const dialled = captureDials()
+    await connectDev({ query: { token: 'a b', room: 'r' } })
+    await connectDev({ query: new URLSearchParams({ token: 'c' }) })
+    await connectDev()
+    expect(dialled).toEqual([
+      'https://127.0.0.1:4433/?token=a+b&room=r',
+      'https://127.0.0.1:4433/?token=c',
+      'https://127.0.0.1:4433/',
+    ])
+  })
+
+  test('a function is called on every attempt, so a refreshed token is the one sent', async () => {
+    servePage('localhost')
+    serveManifest(manifest)
+    const dialled = captureDials()
+    let token = 'first'
+    const query = async () => ({ token })
+    await connectDev({ query })
+    token = 'second'
+    await connectDev({ query })
+    expect(dialled).toEqual([
+      'https://127.0.0.1:4433/?token=first',
+      'https://127.0.0.1:4433/?token=second',
+    ])
+  })
+
+  test('a query cannot move the dial off loopback: it is added to the checked URL', async () => {
+    servePage('localhost')
+    serveManifest(manifest)
+    const dialled = captureDials()
+    await connectDev({ query: { host: 'evil.example.com', '@evil.example.com/': 'x' } })
+    expect(new URL(dialled[0] ?? '').hostname).toBe('127.0.0.1')
+  })
+})
+
+describe('fetchDevManifest is the same fetch, with the same refusals', () => {
+  const manifest = { sha256: [1, 2, 3], url: 'https://127.0.0.1:4433/' }
+
+  test('in a browser it returns the checked manifest from the page origin', async () => {
+    servePage('localhost')
+    serveManifest(manifest)
+    expect(await fetchDevManifest()).toEqual(manifest)
+  })
+
+  test('in a browser it refuses a page that is not loopback', async () => {
+    servePage('example.com')
+    serveManifest(manifest)
+    const err = await fetchDevManifest().catch((e: unknown) => e)
+    expect((err as TransportError).code).toBe('WT_DEV_ONLY')
+  })
+
+  test('outside a browser it takes an absolute loopback endpoint, and only that', async () => {
+    delete g.location
+    serveManifest(manifest)
+    expect(
+      await fetchDevManifest({
+        endpoint: 'http://127.0.0.1:3000/.well-known/transport-io-dev',
+      }),
+    ).toEqual(manifest)
+
+    const relative = await fetchDevManifest().catch((e: unknown) => e)
+    expect((relative as TransportError).code).toBe('WT_DEV_ONLY')
+    expect((relative as TransportError).message).toContain('no page origin')
+
+    const remote = await fetchDevManifest({
+      endpoint: 'https://example.com/.well-known/transport-io-dev',
+    }).catch((e: unknown) => e)
+    expect((remote as TransportError).code).toBe('WT_DEV_ONLY')
+    expect((remote as TransportError).message).toContain('manifest endpoint')
+  })
+
+  test('a manifest pointing off loopback, or past its expiry, is refused here too', async () => {
+    servePage('localhost')
+    serveManifest({ sha256: [1], url: 'https://evil.example.com:4433/' })
+    expect(((await fetchDevManifest().catch((e: unknown) => e)) as TransportError).code).toBe(
+      'WT_DEV_ONLY',
+    )
+    serveManifest({ ...manifest, expiresAt: new Date(Date.now() - 1000).toISOString() })
+    expect(((await fetchDevManifest().catch((e: unknown) => e)) as TransportError).code).toBe(
+      'WT_CERT_EXPIRED',
+    )
   })
 })

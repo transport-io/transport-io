@@ -42,46 +42,75 @@ export const DEV_ENDPOINT = '/.well-known/transport-io-dev'
  */
 const LOOPBACK: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
 
-function refuse(what: string, host: string): never {
+function notLoopback(what: string, host: string): never {
   throw new TransportError(
     'WT_DEV_ONLY',
-    `connectDev() refuses a non-loopback ${what} (${host === '' ? '<none>' : host})`,
-    'connectDev fetches a certificate hash from the page origin and is for local development only. Use connectBrowser with your own certificateHash, or a real certificate, anywhere else.',
+    `the dev manifest is refused for a non-loopback ${what} (${host === '' ? '<none>' : host})`,
+    'connectDev and fetchDevManifest trust a certificate hash served over plain HTTP and are for local development only. Use connectBrowser with your own certificateHash, or a real certificate, anywhere else.',
   )
 }
 
 /** The shape `transport-io dev` serves. Kept narrow so a wrong endpoint fails loudly. */
-interface DevManifest {
+export interface DevManifest {
+  /** SHA-256 over the DER of the certificate the dev command minted. */
   readonly sha256: readonly number[]
+  /** The WebTransport URL the dev command is listening on. Loopback, checked. */
   readonly url: string
   /** ISO 8601. Absent when an older `transport-io dev` is serving the manifest. */
   readonly expiresAt?: string
 }
 
-export interface DevConnectOptions {
-  /** Overrides the endpoint. For tests and for a dev server on another path. */
+/** What the WebTransport URL's query carries, which is where a browser can put a token. */
+export type DevQuery = Readonly<Record<string, string>> | URLSearchParams
+
+export interface DevManifestOptions {
+  /**
+   * Overrides the endpoint. For tests, for a dev server on another path, and for tooling
+   * outside a browser, where it has to be an absolute loopback URL since there is no page
+   * origin to be relative to.
+   */
   readonly endpoint?: string
 }
 
-/**
- * Connects using the certificate `transport-io dev` minted, fetched from the page origin.
- *
- * The WebTransport URL comes from the same response, so the page never hardcodes a port and
- * cannot drift out of step with the server the CLI started.
- */
-export async function connectDev(opts: DevConnectOptions = {}): Promise<Connection> {
-  const loc = (globalThis as { location?: { hostname?: string } }).location
-  if (loc === undefined) {
-    throw new TransportError(
-      'WT_DEV_ONLY',
-      'connectDev() needs a browser: there is no location to check',
-      'Use connectBrowser in a browser, or connectHttp3 from Node.',
-    )
-  }
-  const pageHost = loc.hostname ?? ''
-  if (!LOOPBACK.has(pageHost)) refuse('page origin', pageHost)
+export interface DevConnectOptions extends DevManifestOptions {
+  /**
+   * Added to the WebTransport URL's query, where the listener's `authorize` reads it. A
+   * function is called on every attempt, the first and each reconnect, so a token refreshed
+   * since the last attempt is the one sent.
+   */
+  readonly query?: DevQuery | (() => DevQuery | Promise<DevQuery>)
+}
 
+/**
+ * The manifest `transport-io dev` serves, fetched and checked: what `connectDev` dials from,
+ * and what development tooling, a plugin that re-serves it from another dev server, reads.
+ *
+ * Every refusal `connectDev` makes about where it may be used is made here, so nothing built
+ * on this can reach production either. In a browser the page has to be on loopback. Outside
+ * one there is no page, so the endpoint has to be an absolute loopback URL. Either way the
+ * WebTransport URL in the manifest has to be loopback, and a certificate past its validity
+ * is `WT_CERT_EXPIRED`.
+ */
+export async function fetchDevManifest(opts: DevManifestOptions = {}): Promise<DevManifest> {
+  const loc = (globalThis as { location?: { hostname?: string } }).location
   const endpoint = opts.endpoint ?? DEV_ENDPOINT
+  if (loc !== undefined) {
+    const pageHost = loc.hostname ?? ''
+    if (!LOOPBACK.has(pageHost)) notLoopback('page origin', pageHost)
+  } else {
+    let endpointHost = ''
+    try {
+      endpointHost = new URL(endpoint).hostname
+    } catch {
+      throw new TransportError(
+        'WT_DEV_ONLY',
+        `there is no page origin for ${endpoint} to be relative to`,
+        'Outside a browser, pass an absolute loopback endpoint, for example http://127.0.0.1:3000/.well-known/transport-io-dev.',
+      )
+    }
+    if (!LOOPBACK.has(endpointHost)) notLoopback('manifest endpoint', endpointHost)
+  }
+
   const res = await fetch(endpoint)
   if (!res.ok) {
     throw new TransportError(
@@ -100,7 +129,8 @@ export async function connectDev(opts: DevConnectOptions = {}): Promise<Connecti
   }
 
   /**
-   * Expiry is checked before dialling, and this is the whole reason the manifest carries it.
+   * Expiry is checked before anything dials, and this is the whole reason the manifest
+   * carries it.
    *
    * A pinned certificate is capped at 14 days, so it expiring is normal operation rather
    * than a fault. Once it has, the browser's failure is indistinguishable from a server that
@@ -125,14 +155,39 @@ export async function connectDev(opts: DevConnectOptions = {}): Promise<Connecti
   try {
     targetHost = new URL(manifest.url).hostname
   } catch {
-    refuse('WebTransport URL', manifest.url)
+    notLoopback('WebTransport URL', manifest.url)
   }
-  if (!LOOPBACK.has(targetHost)) refuse('WebTransport URL', targetHost)
+  if (!LOOPBACK.has(targetHost)) notLoopback('WebTransport URL', targetHost)
+  return manifest
+}
+
+/**
+ * Connects using the certificate `transport-io dev` minted, fetched from the page origin.
+ *
+ * The WebTransport URL comes from the same response, so the page never hardcodes a port and
+ * cannot drift out of step with the server the CLI started.
+ */
+export async function connectDev(opts: DevConnectOptions = {}): Promise<Connection> {
+  if ((globalThis as { location?: unknown }).location === undefined) {
+    throw new TransportError(
+      'WT_DEV_ONLY',
+      'connectDev() needs a browser: there is no location to check',
+      'Use connectBrowser in a browser, or connectHttp3 from Node.',
+    )
+  }
+  const manifest = await fetchDevManifest(opts)
+
+  const url = new URL(manifest.url)
+  const query = typeof opts.query === 'function' ? await opts.query() : opts.query
+  if (query !== undefined) {
+    const pairs = query instanceof URLSearchParams ? query : Object.entries(query)
+    for (const [key, value] of pairs) url.searchParams.set(key, value)
+  }
 
   // No probe: the manifest fetch above already proved the dev server answers over TCP, the
   // WebTransport port is UDP-only on loopback, and expiry was ruled out before dialling.
   return await connectBrowser({
-    url: manifest.url,
+    url: url.href,
     certificateHash: Uint8Array.from(manifest.sha256),
     probe: false,
   })

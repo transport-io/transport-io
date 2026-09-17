@@ -3913,3 +3913,32 @@ of its longest waits.
 **Reconsider when:** an application needs the reason typed end to end, a union the client
 and the door share. That is a second type parameter on the client and the hooks, or a slot
 in the contract, and neither is worth it for a string the application already owns.
+
+### D145. `connectDev` carries a query, asked for on each attempt, and the manifest fetch is exported
+The first outside application reads its token in `authorize` from the URL query, which is
+the one place a browser can put it, and `connectDev` took only `endpoint`: the URL comes
+from the manifest, so the page could not add to it. It fetched the manifest itself and called
+`connectBrowser` with `?token=` and `probe: false`, eight lines that reimplemented
+`connectDev` without its loopback checks. This entry came from that application.
+
+**Decision.** `connectDev({ query })` and `devClient({ query })`: an object, a
+`URLSearchParams`, or a function returning either, sync or async. The function is called on
+every attempt, because `connect` already runs per attempt and a refreshed token is the case;
+it is Socket.IO's `auth` callback. With D144 it closes the loop: a refusal is final, the page
+gets a credential that will pass, and the next attempt asks the function again. The query is
+added to the URL after the manifest's URL has been checked as loopback, with
+`searchParams.set`, so it cannot move the dial. `connectBrowser` takes no `query`: there the
+application writes the URL, and its `connect` closure already runs per attempt.
+
+`fetchDevManifest(options?)` is exported from `transport-io/dev-transport`, which D139
+wanted for a Vite plugin and this makes a second request for. It is the fetch `connectDev`
+makes and keeps every refusal, since a manifest fetch without them is the production path
+`connectDev` exists to make impossible: a browser page must be on loopback, the manifest's
+URL must be loopback, and an expired certificate is `WT_CERT_EXPIRED`. Outside a browser
+there is no page origin, so the endpoint must be an absolute loopback URL.
+
+**Measured.** In Chromium against `transport-io dev --demo`: a client whose `query` function
+returns a different token on each attempt connects both times, and the function ran once per
+attempt. A query naming another host leaves the dialled hostname `127.0.0.1`.
+
+**Reconsider when:** D139's plugin is built, at which point this is what it calls.

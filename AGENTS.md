@@ -27,7 +27,7 @@ Node ≥ 22. TypeScript ≥ 5.0 for consumers.
 |---|---|---|
 | `transport-io` | contract, `Client`, `createServer`, errors, `MemoryAdapter` | anywhere |
 | `transport-io/browser-transport` | `browserClient`, `connectBrowser` | browser |
-| `transport-io/dev-transport` | `devClient`, `connectDev`, `DEV_ENDPOINT` | browser, loopback only |
+| `transport-io/dev-transport` | `devClient`, `connectDev`, `fetchDevManifest`, `DEV_ENDPOINT` | browser, loopback only |
 | `transport-io/node-transport` | `listenHttp3`, `listenDev`, `http3Client`, `connectHttp3` | Node only |
 | `transport-io/websocket-transport` | `connectWebSocket` | anywhere with a `WebSocket` global |
 | `transport-io/websocket-node-transport` | `listenWebSocket` | Node only |
@@ -128,7 +128,11 @@ the certificate to the server process by environment. Two functions connect to i
 `transport-io/dev-transport` in the browser.
 
 `connectDev` throws `WT_DEV_ONLY` unless both the page origin and the WebTransport URL are
-loopback, so it cannot be enabled in production by accident.
+loopback, so it cannot be enabled in production by accident. `connectDev({ query })` and
+`devClient({ query })` add a query to the WebTransport URL, which is where `authorize` reads a
+token: an object, a `URLSearchParams`, or a function returning either, called on every
+attempt so a refreshed token is the one sent. `fetchDevManifest()` is the same fetch with the
+same refusals, for tooling: `{ sha256, url, expiresAt? }`.
 
 It does not bundle browser code. Run your own bundler and pass `--static <dir>`.
 

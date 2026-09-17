@@ -67,7 +67,9 @@ Without `--static` it serves the first of `public`, `web/dist`, `web` and `dist`
 
 **A page served by something else** needs the hash too. `devClient` fetches it from the
 page's own origin at `/.well-known/transport-io-dev`, so a Vite dev server proxies that one
-path to the command's port. `examples/react` does exactly this.
+path to the command's port. `examples/react` does exactly this. `fetchDevManifest()` is that
+fetch on its own, with the same loopback checks, for tooling that wants the hash or the URL
+without connecting.
 
 ## Deploying
 
