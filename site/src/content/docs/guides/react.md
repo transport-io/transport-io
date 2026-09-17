@@ -111,8 +111,11 @@ import { api } from './api.ts'
 export function Status(): ReactNode {
   const { status, rooms, lastError, refused } = api.useConnection()
   // Refused by the server's authorize. Final: nothing is retrying, so ask for a sign-in.
-  if (refused !== null) return <p>sign in again ({refused.reason})</p>
-  if (status === 'closed' && lastError !== null) return <p>offline: {lastError.code}</p>
+  if (refused !== null) return <p>Please sign in again.</p>
+  // Your own words, chosen by the code. `lastError.message` is written for a log.
+  if (status === 'closed' && lastError !== null) {
+    return <p>{lastError.code === 'WT_NO_SUPPORT' ? 'This browser is not supported.' : 'Offline.'}</p>
+  }
   return (
     <p>
       {status}, in {rooms.length} room(s)
@@ -132,6 +135,70 @@ back in.
 **During server rendering it reports `idle`.** That is true, since no connection exists on a
 server, and it makes the server's HTML identical to the client's first render, so hydration
 has nothing to reconcile. The connect effect then drives the only transition.
+
+## Signing in again, without a reload
+
+A refusal is final, so the page has to start the next attempt itself, and under the provider
+it does not own the connection: the provider holds the one `connect()` for the tree. The way
+through is the pair from `useConnection()`. `disconnect()` takes that hold to zero and
+`connect()` takes it back to one, so the provider's own `disconnect()` on unmount still
+closes the client. `connect` in the client's options runs on every attempt, so the attempt
+the pair starts reads the token as it is by then.
+
+```tsx
+'use client'
+import { Client } from 'transport-io'
+import { connectBrowser } from 'transport-io/browser-transport'
+import { TransportProvider } from '@transport-io/react'
+import { type ReactNode, useState } from 'react'
+import { api, type AppMap, contract } from './api.ts'
+
+// Your sign-in: the form stores the token wherever your app keeps it, and this reads it.
+declare function SignInForm(props: { onSignedIn: () => void }): ReactNode
+declare function currentToken(): string
+
+function urlWithToken(): string {
+  const url = new URL('https://example.com:4433/')
+  // Read on every attempt, so it is whatever the last sign-in stored.
+  url.searchParams.set('token', currentToken())
+  return url.href
+}
+
+export function SignedIn({ children }: { children: ReactNode }): ReactNode {
+  const { refused, connect, disconnect } = api.useConnection()
+  if (refused === null) return children
+  return (
+    <SignInForm
+      onSignedIn={() => {
+        disconnect()
+        // A second refusal lands in `refused` again, so the rejection is not news here.
+        void connect().catch(() => undefined)
+      }}
+    />
+  )
+}
+
+export function App({ children }: { children: ReactNode }): ReactNode {
+  const [client] = useState(
+    () =>
+      new Client<AppMap>({
+        contract,
+        reconnect: { minMs: 500, maxMs: 30_000 },
+        connect: () => connectBrowser({ url: urlWithToken() }),
+      }),
+  )
+  return (
+    <TransportProvider client={client}>
+      <SignedIn>{children}</SignedIn>
+    </TransportProvider>
+  )
+}
+```
+
+Call the two together and in that order. `connect()` alone would take the hold to two, and
+the client would stay connected after the provider unmounted. Under `transport-io dev` the
+URL comes from the manifest, so the token goes in `connectDev({ query: () => ({ token }) })`
+instead; [Authenticating a peer](/guides/authorize/) has that form.
 
 ## Events
 

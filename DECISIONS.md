@@ -4056,3 +4056,23 @@ WebSocket connector. SECURITY.md says so. That is the one code change in this en
 **Reconsider when:** an application needs the middle of `message` on its own for structured
 logs, the sizes in `WT_PAYLOAD_TOO_LARGE` or the port in `WT_PORT_IN_USE`, and is slicing the
 string to get it. The field is then named for a log, `detail`, and documented as one.
+
+### D148. Signing in again under the provider is the pair from `useConnection()`, verified first
+D144 made a refusal final and said the way out is `disconnect()` then `connect()`. Under
+`TransportProvider` the page does not own the connection: the provider holds the one
+`connect()` for the tree, so the pair works only if the hold count lands back at one. The
+application that asked for an example had never run that path, because it reloads. So it was
+run before it was written down.
+
+**Measured.** `e2e/react-signin.spec.ts`, in Chromium, under StrictMode and the provider,
+against the fixture's server with a door. Refused at the door: nothing retries, the button
+calls the pair with a token that passes, the `query` function is asked again and sends it,
+and the page connects. Refused on a reconnect, a token that expired under an open page: the
+same. Then the tree unmounts, the provider's own `disconnect()` closes the client, which is
+the hold count back at one, since at two it would stay connected with nobody holding it.
+
+**Decision.** The React guide has the example, a `SignedIn` component over
+`useConnection()`, and says the two calls go together and in that order, because `connect()`
+alone takes the hold to two. No `reconnect()` method: the pair is two lines, it is neutral
+on the count, and it is the same two lines with or without React.
+
