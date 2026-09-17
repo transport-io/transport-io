@@ -31,6 +31,12 @@ const REACT_EXAMPLE_PORT = process.env.E2E_REACT_EXAMPLE_PORT ?? '3230'
 const REACT_EXAMPLE_WT_PORT = process.env.E2E_REACT_EXAMPLE_WT_PORT ?? '4530'
 export const REACT_EXAMPLE_ORIGIN = `http://localhost:${REACT_EXAMPLE_PORT}`
 
+/**
+ * A Chromium-based browser already on this machine, by the path of its executable, instead
+ * of the one `npx playwright install` downloads. CI never sets it.
+ */
+const E2E_BROWSER = process.env.E2E_BROWSER
+
 const DEMO_PORT = process.env.E2E_DEMO_PORT ?? '3210'
 const DEMO_WT_PORT = process.env.E2E_DEMO_WT_PORT ?? '4510'
 export const DEMO_ORIGIN = `http://localhost:${DEMO_PORT}`
@@ -46,7 +52,17 @@ export default defineConfig({
     baseURL: E2E_ORIGIN,
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(E2E_BROWSER === undefined
+          ? {}
+          : { launchOptions: { executablePath: E2E_BROWSER } }),
+      },
+    },
+  ],
   webServer: [
     {
       command:
