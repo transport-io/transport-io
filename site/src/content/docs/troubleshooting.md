@@ -106,7 +106,8 @@ for a TCP port, the loopback address that answered: `transport-io dev` checks bo
 and then takes the browser's `localhost`. The QUIC binding reports nothing for a held UDP
 port, so the check runs before it binds, and `transport-io dev` checks its WebTransport port
 before it prints a URL for it, with or without a server entry. Stop the other process, or
-pass another port.
+pass another port. A `transport-io dev` that was killed with SIGKILL leaves the server it
+started running, and that server is the process holding the WebTransport port.
 
 ## WT_HANDSHAKE_TIMEOUT
 

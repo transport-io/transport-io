@@ -4247,9 +4247,65 @@ table coloured two cells.
 **Found on the way.** `transport-io dev` installs no signal handler, so a `SIGTERM` to it
 leaves the entry it spawned running and holding the UDP port. Ctrl-C does not show it, since
 the terminal signals the whole group. The bench starts the command in its own process group
-and stops the group. Recorded here and not fixed in this change.
+and stops the group. D151 is the fix.
 
 **Reconsider when:** the bench, on a machine with a display and a real pointer, disagrees
 with the headless figures by more than the run-to-run spread, which here is about 10 ms a
 second; or an application reports the page underneath an open panel dropping frames, which
 these runs never did.
+### D151. The dev command passes SIGTERM, SIGINT and SIGHUP to its entry, and ends as the entry ended
+`transport-io dev <entry>` spawned the entry and installed no signal handler, so a signal
+sent to the command alone ended it and left the entry running with its UDP port held.
+Observed on 2026-09-17: two `node examples/chat/server.node.ts` processes holding UDP 4637
+and 4647 after the script that spawned their commands ended them with SIGTERM. A terminal
+does not show it, because Ctrl-C goes to the whole foreground process group and the entry
+receives a SIGINT of its own.
+
+**What it does.** `cli/supervise.node.ts` passes SIGTERM, SIGINT and SIGHUP to the entry and
+does nothing else with them, so an entry that drains has the time to, and the command exits
+when the entry has. There is no deadline and no escalation to SIGKILL. An entry that ignores
+SIGTERM ignores it with or without this command in front of it, and a second signal is
+passed on like the first. An `exit` listener sends the entry SIGTERM on every other way out,
+`process.exit` or an uncaught exception. The command cannot wait there, so the entry ends
+shortly after it.
+
+**How the command ends.** With the entry's code when the entry exited with one. When the
+entry died of one of the three signals, the command removes its listeners and raises the
+same signal on itself, so a script that kills it reads `signal: 'SIGTERM'` and no code, as
+it did before the command handled anything. Measured on Node 22.23.2, since Node's
+documentation describes that default as an exit with 128 plus the number. A shell depends on
+it too. Measured with bash 5.3.9 and a loop of three iterations, each signalled by process
+group: a command that exits 130 on SIGINT ran all three, and a command that died of SIGINT
+stopped the loop at the first. When the entry died of any other signal the command exits
+with 128 plus the signal number, which is what a shell reports for it. It was 0, and that
+read as success for a server that had been killed. Those signals are not raised again,
+because SIGQUIT, SIGABRT and SIGSEGV would dump core for a command that did not crash.
+
+**The entry stays in the command's process group, so Ctrl-C reaches it twice.** Measured
+with the command in a group of its own and SIGINT sent to the group, as a terminal sends
+it: a SIGINT handler in the entry ran twice, and once when the command alone was signalled.
+A Node signal listener receives the signal's name and nothing about who sent it, so the two
+cases cannot be told apart. The alternative is `detached: true`, where the command is the
+only sender. Node documents that it makes the child the leader of a new process group and a
+new session, so Ctrl-Z and Ctrl-\ stop reaching the entry, and an entry orphaned by SIGKILL
+is no longer in the terminal's session either. One repeated signal costs less than that.
+The certificates guide says a handler runs twice.
+
+**What it cannot do.** SIGKILL reaches no handler, so a command killed with it leaves the
+entry behind, measured. The next run reports `WT_PORT_IN_USE` and the troubleshooting page
+names the cause. Closing that needs the entry to cooperate, by watching a pipe or loading a
+preload, and the entry is the user's file.
+
+**Verified** on macOS with Node 22.23.2. `cli/signals.node.test.ts` signals the command
+alone with each of the three and asserts the entry is gone and `assertUdpPortFree` passes
+on its port, which is the check the next run makes. All three failed before the change. It
+covers the code, the other signals and the `exit` listener as well, and removing the
+listener fails its test. The reported case was run again through the built CLI with
+`examples/chat`: `lsof -nP -iUDP:<port>` named the entry before SIGTERM and nothing after.
+Windows was not measured. Node documents that `subprocess.kill()` there ends the process
+abruptly whatever the signal, so an entry on Windows is stopped and is not asked to stop.
+
+**Reconsider when:** an entry that treats a second SIGINT as a forced exit reports losing
+its drain to one Ctrl-C, which is the case for `detached` and what it costs; or orphans are
+reported from commands killed with SIGKILL, by a test runner for instance, which is the
+case for a preload that watches the parent.

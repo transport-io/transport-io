@@ -65,6 +65,12 @@ npx transport-io dev ./server.node.ts --static ./web/dist
 
 Without `--static` it serves the first of `public`, `web/dist`, `web` and `dist` that exists.
 
+**Your server runs as a child of the command.** SIGTERM, SIGINT and SIGHUP sent to the
+command are passed to the server, and the command exits once the server has. On Ctrl-C the
+terminal signals both processes, so a SIGINT handler in your server runs twice. SIGKILL
+cannot be passed on. A server left behind by one still holds its port, and the next run
+reports `WT_PORT_IN_USE`.
+
 **A page served by something else** needs the hash too. `devClient` fetches it from the
 page's own origin at `/.well-known/transport-io-dev`, so a Vite dev server proxies that one
 path to the command's port. `examples/react` does exactly this. `fetchDevManifest()` is that

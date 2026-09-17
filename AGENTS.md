@@ -127,6 +127,10 @@ the certificate to the server process by environment. Two functions connect to i
 `listenDev()` from `transport-io/node-transport` on the server, `connectDev()` from
 `transport-io/dev-transport` in the browser.
 
+The server runs as a child of the command. SIGTERM, SIGINT and SIGHUP sent to the command
+are passed to it, and the command exits once the server has. SIGKILL cannot be passed on,
+so stop the command with SIGTERM or the server is left holding its port.
+
 `connectDev` throws `WT_DEV_ONLY` unless both the page origin and the WebTransport URL are
 loopback, so it cannot be enabled in production by accident. `connectDev({ query })` and
 `devClient({ query })` add a query to the WebTransport URL, which is where `authorize` reads a

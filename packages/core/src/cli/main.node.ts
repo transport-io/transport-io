@@ -22,6 +22,7 @@ import { DEV_ENDPOINT } from '../transport/dev.ts'
 import { assertUdpPortFree } from '../transport/port.node.ts'
 import { daysLeft, ensureCertificate } from './certificate.node.ts'
 import { DEV_HOST, startDevServer } from './dev-server.node.ts'
+import { superviseChild } from './supervise.node.ts'
 
 const DEFAULT_PORT = 3000
 const DEFAULT_WT_PORT = 4433
@@ -173,7 +174,7 @@ async function main(): Promise<void> {
         TRANSPORT_IO_DEV_WT_PORT: String(args.wtPort),
       },
     })
-    child.on('exit', (code) => process.exit(code ?? 0))
+    superviseChild(child)
   } else if (!args.demo) {
     console.log('  No entry given, so no server was started. Pass one, or use --demo.')
     console.log('')
