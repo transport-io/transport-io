@@ -43,8 +43,8 @@ export function connect(token: string): Client<AppMap> {
 ## The door
 
 `authorize` receives the request: `path`, `query`, and `peerAddress`. Return what you
-learned, or `null` to refuse. The server's second type argument is what `authorize` returns,
-and every `peer.data` and `ctx.peer.data` carries it:
+learned, or refuse: `null`, or `refuse(reason)` to say why. The server's second type argument
+is what `authorize` returns, and every `peer.data` and `ctx.peer.data` carries it:
 
 ```ts file=server.node.ts
 import { createServer } from 'transport-io'
@@ -81,16 +81,62 @@ export async function main(): Promise<void> {
 The WebSocket listener takes it too, and its request carries the upgrade's `headers`, cookies
 included, since that is an ordinary HTTP request.
 
+## Refusing, with a reason
+
+`refuse(reason)` refuses a peer and tells it why. The reason is a code the page compares,
+not a sentence: it travels as the session's close reason, so it is 1 to 123 bytes and
+`refuse` throws on anything longer. `null` is the reason `'refused'`.
+
+```ts file=door.ts
+import { refuse } from 'transport-io'
+import type { User } from './contract.ts'
+
+declare function lookup(token: string | null): Promise<(User & { banned: boolean }) | null>
+
+export async function authorize({ query }: { query: URLSearchParams }) {
+  const user = await lookup(query.get('token'))
+  if (user === null) return refuse('expired')
+  if (user.banned) return refuse('banned')
+  return { name: user.name }
+}
+```
+
+An `authorize` that throws has decided nothing, a database that is down, so it is not a
+refusal: the session closes, and a client that reconnects keeps trying.
+
 ## What a refused peer sees
 
 The session closes as `WT_UNAUTHORIZED` before the server sends anything, so a refused peer
-receives the reason and never the event table. On the client, `connect()` rejects with
-`WT_UNAUTHORIZED` and the snapshot's `lastError` carries it. A refusal does not dial the
-fallback: it is an answer, not a path to route around.
+receives the reason and never the event table. On the client, `connect()` rejects with a
+`RefusedError`, whose `code` is `WT_UNAUTHORIZED` and whose `reason` is yours, and the
+snapshot has `refused: { reason }` beside a `status` of `closed`:
 
-A reconnect is a new session and a new request, so `authorize` runs again with whatever the
-URL carries then. A token that expires is refused on the next connect, which is where the
-page fetches a fresh one.
+```ts file=signin.ts
+import { type Client, RefusedError } from 'transport-io'
+import type { AppMap } from './contract.ts'
+
+declare function showSignIn(): void
+declare function showBanned(): void
+
+export async function open(client: Client<AppMap>): Promise<void> {
+  try {
+    await client.connect()
+  } catch (e) {
+    if (!(e instanceof RefusedError)) throw e
+    if (e.reason === 'banned') showBanned()
+    else showSignIn()
+  }
+}
+```
+
+**A refusal is final.** It does not dial the fallback, and a client with `reconnect` stops
+on it, since the same request would be refused again. A reconnect is a new request, so `authorize` runs again on each one,
+and a token that expired while the page was open is refused there; `refused` on the snapshot
+is how the page finds out. The way out is a credential that will pass, then `disconnect()`
+and `connect()`.
+
+A server can refuse a live session the same way, a token that expired mid-session:
+`peer.close(CloseCode.WT_UNAUTHORIZED, 'expired')`.
 
 ## Without a door
 
@@ -131,5 +177,5 @@ export function presence(server: Server<AppMap, User>): void {
 }
 ```
 
-QUIC notices a dead path with its idle timeout, and the WebSocket mapping with its own
-deadline, so both moments arrive for a peer that vanished as well as for one that closed.
+Both moments arrive for a peer that vanished as well as for one that closed, up to 25
+seconds later over WebTransport.

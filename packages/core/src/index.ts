@@ -12,6 +12,7 @@ export {
   // times.
   type RemoteEnvelope,
 } from './adapter.ts'
+export { type Refusal, refuse } from './authorize.ts'
 export {
   Client,
   type ClientOptions,
@@ -20,6 +21,7 @@ export {
   type FallbackReason,
   type NativeLanes,
   type ReconnectOptions,
+  type Refused,
   type Status,
   withFallback,
 } from './client.ts'
@@ -54,7 +56,7 @@ export {
   unreliable,
 } from './contract.ts'
 export { maxDatagramPayload } from './datagram.ts'
-export { TransportError, type TransportErrorCode } from './errors.ts'
+export { RefusedError, TransportError, type TransportErrorCode } from './errors.ts'
 export { encodeFrame, type Frame, FrameDecoder, maxPayloadFor } from './framer.ts'
 export {
   CloseCode,

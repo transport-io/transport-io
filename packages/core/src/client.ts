@@ -16,7 +16,7 @@ import {
   type SentBy,
   type StreamableOf,
 } from './contract.ts'
-import { TransportError } from './errors.ts'
+import { errorForClose, RefusedError, TransportError } from './errors.ts'
 import { CloseCode, FrameType } from './protocol.ts'
 import { Session, type SessionStats, type StreamResult } from './session.ts'
 import { OwnedTimers } from './timers.ts'
@@ -32,11 +32,27 @@ export type Status = 'idle' | 'connecting' | 'connected' | 'closing' | 'closed'
  */
 export type FallbackReason = 'unsupported' | 'unreachable'
 
+/**
+ * The server's `authorize` refused this client, and why: what `refuse(reason)` was given, or
+ * `'refused'` where `authorize` returned `null`.
+ */
+export interface Refused {
+  readonly reason: string
+}
+
 export interface ClientState {
   readonly status: Status
   readonly sessionId: string | null
   readonly rooms: readonly string[]
   readonly lastError: TransportError | null
+  /**
+   * Set when the server refused this client at `authorize`, beside a `status` of `closed`.
+   * A refusal is final: the same request would be refused again, so a client that reconnects
+   * on its own has stopped, and nothing happens until the application calls `disconnect()`
+   * and `connect()` with a credential that will pass. `null` otherwise, and cleared when the
+   * next attempt starts.
+   */
+  readonly refused: Refused | null
   /** What carries the current session. `null` until connected. */
   readonly transport: Transport | null
   /**
@@ -104,6 +120,7 @@ export class Client<M extends AnyMap = Registered> {
     sessionId: null,
     rooms: [],
     lastError: null,
+    refused: null,
     transport: null,
     fallbackReason: null,
   })
@@ -243,7 +260,7 @@ export class Client<M extends AnyMap = Registered> {
   }
 
   async #doConnect(): Promise<void> {
-    this.#patch({ status: 'connecting', lastError: null })
+    this.#patch({ status: 'connecting', lastError: null, refused: null })
     const generation = this.#generation
     try {
       const table = await buildEventTable(this.#opts.contract)
@@ -304,7 +321,7 @@ export class Client<M extends AnyMap = Registered> {
         e instanceof TransportError
           ? e
           : new TransportError('WT_SESSION_CLOSED', String(e), 'Retry the connection.')
-      this.#patch({ status: 'closed', lastError: err })
+      this.#patch({ status: 'closed', lastError: err, refused: refusedBy(err) })
       throw err
     }
   }
@@ -366,7 +383,16 @@ export class Client<M extends AnyMap = Registered> {
     }
     session.onControl((type, body) => this.#onMembership(type, body))
 
-    await session.start()
+    try {
+      await session.start()
+    } catch (e) {
+      // A session that never started is nobody's session. Left in place it answered `emit`
+      // by dropping, where a client with no session throws. `close` is idempotent, so a
+      // session the peer or the deadline already closed is not closed twice.
+      session.close(CloseCode.WT_NO_ERROR, 'handshake failed')
+      if (this.#session === session) this.#session = undefined
+      throw e
+    }
     this.#attempt = 0
     this.#patch({
       status: 'connected',
@@ -376,18 +402,26 @@ export class Client<M extends AnyMap = Registered> {
     })
     for (const cb of this.#onSession) cb(this.#snapshot)
 
-    void conn.closed.then(() => {
+    void conn.closed.then((info) => {
       // Superseded by a disconnect or a newer connect: that path patched its own state.
       if (generation !== this.#generation) return
       this.#session = undefined
       this.#connecting = undefined
+      // A close code that is an error says why the session ended. A server may close a live
+      // session as `WT_UNAUTHORIZED`, a token that expired, and that is a refusal like one
+      // at the door.
+      const err = errorForClose(info.code, info.reason) ?? null
+      const refused = refusedBy(err)
       this.#patch({
         status: 'closed',
         sessionId: null,
         rooms: [],
         transport: null,
         fallbackReason: null,
+        lastError: err,
+        refused,
       })
+      if (refused !== null) return
       if (this.#opts.reconnect !== undefined && this.#refs > 0) this.#scheduleReconnect()
     })
   }
@@ -410,8 +444,11 @@ export class Client<M extends AnyMap = Registered> {
       if (this.#connecting !== undefined) return
       const attempt = this.#doConnect()
       this.#connecting = attempt
-      attempt.catch(() => {
+      attempt.catch((e: unknown) => {
         if (this.#connecting === attempt) this.#connecting = undefined
+        // A refusal is final. The token was never going to become valid by waiting, and
+        // retrying it is a client that says "offline, retrying" for ever.
+        if (e instanceof RefusedError) return
         if (generation === this.#generation && this.#refs > 0) this.#scheduleReconnect()
       })
     })
@@ -450,6 +487,10 @@ export class Client<M extends AnyMap = Registered> {
  * let `new Client(...)` take a fallback without passing the gate below.
  */
 const fallbacks = new WeakMap<object, () => Promise<Connection>>()
+
+function refusedBy(e: TransportError | null): Refused | null {
+  return e instanceof RefusedError ? Object.freeze({ reason: e.reason }) : null
+}
 
 function fallbackReasonFor(e: unknown): FallbackReason | undefined {
   if (!(e instanceof TransportError)) return undefined

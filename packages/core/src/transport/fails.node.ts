@@ -17,10 +17,11 @@
  *     anything, so a listener's session sends a liveness probe
  */
 import { Http3Server, quicheLoaded, WebTransport } from '@fails-components/webtransport'
+import { decide } from '../authorize.ts'
 import { Client, type ClientOptions } from '../client.ts'
 import type { AnyMap, Registered } from '../contract.ts'
 import { TransportError } from '../errors.ts'
-import { CloseCode, DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
+import { DATAGRAM_CONSERVATIVE_FLOOR } from '../protocol.ts'
 import { OwnedTimers } from '../timers.ts'
 import { closedOf } from './closed.ts'
 import { assertUdpPortFree } from './port.node.ts'
@@ -196,30 +197,6 @@ function requestOf(session: AnySession): ConnectRequest {
 }
 
 /**
- * Runs `authorize` for a session that has just been established. A refusal closes it with
- * `WT_UNAUTHORIZED` before this side sends frame 0, so the peer learns why and learns
- * nothing else.
- */
-async function decide<D>(
-  session: AnySession,
-  authorize: Authorize<D> | undefined,
-): Promise<{ accepted: true; data: D | undefined } | { accepted: false }> {
-  if (authorize === undefined) return { accepted: true, data: undefined }
-  let verdict: D | null
-  try {
-    verdict = await authorize(requestOf(session))
-  } catch {
-    session.close({ closeCode: CloseCode.WT_UNAUTHORIZED, reason: 'authorize failed' })
-    return { accepted: false }
-  }
-  if (verdict === null) {
-    session.close({ closeCode: CloseCode.WT_UNAUTHORIZED, reason: 'refused by authorize' })
-    return { accepted: false }
-  }
-  return { accepted: true, data: verdict }
-}
-
-/**
  * Only `Http3Server` is ever constructed. `Http2Server` and `reliability: 'both'` exist in
  * the dependency and are never used: a server that does not offer the HTTP/2 mapping
  * cannot be negotiated into it, whatever a client supports. That is the real enforcement
@@ -284,8 +261,14 @@ export async function listenHttp3<D = undefined>(
         } catch {
           continue
         }
-        const verdict = await decide(value, opts.authorize)
-        if (!verdict.accepted) continue
+        // A refusal closes the session before this side sends frame 0, so the peer learns
+        // why and learns nothing else.
+        const session = value
+        const verdict = await decide(opts.authorize, () => requestOf(session))
+        if (!verdict.accepted) {
+          session.close({ closeCode: verdict.code, reason: verdict.reason })
+          continue
+        }
         yield new FailsConnection(value, {
           data: verdict.data,
           probeMs: LIVENESS_PROBE_MS,

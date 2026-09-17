@@ -149,13 +149,18 @@ The first `connect()` is not retried: it resolves or rejects as it always did, a
 retrying starts once a session has been had. `disconnect()` stops a reconnect that is
 waiting. With no `reconnect` given, a dropped session stays closed and the snapshot says so.
 
+A refusal stops it as well. When the server's [`authorize`](/guides/authorize/) refuses a
+reconnect, the snapshot has `refused: { reason }` beside `closed`, and nothing is retried:
+the same request would be refused again. Show the sign-in, and once there is a credential
+that will pass, `disconnect()` and `connect()`.
+
 ## What this does not do
 
 It does not survive a server restart, because `history` is your storage and the recipe says
 nothing about what that is. It does not handle a token that expires mid-session: `resume`
 returns `joined: false` and the client is left connected but out of the room, which is the
 right shape, and what to do about it is a product decision. With [`authorize`](/guides/authorize/)
-at the door, an expired token is refused on the next connect instead, and `lastError` says so.
+at the door, an expired token is refused on the next connect instead, and `refused` says so.
 
 It does not keep a transport. A reconnect starts from WebTransport every time, so it may
 land on [the fallback](/guides/fallback/) or come back off it, and `transport` in the

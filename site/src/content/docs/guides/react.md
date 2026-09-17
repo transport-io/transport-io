@@ -109,7 +109,9 @@ import type { ReactNode } from 'react'
 import { api } from './api.ts'
 
 export function Status(): ReactNode {
-  const { status, rooms, lastError } = api.useConnection()
+  const { status, rooms, lastError, refused } = api.useConnection()
+  // Refused by the server's authorize. Final: nothing is retrying, so ask for a sign-in.
+  if (refused !== null) return <p>sign in again ({refused.reason})</p>
   if (status === 'closed' && lastError !== null) return <p>offline: {lastError.code}</p>
   return (
     <p>
@@ -123,6 +125,9 @@ All state comes through `useSyncExternalStore`, and the object this returns is r
 stable: it changes only when the connection state does, so putting it in a dependency array
 is safe. `transport` and `fallbackReason` are on the same object: what carries the session,
 and why it is a fallback when it is. [The fallback](/guides/fallback/) covers the rest.
+`refused` is there too: `{ reason }` when the server's `authorize` refused this client, and
+`null` otherwise. [Authenticating a peer](/guides/authorize/) has the reasons and the way
+back in.
 
 **During server rendering it reports `idle`.** That is true, since no connection exists on a
 server, and it makes the server's HTML identical to the client's first render, so hydration

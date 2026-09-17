@@ -2,17 +2,19 @@
  * `authorize` on the real listeners. Over QUIC the request callback has to strip the query
  * from `:path` before the binding routes the session, or `/?token=x` never reaches a listener
  * on `/`: the first test dials with a query and is the one that failed before the callback
- * existed. A refused peer sees `WT_UNAUTHORIZED` and the server's `onSession` never runs.
+ * existed. A refused peer sees a `RefusedError` carrying the reason `authorize` gave, the
+ * same on both listeners, and the server's `onSession` never runs.
  */
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { refuse } from '../authorize.ts'
 import { ensureCertificate } from '../cli/certificate.node.ts'
 import { Client } from '../client.ts'
 import { defineContract, type MapOf, reliable } from '../contract.ts'
-import type { TransportError } from '../errors.ts'
+import { RefusedError, type TransportError } from '../errors.ts'
 import { createServer } from '../server.ts'
 import { connectHttp3, listenHttp3 } from './fails.node.ts'
 import { listenWebSocket } from './websocket.node.ts'
@@ -41,9 +43,11 @@ test('over QUIC: a token in the query reaches authorize, becomes peer.data, and 
     cert: cert.cert,
     privKey: cert.privKey,
     path: '/',
-    authorize: ({ path, query, peerAddress }): Who | null => {
+    authorize: ({ path, query, peerAddress }) => {
       assert.equal(path, '/')
-      return query.get('token') === 'good' ? { user: 'ann', from: peerAddress } : null
+      return query.get('token') === 'good'
+        ? { user: 'ann', from: peerAddress }
+        : refuse('expired')
     },
   })
   const server = createServer<AppMap, Who>({ contract })
@@ -75,7 +79,9 @@ test('over QUIC: a token in the query reaches authorize, becomes peer.data, and 
     })
     const err = await rejected(bad.connect())
     assert.equal(err.code, 'WT_UNAUTHORIZED')
-    assert.match(err.message, /refused by authorize/)
+    assert.ok(err instanceof RefusedError)
+    assert.equal(err.reason, 'expired')
+    assert.deepEqual(bad.getSnapshot().refused, { reason: 'expired' })
 
     assert.equal(seen.length, 1)
     assert.equal(seen[0]?.user, 'ann')
@@ -110,6 +116,9 @@ test('over the WebSocket: the upgrade request reaches authorize, headers include
     })
     const err = await rejected(bad.connect())
     assert.equal(err.code, 'WT_UNAUTHORIZED')
+    // `null` is a refusal with the default reason, and it crosses the socket whole.
+    assert.ok(err instanceof RefusedError)
+    assert.equal(err.reason, 'refused')
 
     assert.equal(seen.length, 1)
     assert.equal(seen[0]?.user, 'bob')

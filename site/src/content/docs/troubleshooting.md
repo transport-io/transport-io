@@ -51,10 +51,12 @@ See [Certificates](/guides/certificates/).
 
 ## WT_UNAUTHORIZED
 
-`connect()` rejected because the listener's `authorize` refused this peer, and the message
-is the server's reason. The session closed before the server sent anything, so nothing about
-the contract reached the page. Obtain a valid credential, usually a token in the WebTransport
-URL's query string, and connect again. A refusal does not dial the fallback.
+The listener's `authorize` refused this peer. The error is a `RefusedError` and its `reason`
+is the server's, `'refused'` where it gave none; the snapshot has the same in `refused`. The
+session closed before the server sent anything, so nothing about the contract reached the
+page. A refusal is final: it does not dial the fallback, and a client with `reconnect` has
+stopped. Obtain a valid credential, usually a token in the WebTransport URL's query string,
+then `disconnect()` and `connect()`.
 
 ## WT_PORT_IN_USE
 

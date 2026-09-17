@@ -28,6 +28,14 @@ const settle = async (): Promise<void> => {
   for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 1))
 }
 
+/**
+ * A stream that fails to open is reported once the connection has had 250 ms to say why it
+ * closed, so a failed accept surfaces after that wait and not at once.
+ */
+const settleFailedAccept = async (): Promise<void> => {
+  await new Promise((r) => setTimeout(r, 320))
+}
+
 describe('listen(source) accepts every connection', () => {
   test('a peer that connects through the loop is a session, with no loop in user code', async () => {
     const server = createServer<AppMap>({ contract })
@@ -92,7 +100,7 @@ describe('a failed accept is counted, not swallowed and not fatal', () => {
     const { Client } = await import('./client.ts')
     const client = new Client<AppMap>({ contract, connect: async () => clientSide })
     await client.connect()
-    await settle()
+    await settleFailedAccept()
 
     expect(server.acceptErrors).toBe(1)
     expect(joined).toBe(1)
@@ -121,7 +129,7 @@ describe('a failed accept is counted, not swallowed and not fatal', () => {
         seen.push(e)
       },
     })
-    await settle()
+    await settleFailedAccept()
 
     expect(seen).toHaveLength(1)
     expect((seen[0] as Error).message).toContain('handshake refused')

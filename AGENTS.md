@@ -168,10 +168,12 @@ client.disconnect()
 | `stats()` | Per-peer drop counters. |
 | `withFallback<M>(opts)` | `ClientOptions` plus `fallback`, a connector for a reliable-only transport: `() => connectWebSocket({ url })`. Native first on every connect; the fallback on `WT_NO_SUPPORT`, on a failed WebTransport handshake when the WebSocket connects, and on `WT_HANDSHAKE_TIMEOUT` over WebTransport (Safari, 5 s), else the WebTransport error. Returns `FallbackClient<M>`: no `call()` or `stream()`; they live on `native`, which is `null` on a fallback session. Compiles only when every unreliable event declares a fallback, and the error names the event. |
 
-`ClientState` is `{ status, sessionId, rooms, lastError, transport, fallbackReason }` where
-`status` is `'idle' | 'connecting' | 'connected' | 'closing' | 'closed'`, `transport` is
-`'webtransport' | 'websocket' | null` and `fallbackReason` is
-`'unsupported' | 'unreachable' | null`.
+`ClientState` is `{ status, sessionId, rooms, lastError, refused, transport, fallbackReason }`
+where `status` is `'idle' | 'connecting' | 'connected' | 'closing' | 'closed'`, `transport` is
+`'webtransport' | 'websocket' | null`, `fallbackReason` is
+`'unsupported' | 'unreachable' | null`, and `refused` is `{ reason: string } | null`: set when
+the server's `authorize` refused this client, beside `status: 'closed'`. `lastError` is why
+the last attempt failed or why the last session closed.
 
 ## Server
 
@@ -220,11 +222,17 @@ client-initiated subscription, make it a `call` whose handler authorises the pay
 then joins `ctx.peer`.
 
 **The door is `authorize` on the listener**: `listenHttp3({ authorize: ({ path, query,
-peerAddress }) => data | null })`, run before the session is accepted. `null` closes the
-session as `WT_UNAUTHORIZED` before frame 0, so the peer receives the reason and never the
-event table; on the client `connect()` rejects with that code and nothing is dialled after it. What
-it returns is `peer.data`, typed by the second type argument of `createServer<M, D>` and
-assignable. A browser can put a token only in the WebTransport URL's query; the WebSocket
+peerAddress }) => data | null | refuse(reason) })`, run before the session is accepted.
+`null` or `refuse('expired')` closes the session as `WT_UNAUTHORIZED` before frame 0, so the
+peer receives the reason and never the event table. The reason is a short code, 1 to 123
+bytes, and `null` is `'refused'`. On the client `connect()` rejects with a `RefusedError`,
+`code: 'WT_UNAUTHORIZED'` and `reason`, and the snapshot has `refused: { reason }` beside
+`status: 'closed'`. **A refusal is final**: nothing is dialled after it and a client with
+`reconnect` stops, until the application calls `disconnect()` then `connect()` with a
+credential that passes. An `authorize` that throws decided nothing, and stays retryable.
+`peer.close(CloseCode.WT_UNAUTHORIZED, reason)` refuses a live session the same way. What
+`authorize` returns otherwise is `peer.data`, typed by the second type argument of
+`createServer<M, D>` and assignable. A browser can put a token only in the WebTransport URL's query; the WebSocket
 listener's `authorize` also sees the upgrade request's `headers`. `listenDev` takes it too.
 `peer.id` identifies nobody: it is a value this server assigned itself.
 
@@ -311,7 +319,7 @@ is never thrown from this library.
 | `WT_UDP_UNREACHABLE` | the handshake failed but the origin answers over HTTPS: the server is up and UDP is not reaching it | check the firewall, the VPN, or the platform's UDP ingress; nothing in the library routes around it |
 | `WT_CERT_EXPIRED` | the `transport-io dev` certificate has expired | run `transport-io dev` again; it mints a new one |
 | `WT_PORT_IN_USE` | a listener's port is held by another process; the dev command checks both loopback addresses | stop that process, or pass another port |
-| `WT_UNAUTHORIZED` | the listener's `authorize` refused this peer; the message is the server's reason | obtain a valid credential and connect again; nothing is dialled after a refusal |
+| `WT_UNAUTHORIZED` | the listener's `authorize` refused this peer; the error is a `RefusedError` and `reason` is the server's | final: reconnect has stopped; obtain a valid credential, then `disconnect()` and `connect()` |
 | `WT_DEV_ONLY` | `connectDev` or `listenDev` outside loopback, or without the environment `transport-io dev` sets | use `connectBrowser` with your own certificate anywhere that is not local development |
 
 ## Behaviour worth knowing before you debug it

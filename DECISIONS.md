@@ -3853,3 +3853,63 @@ carried on.
 **Reconsider when:** the binding surfaces its idle timeout, at which point the probe is
 redundant and D141's knob has something to turn; or an application needs a vanished peer
 noticed faster than 25 seconds, which is the same request as D141 with a number attached.
+
+### D144. A refusal says why, is a state beside `closed`, and is final
+Two bugs from the first outside application on 0.11.0, and one feature that fixes both,
+which the application suggested itself under "what Socket.IO lacks". In Chrome a peer refused
+by `authorize` saw `WT_SESSION_CLOSED`, so its "sign in again" never appeared: `dispose()`
+produced `WT_UNAUTHORIZED` only once `closed` had delivered code 1007, and Chromium fails the
+stream the client opens first. Measured in a page: `ready`, then "The session is closed."
+from `createUnidirectionalStream`, then `closed` resolving with 1007 and the reason, all
+inside a millisecond and in that order. Node reported it correctly. And a client with
+`reconnect` retried a refusal for ever, against a token that was never going to become valid.
+
+**Decision.** `authorize` returns a reason, the client gets a typed refused state carrying
+it, and the reconnect loop treats that state as final. Three things were settled building it.
+
+*What the reason travels as.* The session's close reason, whole and nothing else, under close
+code 1007. A close reason is capped, 1024 bytes on WebTransport and 123 on the WebSocket
+mapping, so a reason is 1 to 123 bytes, the smaller cap, and means the same on either. The
+cap is enforced where the reason is made: `refuse(reason)` throws `WT_VALIDATION_FAILED` on
+an empty or longer one, because a reason cut on the wire no longer equals what the client
+compares it with, and a silent cut is the worse failure. So a reason is a code, `expired`,
+and prose belongs to the page. `null` from `authorize` stays a refusal, since a lookup that
+returns `User | null` is the natural door, and its reason is `refused`.
+
+*A status or a field.* A field, `refused: { reason } | null`, beside a `status` of `closed`.
+Status says what the client is doing, and a refused client is doing what a closed one is:
+it has no session and `connect()` may be called. Why it stopped is a second fact, as
+`fallbackReason` is beside `transport`. Everything that already treats `closed` as closed
+stays right, and the one thing that was wrong, a page saying "retrying", is answered by the
+field being there to read. A sixth status would have broken every exhaustive switch to say
+something `closed` already says.
+
+*What `connect()` rejects with.* A `RefusedError`, a `TransportError` whose `code` is
+`WT_UNAUTHORIZED` and whose `reason` is the server's. An application branches on the class
+or the code and then on `reason`, and never reads a message. Socket.IO's `connect_error` is
+a plain `Error` with an untyped `data`.
+
+**What else it needed.** A throw from `authorize` is not a refusal. It used to close as 1007
+like one, and with a refusal final that would park every client for good the first time a
+verification backend blinked. It closes as `WT_NO_ERROR` with the reason `authorize failed`,
+the client sees `WT_SESSION_CLOSED` carrying that reason, and the loop keeps trying. Both
+listeners now share one `decide`, so the verdict cannot mean two things. A failed `start()`
+waits up to 250 ms for `closed` before it reports, on the failure path only, and any close
+code that is an error becomes that error, not only 1007. The client's closed handler does
+the same for a live session: `lastError` says why a session closed, which the
+troubleshooting page already claimed and the code did not do, and a server may close a live
+session as `WT_UNAUTHORIZED` with the same meaning as at the door. A session whose `start()`
+failed is no longer left as the client's session, where it answered `emit` by dropping.
+
+**The way out** is `disconnect()` then `connect()`, which is neutral on the hold count, with
+a credential that will pass. No new method.
+
+**Measured.** `e2e/refused.spec.ts` in Chromium: a refused page gets `WT_UNAUTHORIZED`,
+`reason: 'expired'` and `refused: { reason: 'expired' }`; with the wait removed the same spec
+reports `WT_SESSION_CLOSED` and `refused: null`, which is the report. A reconnecting page
+whose token stops being valid asks the door once more and never again, watched for fifteen
+of its longest waits.
+
+**Reconsider when:** an application needs the reason typed end to end, a union the client
+and the door share. That is a second type parameter on the client and the hooks, or a slot
+in the contract, and neither is worth it for a string the application already owns.

@@ -33,6 +33,7 @@ import {
   HOST_ORDINAL_QUARANTINE_MS,
   MAX_SESSION_HOSTS,
   ORIGIN_QUARANTINE_MS,
+  REFUSAL_REASON_MAX_BYTES,
   ResetCode,
   SEQUENCE_STATE_RETENTION_MS,
   STREAM_FRAME_OVERHEAD_BYTES,
@@ -429,6 +430,11 @@ const TABLE_CONSTANTS: readonly TableConstant[] = [
     name: 'WS_KEEPALIVE_INTERVAL_MS',
   },
   { row: /WT_IDLE_TIMEOUT/, expect: WS_IDLE_TIMEOUT_MS, name: 'WS_IDLE_TIMEOUT_MS' },
+  {
+    row: /`WT_UNAUTHORIZED`/,
+    expect: REFUSAL_REASON_MAX_BYTES,
+    name: 'REFUSAL_REASON_MAX_BYTES',
+  },
 ]
 
 const withoutFences = proto.replace(/```[\s\S]*?```/g, '')

@@ -13,7 +13,7 @@ import {
 } from './codec.ts'
 import type { Direction, EventEntry, EventTable } from './contract.ts'
 import { decodeDatagram, encodeDatagram, SequenceGate } from './datagram.ts'
-import { TransportError } from './errors.ts'
+import { errorForClose, TransportError } from './errors.ts'
 import { encodeFrame, type Frame, FrameDecoder } from './framer.ts'
 import { buildHandshake, type Negotiated, negotiate, parseHandshake } from './handshake.ts'
 import {
@@ -33,6 +33,13 @@ import {
 import { DatagramQueue, EmitQueue, PeerTooSlowError, type QueueStats } from './queue.ts'
 import { type OwnedTimer, OwnedTimers } from './timers.ts'
 import type { BidiStream, CloseInfo, Connection } from './transport/types.ts'
+
+/**
+ * How long a failed `start()` waits for the connection to say why it closed. The close info
+ * follows the failed stream in the same turn in Chromium; this is the bound for a transport
+ * where it does not, and it is paid only on a path that has already failed.
+ */
+const CLOSE_INFO_WAIT_MS = 250
 
 export interface SessionStats extends QueueStats {
   readonly staleReceived: number
@@ -251,6 +258,8 @@ export class Session {
   #disposed = false
   /** What the transport reported when it closed, so a refusal keeps its code and reason. */
   #closeInfo: CloseInfo | undefined
+  /** Releases `#explain`'s wait for the close info, which disposal would otherwise strand. */
+  #releaseExplain: (() => void) | undefined
   readonly #side: Direction | undefined
   #directionDropped = 0
 
@@ -378,10 +387,60 @@ export class Session {
       })
       this.#sweepTimer.unref()
       return n
+    } catch (e) {
+      throw await this.#explain(e)
     } finally {
       this.#clearHandshakeTimer()
       this.#deadlineReject = undefined
     }
+  }
+
+  /**
+   * Why `start()` failed, once the connection has had a moment to say.
+   *
+   * A peer that closes the session before the handshake, which is what a refusal at the
+   * door is, reaches this side twice: the stream being opened fails, and `closed` delivers
+   * the code and the reason. In Chromium the stream fails first, measured, so the failure
+   * that reached `start()` was the platform's "The session is closed." and the refusal
+   * arrived a moment later to nobody. An error of our own already says why and is thrown as
+   * it is; anything else waits briefly for `closed`, and a close code that is an error is
+   * the answer.
+   */
+  async #explain(e: unknown): Promise<unknown> {
+    if (e instanceof TransportError && e.code !== 'WT_SESSION_CLOSED') return e
+    if (this.#closeInfo === undefined && !this.#disposed) {
+      // Three ways out, because a timer alone is a hang: `dispose()` clears every timer, so
+      // it releases this wait itself, and `closed` settling is the answer being waited for.
+      await new Promise<void>((resolve) => {
+        this.#releaseExplain = resolve
+        void this.#conn.closed.then(() => resolve())
+        this.#timers.after(CLOSE_INFO_WAIT_MS, resolve)
+      })
+      this.#releaseExplain = undefined
+    }
+    if (this.#closeInfo !== undefined) return this.#closedBeforeHandshake(e)
+    return e instanceof TransportError
+      ? e
+      : new TransportError(
+          'WT_SESSION_CLOSED',
+          `the session failed before the handshake completed: ${String(e)}`,
+          'Connect again. A session torn down mid-handshake cannot be revived.',
+          e,
+        )
+  }
+
+  /** What a session that closed before its handshake tells `start()`'s caller. */
+  #closedBeforeHandshake(cause?: unknown): TransportError {
+    const info = this.#closeInfo
+    const said = info === undefined ? undefined : errorForClose(info.code, info.reason)
+    if (said !== undefined) return said
+    const reason = info === undefined || info.reason === '' ? '' : `: ${info.reason}`
+    return new TransportError(
+      'WT_SESSION_CLOSED',
+      `the session closed before the handshake completed${reason}`,
+      'Connect again. A session torn down mid-handshake cannot be revived.',
+      cause,
+    )
   }
 
   /**
@@ -774,22 +833,8 @@ export class Session {
     this.#timers.clearAll()
     this.#sweepTimer = undefined
     this.#handshakeTimer = undefined
-    if (!this.#handshakeSettled) {
-      const info = this.#closeInfo
-      this.#settleHandshake(
-        info?.code === CloseCode.WT_UNAUTHORIZED
-          ? new TransportError(
-              'WT_UNAUTHORIZED',
-              info.reason === '' ? 'the server refused this connection' : info.reason,
-              'The server refused this peer at authorize. Obtain a valid credential and connect again.',
-            )
-          : new TransportError(
-              'WT_SESSION_CLOSED',
-              'the session closed before the handshake completed',
-              'Connect again. A session torn down mid-handshake cannot be revived.',
-            ),
-      )
-    }
+    this.#releaseExplain?.()
+    if (!this.#handshakeSettled) this.#settleHandshake(this.#closedBeforeHandshake())
     this.#handlers.clear()
     this.#callHandlers.clear()
     this.#controlHandlers.clear()

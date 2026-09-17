@@ -463,7 +463,10 @@ void status
 ```
 
 `transport` is what carries the current session, `null` until connected. `fallbackReason`
-says why that session is on a fallback transport, and is `null` on a native one.
+says why that session is on a fallback transport, and is `null` on a native one. `lastError`
+is why the last attempt failed or the last session closed, where the close code was an
+error. `refused` is `{ reason }` when the server's `authorize` refused this client, beside a
+`status` of `closed`, and `null` otherwise (§3.3); both clear when the next attempt starts.
 
 **`getSnapshot()` returns the same reference until something changes**, so it is safe to hand
 to `useSyncExternalStore`.
@@ -480,7 +483,8 @@ fetched.
 a connected session closes: a wait of `minMs`, doubled on each failed attempt up to `maxMs`
 and randomised between half of that and all of it, then an attempt from the native connector
 again. Off unless given. The first `connect()` is not retried and settles as it always did;
-`disconnect()` stops a reconnect that is waiting.
+`disconnect()` stops a reconnect that is waiting. A refusal stops it too: `refused` is set,
+and nothing is retried until the application calls `disconnect()` and `connect()`.
 
 ```ts
 export function resilient(connect: ClientOptions['connect']): Client<AppMap> {
@@ -665,7 +669,8 @@ A listener decides each peer at the door with `authorize`, which receives the re
 opened the session: its `path`, its `query`, the `peerAddress`, and on the WebSocket
 listener the upgrade `headers` too. A browser can put nothing but the path and the query on
 a WebTransport request, so the query is where a token travels. What `authorize` returns is
-`peer.data`, typed by the server's second type argument; `null` refuses the peer.
+`peer.data`, typed by the server's second type argument. `null` refuses the peer, and
+`refuse(reason)` refuses it and says why.
 
 ```ts standalone
 import { createServer, defineContract, type MapOf, reliable } from 'transport-io'
@@ -697,10 +702,50 @@ export async function main(): Promise<void> {
 }
 ```
 
-A refused peer's session closes as `WT_UNAUTHORIZED` (§10.2 code 1007) with the reason,
-before the server's frame 0, so it never receives the event table. On the client,
-`connect()` rejects with `WT_UNAUTHORIZED` carrying that reason, and a refusal does not dial
-the fallback. A server whose listener has no `authorize` has `peer.data` of `undefined`; the
+A refused peer's session closes as `WT_UNAUTHORIZED` (§10.2 code 1007) before the server's
+frame 0, so it never receives the event table. The reason is a short code the client
+compares, 1 to 123 bytes, and `refuse` throws on a longer one; `null` is the reason
+`'refused'`. An `authorize` that throws has decided nothing: the session closes without that
+code, and a client may try again.
+
+```ts
+import { refuse } from 'transport-io'
+
+declare function lookup(token: string | null): Promise<{ name: string; banned: boolean } | null>
+
+export async function door({ query }: { query: URLSearchParams }) {
+  const user = await lookup(query.get('token'))
+  if (user === null) return refuse('expired')
+  if (user.banned) return refuse('banned')
+  return { name: user.name }
+}
+```
+
+On the client, `connect()` rejects with a `RefusedError`: a `TransportError` whose `code` is
+`WT_UNAUTHORIZED` and whose `reason` is the server's. The snapshot carries `refused:
+{ reason }` beside a `status` of `closed`. A refusal is final: it does not dial the fallback,
+and a client that reconnects on its own stops, since the same request would be refused again.
+The way out is a credential that will pass, then `disconnect()` and `connect()`. A server may
+also close a live session with `peer.close(CloseCode.WT_UNAUTHORIZED, reason)`, a token that
+expired, and the client treats it the same.
+
+```ts
+import { type Client, RefusedError } from 'transport-io'
+
+export async function openOrSignIn(
+  client: Client<AppMap>,
+  signIn: (why: string) => void,
+): Promise<void> {
+  try {
+    await client.connect()
+  } catch (e) {
+    if (e instanceof RefusedError) signIn(e.reason)
+    else throw e
+  }
+}
+```
+
+A server whose listener has no `authorize` has `peer.data` of `undefined`; the
 property is assignable, so per-peer state can live there either way. `listenDev` and
 `listenWebSocket` take the same `authorize`; the WebSocket one sees cookies, since the
 upgrade is an ordinary HTTP request.

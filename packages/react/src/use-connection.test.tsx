@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test'
 import { act, render } from '@testing-library/react'
 import { useState } from 'react'
 import { renderToString } from 'react-dom/server'
-import { Client, createServer } from 'transport-io'
+import { Client, CloseCode, createServer } from 'transport-io'
 import { loopbackPair } from 'transport-io/testing'
 import { TransportProvider } from './context.tsx'
 import { contract, settle, wire } from './harness.tsx'
@@ -88,5 +88,30 @@ describe('server rendering', () => {
     expect(html).toContain('idle')
     expect(html).toContain('null')
     expect(html).toContain('|0|')
+  })
+})
+
+describe('a refusal', () => {
+  test('reaches a component as refused beside closed, with the server reason', async () => {
+    const [serverSide, clientSide] = loopbackPair()
+    // What a listener does when authorize returns refuse('expired').
+    serverSide.close(CloseCode.WT_UNAUTHORIZED, 'expired')
+    const client = new Client({ contract, connect: async () => clientSide })
+    const seen: string[] = []
+
+    function Component(): null {
+      const { status, refused } = useConnection()
+      seen.push(`${status}:${refused?.reason ?? '-'}`)
+      return null
+    }
+    render(
+      <TransportProvider client={client}>
+        <Component />
+      </TransportProvider>,
+    )
+    await act(async () => {
+      await settle()
+    })
+    expect(seen[seen.length - 1]).toBe('closed:expired')
   })
 })

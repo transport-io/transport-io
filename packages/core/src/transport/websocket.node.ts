@@ -18,7 +18,7 @@ import {
 } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { WebSocketServer } from 'ws'
-import { CloseCode } from '../protocol.ts'
+import { decide } from '../authorize.ts'
 import { asPortInUse } from './port.node.ts'
 import { PROBE_PATH } from './probe.ts'
 import type { Authorize, Connection, ConnectRequest } from './types.ts'
@@ -93,29 +93,15 @@ export async function listenWebSocket<D = undefined>(
       queue.push(conn)
     }
   }
-  const refuse = (socket: SocketLike, reason: string): void => {
-    socket.close(toWebSocketCloseCode(CloseCode.WT_UNAUTHORIZED), reason)
-  }
-  const authorize = opts.authorize
   wss.on('connection', (raw, req) => {
     const socket = raw as unknown as SocketLike
-    if (authorize === undefined) {
-      deliver(new WebSocketConnection(socket) as Accepted)
-      return
-    }
     void (async () => {
-      let verdict: D | null
-      try {
-        verdict = await authorize(requestOf(req))
-      } catch {
-        refuse(socket, 'authorize failed')
+      const verdict = await decide(opts.authorize, () => requestOf(req))
+      if (!verdict.accepted) {
+        socket.close(toWebSocketCloseCode(verdict.code), verdict.reason)
         return
       }
-      if (verdict === null) {
-        refuse(socket, 'refused by authorize')
-        return
-      }
-      deliver(new WebSocketConnection(socket, { data: verdict }) as Accepted)
+      deliver(new WebSocketConnection(socket, { data: verdict.data }) as Accepted)
     })()
   })
 

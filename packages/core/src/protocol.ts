@@ -27,6 +27,11 @@ export const FALLBACK_UNRELIABLE_LOW_WATER = 32
 export const WS_CLOSE_NORMAL = 1000
 export const WS_CLOSE_OFFSET = 3000
 export const WS_CLOSE_REASON_MAX_BYTES = 123
+/**
+ * PROTOCOL.md §4. A refusal's reason is the close reason, and the client compares it, so it
+ * has to arrive whole on every mapping: the cap is the smaller of the two, the WebSocket's.
+ */
+export const REFUSAL_REASON_MAX_BYTES = 123
 /** PROTOCOL.md §3.3 - a peer that has sent nothing for this long sends an empty message. */
 export const WS_KEEPALIVE_INTERVAL_MS = 15_000
 /** PROTOCOL.md §3.3 - a peer that has received nothing for this long closes as WT_IDLE_TIMEOUT. */

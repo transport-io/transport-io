@@ -6,6 +6,8 @@
  * `streamErrorCode` so reset codes are only recoverable by parsing a message string, and
  * it ships a reliability fallback that must be actively disabled.
  */
+import type { Refusal } from '../authorize.ts'
+
 /** What carries a session: every lane on `webtransport`, the reliable lane only on `websocket`. */
 export type Transport = 'webtransport' | 'websocket'
 
@@ -29,11 +31,14 @@ export interface ConnectRequest {
 }
 
 /**
- * Decides a peer at the door. `null` refuses it: the session closes as `WT_UNAUTHORIZED`
- * before the server's handshake, so a refused peer never receives the event table. Anything
- * else is accepted and becomes `peer.data`.
+ * Decides a peer at the door. `null` or `refuse(reason)` refuses it: the session closes as
+ * `WT_UNAUTHORIZED` before the server's handshake, so a refused peer learns the reason and
+ * never receives the event table. Anything else is accepted and becomes `peer.data`. A throw
+ * is not a refusal: the session closes without that code, and a client may try again.
  */
-export type Authorize<D> = (request: ConnectRequest) => D | null | Promise<D | null>
+export type Authorize<D> = (
+  request: ConnectRequest,
+) => D | Refusal | null | Promise<D | Refusal | null>
 
 export interface BidiStream {
   readonly readable: ReadableStream<Uint8Array>

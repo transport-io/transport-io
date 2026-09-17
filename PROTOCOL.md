@@ -176,6 +176,26 @@ sending its frame 0, so a refused peer receives the reason and nothing else, the
 included.
 <!-- norm: unauthorized-closes-before-handshake -> packages/core/src/authorize.test.ts -->
 
+The close reason of a refusal is the application's reason, whole: a short code the client
+compares, `expired`, and never prose. It MUST be 1 to 123 bytes of UTF-8, which is the
+<!-- norm: refusal-reason-123-bytes -> packages/core/src/refusal.test.ts -->
+WebSocket mapping's cap on a close reason (§3.3), so a reason arrives the same on either
+mapping and is never cut. A refusal with nothing to say uses `refused`.
+
+`WT_UNAUTHORIZED` is an answer about the request, and a client treats it as final: the same
+request would be refused again, so a client that reconnects on its own MUST stop on it.
+<!-- norm: refusal-is-final -> packages/core/src/refusal.test.ts -->
+A server that fails to reach a decision, its verification backend down, MUST NOT close as
+<!-- norm: undecided-is-not-a-refusal -> packages/core/src/refusal.test.ts -->
+`WT_UNAUTHORIZED`, because nothing was decided and the next attempt may be. The reference
+server closes such a session as `WT_NO_ERROR` with the reason `authorize failed`. A server
+MAY close an established session as `WT_UNAUTHORIZED`, a credential that expired, with the
+same meaning.
+
+A client opening its emit stream on a refused session may see that stream fail before the
+session's close code is delivered; Chromium does. A client SHOULD wait briefly for the close
+before reporting a failed handshake, or it reports a refusal as a lost session.
+
 ### 4.1 Frame
 
 Each peer writes exactly one `HANDSHAKE` frame as frame 0 of its emit stream, immediately
@@ -258,7 +278,7 @@ contains. It matters when event names encode unreleased features or internal str
 **The door is the listener's `authorize`**, which decides each peer from the request that
 opened the session, its path, query and peer address, before the session is accepted. A
 refused peer is closed as `WT_UNAUTHORIZED` (§10.2) before this side's frame 0, so it
-receives the reason and never the table. The handshake payload itself is exhaustively
+receives the reason (§4) and never the table. The handshake payload itself is exhaustively
 `{ v, feat, events }` and carries no credential: a browser can put a token only in the
 request's query string, and nothing can stand in front of the QUIC endpoint, since a proxy
 drops UDP. Without an `authorize`, every peer that opens a session is accepted and receives
@@ -859,7 +879,7 @@ exceed **1024 bytes**, per the HTTP/3 WebTransport draft.
 | `1004` | `WT_PROTOCOL_ERROR` | Unrecoverable framing violation. |
 | `1005` | `WT_IDLE_TIMEOUT` | Nothing received for 45000 ms on a mapping with an idle deadline (§3.3). The path is dead, or the peer sends no keepalive. |
 | `1006` | `WT_RELIABILITY_REFUSED` | Session was reliable-only, or on a fallback transport with an undeclared unreliable event in the contract. See §2. |
-| `1007` | `WT_UNAUTHORIZED` | The listener's `authorize` refused this peer. Sent before the server's frame 0, with the reason. |
+| `1007` | `WT_UNAUTHORIZED` | The listener's `authorize` refused this peer. Sent before the server's frame 0; the close reason is the application's reason, 1 to 123 bytes (§4). Final: a client does not retry it. |
 
 On the WebSocket mapping these are carried as WebSocket close codes: 1000 for `WT_NO_ERROR`,
 and 3000 plus the code otherwise (§3.3).
