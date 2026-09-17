@@ -591,8 +591,13 @@ received, so a dead TCP path is noticed within that; keep any proxy's idle timeo
 `client.observe(observer, options?)` calls `observer` with one record for every frame in and
 out, every call stream opening and closing, and every drop `stats()` counts. It returns the
 unsubscribe. Subscribe once, before or after `connect()`: the subscription carries over to
-every session a reconnect produces. A client nobody observes builds no records. A fallback
-client has it too.
+every session a reconnect produces. A fallback client has it too.
+
+**Nothing is emitted when nobody subscribes.** A client with no observer builds no record and
+calls nothing: each site is one branch, and its cost per frame is not measurable. An observer
+costs 25 ns a record, and 50 to 81 ns with previews on, whatever the payload weighs, so a
+logger is affordable in production. The code is about a kilobyte gzipped in every bundle,
+subscribed or not.
 
 ```ts
 import type { FrameRecord } from 'transport-io'
@@ -606,18 +611,47 @@ export function logDrops(client: Client<AppMap>): () => void {
 }
 ```
 
+```ts
+import type { FrameKind, FrameObserver, ObserveOptions } from 'transport-io'
+
+declare const record: FrameRecord
+export const shape: {
+  at: number
+  session: number
+  kind: FrameKind
+  dir: 'in' | 'out'
+  lane: 'reliable' | 'unreliable'
+  event: string | null
+  stream: number | null
+  size: number
+  sequence: number | null
+  preview: string | null
+} = record
+// And back, so a field added to the record fails here until this page has it.
+export const same: FrameRecord = shape
+export const kinds: FrameKind[] = [
+  'handshake', 'emit', 'datagram', 'request', 'response', 'error', 'credit', 'join', 'leave',
+  'open', 'close', 'overflow-dropped', 'stale-dropped', 'stale-received', 'direction-dropped',
+]
+export const observer: FrameObserver = (r) => void r.kind
+export const options: ObserveOptions = { preview: true }
+```
+
+Every field is a number, a string or `null`, and every one is read-only: a record is shared
+by every subscriber, so nobody edits it.
+
 | Field | |
 | --- | --- |
-| `at` | The client's clock, in milliseconds. |
+| `at` | The client's clock, in milliseconds: `Date.now()`, unless the client was given `now`. |
 | `session` | 1 for the first session, 2 for the next. A reconnect is a new session. |
 | `kind` | `handshake`, `emit`, `datagram`, `request`, `response`, `error`, `credit`, `join`, `leave`; `open` and `close` for a call stream; `overflow-dropped`, `stale-dropped`, `stale-received` and `direction-dropped`, each named after the `stats()` counter it explains. |
 | `dir` | `in` or `out`. For `open` and `close`, which side opened the stream. |
 | `lane` | From the contract, so a datagram on a fallback session is still `unreliable`. |
-| `event` | The event's name. `null` for a frame that carries no event. A response names its call. |
+| `event` | The event's name. A response names its call, which the wire does not. `null` for a frame that carries no event, for an event id this contract does not have, and for the `open` and `close` of a stream the peer opened, which has not said what it is for yet. |
 | `stream` | 0 is the emit stream, and everything on a fallback session. 1 and up is a call stream, numbered in the order this session's streams open, and is not the QUIC stream id. `null` for a datagram. |
-| `size` | Bytes on the wire, header included. 0 for `open` and `close`. |
+| `size` | Bytes on the wire, header included. On a fallback session a datagram's size includes the frame that wraps it. 0 for `open` and `close`, which are not frames. |
 | `sequence` | A datagram's sequence number. `null` otherwise. |
-| `preview` | `null` unless asked for. |
+| `preview` | `null` unless this subscriber asked for previews. See below. |
 
 **A drop is a second record, never a replacement.** A datagram that overflowed the ring was
 <!-- norm: drop-is-a-second-record -> packages/core/src/observe.test.ts -->
@@ -627,13 +661,24 @@ dropped on its way here, are not visible from this side. A gap in `sequence` is 
 loss either, since the server numbers an event across every room and this client may not have
 been in all of them.
 
-**A record holds no payload.** `{ preview: true }` adds the first 256 bytes of each JSON
-payload as text, or the first 32 bytes of a `bytes()` payload as hex. Only a subscriber that
-asks receives one, whoever else is subscribed, so a logger does not start seeing payloads
-because a panel is open.
+**A record holds no payload, so keeping records keeps nothing else alive.** `{ preview:
+true }` adds the first `PREVIEW_MAX_BYTES`, 256, of each JSON payload as text, or the first
+32 bytes of a `bytes()` payload as hex. It is cut by bytes, so it is rarely valid JSON and may
+end in a replacement character: show it, never parse it. Only a subscriber that asks receives
+one, whoever else is subscribed, so a logger does not start seeing payloads because a panel is
+open.
 
-An observer runs inside the session, once per frame, so it does one cheap thing: append to a
-bounded list, bump a counter. One that throws is ignored.
+**Do not make a preview of your own by slicing a string.** `JSON.stringify(payload).slice(0,
+256)` looks like the same thing, and the engine keeps the whole string alive behind the slice.
+A ring of 1,000 such previews of 64 KiB payloads held 66 MB, the same as keeping the payloads,
+where 1,000 records with previews held 0.4 MB. The preview here is decoded from the first
+bytes, which is why it is safe to keep.
+
+**An observer runs inside the session, synchronously, once per frame**, so it does one cheap
+thing: append to a bounded list, bump a counter. Records arrive in the order the session saw
+the frames, and an inbound frame is recorded as it arrives, before any handler runs for it. A
+subscriber gets nothing from before it subscribed. One that throws is ignored, and the next
+subscriber still runs.
 
 ---
 
