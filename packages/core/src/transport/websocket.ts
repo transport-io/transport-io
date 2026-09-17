@@ -6,6 +6,7 @@
  * exported from the package, as the transport seam is not (D21, D127).
  */
 import { TransportError } from '../errors.ts'
+import { printable } from './probe.ts'
 import type { Connection } from './types.ts'
 import { type SocketLike, WebSocketConnection } from './websocket-connection.ts'
 
@@ -35,7 +36,7 @@ export async function connectWebSocket(opts: WebSocketConnectOptions): Promise<C
       reject(
         new TransportError(
           'WT_HANDSHAKE_FAILED',
-          `the WebSocket handshake to ${opts.url} failed, close code ${ev.code}`,
+          `the WebSocket handshake to ${printable(opts.url)} failed, close code ${ev.code}`,
           'Check that the server is running, that its WebSocket listener is reachable over TCP, and that a wss:// certificate is one this platform trusts.',
         ),
       )

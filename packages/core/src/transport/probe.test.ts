@@ -3,7 +3,14 @@
  * credentials, no body, and a budget it cannot outlive.
  */
 import { afterEach, describe, expect, test } from 'bun:test'
-import { handshakeFailure, PROBE_BUDGET_MS, PROBE_PATH, probe, probeTarget } from './probe.ts'
+import {
+  handshakeFailure,
+  PROBE_BUDGET_MS,
+  PROBE_PATH,
+  printable,
+  probe,
+  probeTarget,
+} from './probe.ts'
 
 type Globals = { fetch?: typeof fetch }
 const g = globalThis as Globals
@@ -97,5 +104,27 @@ describe('what the failure becomes', () => {
     const e = handshakeFailure(url, undefined, 'skipped', raw)
     expect(e.code).toBe('WT_HANDSHAKE_FAILED')
     expect(e.message).not.toContain('answer')
+  })
+})
+
+describe('an error never prints the query, which is where a token travels', () => {
+  const secret = 'eyJhbGciOi.secret-token'
+  const url = `https://app.example.com:4433/rooms/7?token=${secret}&v=2#frag`
+  const raw = new Error('Opening handshake failed.')
+
+  test('printable keeps the origin and the path, and nothing after them', () => {
+    expect(printable(url)).toBe('https://app.example.com:4433/rooms/7')
+    expect(printable('https://127.0.0.1:4433/')).toBe('https://127.0.0.1:4433/')
+    expect(printable(`not a url?token=${secret}`)).toBe('not a url')
+  })
+
+  test('no outcome of a failed handshake carries the token, in the message or the remedy', () => {
+    const target = `https://app.example.com:4433${PROBE_PATH}?token=${secret}`
+    for (const outcome of ['answered', 'unanswered', 'skipped'] as const) {
+      const e = handshakeFailure(url, outcome === 'skipped' ? undefined : target, outcome, raw)
+      expect(e.message).not.toContain(secret)
+      expect(e.remedy).not.toContain(secret)
+      expect(e.message).toContain('https://app.example.com:4433/rooms/7')
+    }
   })
 })

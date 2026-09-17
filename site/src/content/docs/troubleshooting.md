@@ -8,6 +8,46 @@ with one and leaves it in the snapshot as `lastError`. A failed `call()` or `str
 with one. A session that closes on an error leaves it in `lastError` too. The codes below are
 in the order you are likely to meet them.
 
+## What to show a user, and what to log
+
+Nothing this library writes is written for your users. Every string on an error is English,
+addressed to a developer, and names functions and ports. Show a user your own sentence,
+chosen by `code`, and log the rest.
+
+| field | for | what it is |
+|---|---|---|
+| `code` | branching | One of the codes below. Stable, and a typed union. |
+| `reason`, on a `RefusedError`, and `refused.reason` on the snapshot | branching | The code your own server gave `refuse()`, so you know every value it can take. |
+| `message` | logs | The code, what happened, and the remedy, in one string. It can name the address you dialled, without its query, so a token in the URL is never in it. |
+| `remedy` | logs | What to do about it, addressed to whoever is reading the log. |
+| `cause` | a debugger | The platform's own error, where one was wrapped. |
+
+```ts standalone
+import { RefusedError, type TransportError } from 'transport-io'
+
+export function forUser(e: TransportError): string {
+  if (e instanceof RefusedError) {
+    return e.reason === 'banned' ? 'This account is suspended.' : 'Please sign in again.'
+  }
+  switch (e.code) {
+    case 'WT_NO_SUPPORT':
+      return 'This browser is not supported. Try Chrome or Firefox.'
+    case 'WT_PROTOCOL_VERSION_MISMATCH':
+    case 'WT_CONTRACT_MISMATCH':
+      return 'A new version is available. Reload the page.'
+    default:
+      return 'Connection lost.'
+  }
+}
+
+export function forLogs(e: TransportError): Record<string, unknown> {
+  return { code: e.code, message: e.message, cause: e.cause }
+}
+```
+
+There is no shorter field to print instead: what `message` says between the code and the
+remedy is addressed to a developer too.
+
 ## WT_NO_SUPPORT
 
 The runtime has no WebTransport. Safari, or anything that is not Chrome or Firefox. Use one

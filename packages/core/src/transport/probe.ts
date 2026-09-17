@@ -69,6 +69,21 @@ export async function probe(
  * that listens only on UDP looks exactly like this and is healthy. `skipped` is the message
  * as it always was.
  */
+/**
+ * A URL as an error may print it: the origin and the path, never the query. The query is
+ * where a browser puts a token for `authorize`, since a WebTransport request carries nothing
+ * else, and an error's message ends up in logs, in error trackers, and now and then on a
+ * page. It named the whole URL until an application printed `lastError.message` in a header.
+ */
+export function printable(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.origin}${parsed.pathname}`
+  } catch {
+    return url.split(/[?#]/)[0] ?? url
+  }
+}
+
 export function handshakeFailure(
   url: string,
   target: string | undefined,
@@ -78,7 +93,7 @@ export function handshakeFailure(
   if (outcome === 'answered' && target !== undefined) {
     return new TransportError(
       'WT_UDP_UNREACHABLE',
-      `the server at ${new URL(target).origin} answers over HTTPS but the WebTransport handshake to ${url} failed`,
+      `the server at ${new URL(target).origin} answers over HTTPS but the WebTransport handshake to ${printable(url)} failed`,
       'The server is running and its certificate is trusted, so only the QUIC path is failing. ' +
         'Usually UDP to it is blocked: a firewall or VPN on this network, or a platform in front ' +
         'of the server with no UDP ingress. The site works over TCP and nothing in this library ' +
@@ -89,11 +104,11 @@ export function handshakeFailure(
   }
   const unanswered =
     outcome === 'unanswered' && target !== undefined
-      ? `, and ${target} did not answer over HTTPS within ${PROBE_BUDGET_MS} ms`
+      ? `, and ${printable(target)} did not answer over HTTPS within ${PROBE_BUDGET_MS} ms`
       : ''
   return new TransportError(
     'WT_HANDSHAKE_FAILED',
-    `the WebTransport handshake to ${url} failed${unanswered}`,
+    `the WebTransport handshake to ${printable(url)} failed${unanswered}`,
     'The browser reports one error for every cause here, so check in this order: (1) the ' +
       'server is running and its UDP port is reachable; (2) if you pinned a certificate, ' +
       'that it has not passed its 14-day limit; (3) that the hash matches the certificate ' +

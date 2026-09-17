@@ -296,7 +296,11 @@ Rules:
 ## Errors
 
 Every error is a `TransportError` with a `code` and a `remedy` sentence. A bare `TypeError`
-is never thrown from this library.
+is never thrown from this library. **Never render `message` or `remedy` in a UI**: they are
+English addressed to a developer, and `message` is the code, what happened and the remedy in
+one string. Branch on `code`, and on `reason` for a `RefusedError`, show the application's
+own text, and log `message`. It never contains the dialled URL's query, so a token is not in
+it.
 
 | code | means | do |
 |---|---|---|

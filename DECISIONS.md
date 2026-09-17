@@ -4025,3 +4025,34 @@ inbound validation, and a server handler registered in `onSession` receives both
 **Reconsider when:** an application needs asynchronous work ordered before the first event,
 which is a request for the server to wait, a call the client makes first, and not for this
 hold to grow.
+
+### D147. An error's strings are for logs, there is no short field, and the query stays out of them
+The first outside application, on 0.12.0, printed `lastError.message` in a page header, and a
+user read "Obtain a valid credential, then disconnect() and connect()". `message` is built as
+the code, what happened, and the remedy, in one string, and nothing said which fields were
+for whom. The question it raised: add a short field without the code and the remedy, or is
+guidance enough. This entry came from that application.
+
+**Decision.** Guidance, and no field. The guidance is in the errors page, the API reference
+and AGENTS.md: `code`, and `reason` on a `RefusedError`, are for branching; `message`,
+`remedy` and `cause` are for logs; a user is shown the application's own sentence, chosen by
+`code`.
+
+**Why no field.** The part a short field would hold is "the WebTransport handshake to
+https://… failed" or "the session closed before the handshake completed". It is English, it
+cannot be localised, it names transports and ports, and it is addressed to a developer as
+surely as the remedy is. A field holding it would be shorter and would look like the thing to
+print, which makes the mistake more attractive where the point is to stop it. The mistake was
+printing library text at all, and a better string to print does not fix that. For logs
+nothing is missing: `message` is complete and `code` and `remedy` are already separate.
+
+**What it found.** A failed handshake's message named the whole URL it dialled, and the query
+is where this library tells an application to put its token, a WebTransport request carrying
+nothing else. So the header that showed a remedy could as easily have shown a credential, and
+so could any log or error tracker. `printable(url)` is the origin and the path, and every
+message that names an address uses it: the two handshake failures, the probe target, and the
+WebSocket connector. SECURITY.md says so. That is the one code change in this entry.
+
+**Reconsider when:** an application needs the middle of `message` on its own for structured
+logs, the sizes in `WT_PAYLOAD_TOO_LARGE` or the port in `WT_PORT_IN_USE`, and is slicing the
+string to get it. The field is then named for a log, `detail`, and documented as one.

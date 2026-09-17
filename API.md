@@ -846,7 +846,13 @@ export function describe(e: unknown): string {
 ```
 
 Every error carries a stable code and a `remedy` sentence saying what to do about it. A
-bare `TypeError` is never thrown from this library's own surface. Codes and their numeric
+bare `TypeError` is never thrown from this library's own surface.
+
+`code`, and `reason` on a `RefusedError`, are for branching. `message` is the code, what
+happened and the remedy in one string, and with `remedy` and `cause` it is for logs: every
+string here is English addressed to a developer, so a user is shown the application's own
+sentence, chosen by `code`. `message` can name the address that was dialled and never its
+query, so a token in the URL is not in it. Codes and their numeric
 <!-- norm: no-bare-typeerror -> packages/core/src/api-hardening.test.ts -->
 wire values are specified in `PROTOCOL.md` §10, and a test asserts the two agree.
 

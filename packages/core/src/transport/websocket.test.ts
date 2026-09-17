@@ -457,3 +457,29 @@ describe('a DATAGRAM frame on a session with real datagrams', () => {
     b.dispose()
   })
 })
+
+describe('a failed WebSocket handshake', () => {
+  test('names the address and never the query, which is where a token travels', async () => {
+    const g = globalThis as { WebSocket?: unknown }
+    const original = g.WebSocket
+    // A socket that closes before it opens, as one does against a dead port.
+    g.WebSocket = class {
+      binaryType = 'blob'
+      addEventListener(type: string, listener: (ev: { code: number; reason: string }) => void) {
+        if (type === 'close') queueMicrotask(() => listener({ code: 1006, reason: '' }))
+      }
+    }
+    try {
+      const { connectWebSocket } = await import('./websocket.ts')
+      const err = (await connectWebSocket({
+        url: 'wss://app.example.com/socket?token=secret-token',
+      }).catch((e: unknown) => e)) as { code: string; message: string }
+      expect(err.code).toBe('WT_HANDSHAKE_FAILED')
+      expect(err.message).toContain('wss://app.example.com/socket')
+      expect(err.message).not.toContain('secret-token')
+    } finally {
+      if (original === undefined) delete g.WebSocket
+      else g.WebSocket = original
+    }
+  })
+})

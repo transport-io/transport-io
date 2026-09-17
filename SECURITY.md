@@ -35,7 +35,9 @@ peer from the request that opened the session, its path, query and peer address,
 session is accepted; on the WebSocket listener it sees the upgrade request's headers and
 cookies as well. A browser sends no cookies and no custom headers on a WebTransport request,
 so a token travels in the query string, and the page obtains that token over HTTPS. What
-`authorize` returns is `peer.data`, checked by nobody after that: it is your value.
+`authorize` returns is `peer.data`, checked by nobody after that: it is your value. This
+library keeps the query out of its own errors: a failed handshake names the origin and the
+path it dialled and nothing after them. A URL your own code logs is yours to scrub.
 
 **The handshake discloses your event names and lanes to every peer `authorize` accepts, and
 to every peer when there is no `authorize`.** A refused peer is closed before frame 0 and
