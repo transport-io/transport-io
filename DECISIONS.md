@@ -4264,6 +4264,18 @@ mark's two paths from the brand file, and holds the stylesheet to the twelve col
 palette, no gradient, no shadow and no rounding. Measured again at 120 a second: 84.6 absent,
 74.7 closed, 90.1 open, so the restyle cost nothing.
 
+**Note, 2026-09-17, later.** The screenshots are made by
+`scripts/render-devtools-screenshots.node.ts`, from two real clients over real QUIC, and
+making them found two more things in the panel. On the light ground the brand's dim is 4.38 to
+1 and its accent 3.46, under the 4.5 that text needs, so light-scheme text takes the site's
+next grey down, `#5f5a51`, and the site's `accent-high`, `#8e3a10`, while the accent itself
+stays for the marks that are not text; a test now holds every text colour to 4.5 against both
+grounds in both schemes, and the script reads the rendered colours and refuses to capture
+under it. And the list showed a few pixels of the row above its first whole one, because a
+scroller's padding does not clip: its space is a margin now, and a resize observer, which runs
+when the panel opens or the window changes and never per frame, sets its height to a whole
+number of rows.
+
 ### D151. The dev command passes SIGTERM, SIGINT and SIGHUP to its entry, and ends as the entry ended
 `transport-io dev <entry>` spawned the entry and installed no signal handler, so a signal
 sent to the command alone ended it and left the entry running with its UDP port held.

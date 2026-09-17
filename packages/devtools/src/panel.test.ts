@@ -220,7 +220,8 @@ describe('the brand', () => {
     expect(css).not.toContain('gradient')
     expect(css).not.toContain('shadow')
     expect([...css.matchAll(/border-radius:\s*([^;]+);/g)].map((m) => m[1])).toEqual(['0'])
-    // The palette of assets/brand/USAGE.txt, dark then light, and no other colour anywhere.
+    // The palette of assets/brand/USAGE.txt, dark then light, with the two greys and the
+    // accent-high the site's stylesheet adds to it, and no other colour anywhere.
     const colours = [...new Set([...css.matchAll(/#[0-9a-f]{6}\b/g)].map((m) => m[0]))]
     expect(colours.sort()).toEqual(
       [
@@ -233,11 +234,52 @@ describe('the brand', () => {
         '#e4e0d6',
         '#f3f1ea',
         '#16130f',
-        '#6b655b',
+        '#5f5a51',
         '#cfc9bb',
         '#c2551d',
+        '#8e3a10',
       ].sort(),
     )
+  })
+
+  test('every text colour is 4.5 to 1 against both grounds, in both schemes', () => {
+    const p = mount()
+    const css = p.root.querySelector('style')?.textContent ?? ''
+    const [dark, light] = css.split('@media (prefers-color-scheme: light)')
+    const tokens = (block: string): Record<string, string> =>
+      Object.fromEntries(
+        [...block.matchAll(/--([a-z-]+):\s*(#[0-9a-f]{6})/g)].map((m) => [m[1], m[2]]),
+      )
+    const channel = (c: number): number =>
+      c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+    const luminance = (hex: string): number => {
+      const [r, g, b] = [1, 3, 5].map((i) =>
+        channel(Number.parseInt(hex.slice(i, i + 2), 16) / 255),
+      )
+      return 0.2126 * (r as number) + 0.7152 * (g as number) + 0.0722 * (b as number)
+    }
+    const contrast = (a: string, b: string): number => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+      return ((hi as number) + 0.05) / ((lo as number) + 0.05)
+    }
+    // The light block only overrides, so it is read over the dark one.
+    const schemes = [
+      tokens(dark ?? ''),
+      { ...tokens(dark ?? ''), ...tokens((light ?? '').split('}')[0] ?? '') },
+    ]
+    for (const scheme of schemes) {
+      for (const text of ['ink', 'dim', 'accent-text']) {
+        for (const ground of ['ground', 'panel']) {
+          expect(
+            contrast(scheme[text] as string, scheme[ground] as string),
+          ).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+      // A mark is not text: the rule beside a drop and the status square need 3 to 1.
+      expect(
+        contrast(scheme['accent'] as string, scheme['ground'] as string),
+      ).toBeGreaterThanOrEqual(3)
+    }
   })
 })
 

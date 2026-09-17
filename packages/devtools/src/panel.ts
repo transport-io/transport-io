@@ -41,6 +41,14 @@ const DEFAULT_VISIBLE_ROWS = 200
 const PAINT_INTERVAL_MS = 100
 
 /**
+ * A row's height, and the space above and below the list. The space is a margin and not a
+ * padding: a scroller's padding does not clip, so the row above the first whole one showed
+ * through it as a few pixels of text.
+ */
+const ROW_HEIGHT = 18
+const ROWS_MARGIN = 3
+
+/**
  * A row is one element holding one line of text, its columns padded to these widths in a
  * monospace face. Nine cells a row made 2,000 elements of a full list, and the browser's
  * layout, paint and layer passes are paid per element per frame of the page underneath, which
@@ -77,6 +85,11 @@ function line(
  * a row is ink, a datagram is dim because there are many of them and they matter least, and
  * the accent is kept for the one thing the panel exists to show, which is a drop.
  *
+ * Text has to be read, so every text colour is held to 4.5 to 1 against what it sits on, by a
+ * test. On the light ground the brand's dim is 4.38 and its accent 3.46, so there the dim is
+ * the site's next grey down and accent text is the site's `accent-high`; the accent itself
+ * stays for the marks that are not text, the rule beside a drop and the status square.
+ *
  * The face is Plex when the page has it and the system's monospace when it does not. A panel
  * that fetched a font would be a panel that made a request from inside somebody's application.
  */
@@ -84,12 +97,12 @@ const STYLE = `
 :host {
   all: initial;
   --ground: #141210; --panel: #1d1a16; --ink: #e7e2d6; --dim: #9c9588; --line: #33302a;
-  --accent: #d9692c;
+  --accent: #d9692c; --accent-text: #d9692c;
 }
 @media (prefers-color-scheme: light) {
   :host {
-    --ground: #e4e0d6; --panel: #f3f1ea; --ink: #16130f; --dim: #6b655b; --line: #cfc9bb;
-    --accent: #c2551d;
+    --ground: #e4e0d6; --panel: #f3f1ea; --ink: #16130f; --dim: #5f5a51; --line: #cfc9bb;
+    --accent: #c2551d; --accent-text: #8e3a10;
   }
 }
 * { box-sizing: border-box; border-radius: 0; }
@@ -122,8 +135,8 @@ const STYLE = `
 .status { display: inline-flex; gap: 8px; align-items: center; }
 .muted { color: var(--dim); }
 .counter b { color: var(--ink); font-weight: 600; }
-.counter[data-hot="true"] b { color: var(--accent); }
-.drops { color: var(--accent); }
+.counter[data-hot="true"] b { color: var(--accent-text); }
+.drops { color: var(--accent-text); }
 .spacer { flex: 1; }
 button, select {
   font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line);
@@ -136,24 +149,24 @@ select { padding-right: 24px; }
   pointer-events: none; }
 button:hover, select:hover { border-color: var(--ink); }
 button:focus-visible, select:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
-button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent-text); }
 .body { flex: 1; min-height: 0; display: flex; }
 .frames { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .side { width: 300px; border-left: 1px solid var(--line); overflow: auto; padding: 4px 12px 10px; }
 .side h2 { font: inherit; color: var(--dim); margin: 8px 0 4px; padding-bottom: 3px;
   border-bottom: 1px solid var(--line); }
-.r { padding: 0 12px 0 10px; border-left: 2px solid transparent; white-space: pre; height: 18px;
-  flex: none; overflow: hidden; }
+.r { padding: 0 12px 0 10px; border-left: 2px solid transparent; white-space: pre;
+  height: ${ROW_HEIGHT}px; flex: none; overflow: hidden; }
 .head { color: var(--dim); border-bottom: 1px solid var(--ink); height: 22px; line-height: 21px; }
 /* Newest first in the document and last on screen: a reversed column stays pinned to its end
    while rows arrive, and stays where it is once somebody scrolls up to read, with no script.
    The first child is the row on screen last, and its auto margin takes the free space, so a
    list shorter than the panel starts under the header and not at the bottom of a gap. */
-.rows { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column-reverse;
-  contain: strict; padding: 3px 0; scrollbar-color: var(--line) transparent; }
+.rows { flex: none; height: 0; overflow: auto; display: flex; flex-direction: column-reverse;
+  contain: strict; margin: ${ROWS_MARGIN}px 0; scrollbar-color: var(--line) transparent; }
 .rows > :first-child { margin-bottom: auto; }
 .r[data-lane="unreliable"] { color: var(--dim); }
-.r[data-drop="true"] { color: var(--accent); border-left-color: var(--accent); }
+.r[data-drop="true"] { color: var(--accent-text); border-left-color: var(--accent); }
 .r.session { color: var(--dim); border-top: 1px solid var(--line); margin-top: 3px; }
 /* The last child is the row on screen first. Under the header's own rule it needs none. */
 .rows > .session:last-child { border-top-color: transparent; margin-top: 0; }
@@ -526,11 +539,26 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
     )
   })
 
+  // The list shows whole rows only. Its height is whatever the panel leaves it, which is
+  // rarely a multiple of a row, and the row cut by the top edge showed as a few pixels of
+  // text under the column names. An observer is told after layout, so reading a height here
+  // forces nothing, and it runs when the panel opens or the window changes, never per frame.
+  const fit =
+    typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => {
+          const room = frames.clientHeight - head.offsetHeight - 2 * ROWS_MARGIN
+          const height = `${Math.max(1, Math.floor(room / ROW_HEIGHT)) * ROW_HEIGHT}px`
+          if (rowsEl.style.height !== height) rowsEl.style.height = height
+        })
+      : undefined
+  fit?.observe(frames)
+
   const unsubscribe = store.subscribe(paint)
   ;(options.target ?? document.body).append(host)
   paint()
 
   return () => {
+    fit?.disconnect()
     clearTimeout(relabel)
     unsubscribe()
     store.destroy()
