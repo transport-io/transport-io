@@ -27,7 +27,14 @@ interface AppMap extends MapOf<typeof contract> {}
 test('a blocked QUIC path falls back to the WebSocket, and emits cross it both ways', async ({
   page,
 }) => {
-  const listener = await listenWebSocket({ port: 0 })
+  const origins: (string | undefined)[] = []
+  const listener = await listenWebSocket({
+    port: 0,
+    authorize: ({ headers }) => {
+      origins.push(headers['origin'])
+      return undefined
+    },
+  })
   const server = createServer<AppMap>({ contract })
   await server.listen()
   server.withFallback(listener)
@@ -86,6 +93,9 @@ test('a blocked QUIC path falls back to the WebSocket, and emits cross it both w
   expect(result.got).toContainEqual({ body: 'echo: from a page' })
   expect(result.got).toContainEqual({ n: 3 })
   expect(peers).toEqual(['websocket'])
+  // The upgrade request carries the page's origin, so the comparison the authorize guide shows
+  // works on this listener as it does on the WebTransport one.
+  expect(origins).toEqual([DEMO_ORIGIN])
   listener.stop()
 })
 

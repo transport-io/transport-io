@@ -153,3 +153,69 @@ test('a refused page sees WT_UNAUTHORIZED and the reason, and a refused reconnec
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+/**
+ * The comparison the authorize guide shows, in a real browser. The same page is served at two
+ * origins, `localhost` and `127.0.0.1`, and the listener knows one of them: the page it knows
+ * connects, and the one it does not is refused with a reason, before the event table.
+ */
+test('an authorize that compares the origin refuses a page from another one', async ({
+  browser,
+}) => {
+  const dir = mkdtempSync(join(tmpdir(), 'origin-e2e-'))
+  const cert = ensureCertificate(dir)
+  const PAGES = new Set([DEMO_ORIGIN])
+  const listener = await listenHttp3<Who>({
+    port: 0,
+    host: '127.0.0.1',
+    cert: cert.cert,
+    privKey: cert.privKey,
+    path: '/',
+    authorize: ({ headers }) => {
+      if (!PAGES.has(headers['origin'] ?? '')) return refuse('origin')
+      return { user: 'ann' }
+    },
+  })
+  const server = createServer<AppMap, Who>({ contract })
+  await server.listen(listener)
+
+  const connectFrom = async (origin: string): Promise<unknown> => {
+    const page = await (await browser.newContext()).newPage()
+    await page.goto(origin)
+    const outcome = await page.evaluate(
+      async ({ origin, port, hash }) => {
+        const core = await import(`${origin}/_transport-io/index.js`)
+        const transport = await import(`${origin}/_transport-io/transport/browser.js`)
+        const client = new core.Client({
+          contract: core.defineContract({ chat: core.reliable() }),
+          connect: () =>
+            transport.connectBrowser({
+              url: `https://127.0.0.1:${port}/`,
+              certificateHash: new Uint8Array(hash),
+              probe: false,
+            }),
+        })
+        try {
+          await client.connect()
+          return { status: client.getSnapshot().status }
+        } catch (e) {
+          return { code: (e as { code?: string }).code, refused: client.getSnapshot().refused }
+        }
+      },
+      { origin, port: listener.port, hash: [...cert.sha256] },
+    )
+    await page.context().close()
+    return outcome
+  }
+
+  try {
+    expect(await connectFrom(DEMO_ORIGIN)).toEqual({ status: 'connected' })
+    expect(await connectFrom(DEMO_ORIGIN.replace('localhost', '127.0.0.1'))).toEqual({
+      code: 'WT_UNAUTHORIZED',
+      refused: { reason: 'origin' },
+    })
+  } finally {
+    listener.stop()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

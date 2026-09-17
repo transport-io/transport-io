@@ -126,6 +126,33 @@ export async function authorize({ query }: { query: URLSearchParams }) {
 An `authorize` that throws has decided nothing, a database that is down, so it is not a
 refusal: the session closes, and a client that reconnects keeps trying.
 
+## Only your own pages
+
+No origin is checked for you. A browser puts the page's origin on the request, on the
+WebTransport listener and on the WebSocket one, and `authorize` is handed it in `headers`, so
+the comparison is a line of your own:
+
+```ts file=origin.ts
+import { type ConnectRequest, refuse } from 'transport-io'
+import type { User } from './contract.ts'
+
+declare function userFor(token: string | null): Promise<User | null>
+
+const PAGES = new Set(['https://app.example.com', 'http://localhost:5173'])
+
+export async function authorize({ query, headers }: ConnectRequest) {
+  if (!PAGES.has(headers.origin ?? '')) return refuse('origin')
+  return (await userFor(query.get('token'))) ?? refuse('expired')
+}
+```
+
+That stops another site's page from using a visitor's browser to reach your server. It does
+not stop a program, which sends whatever origin it likes: the token is what authenticates,
+and the origin check is beside it.
+
+An origin is the scheme, the host and the port, with no slash after it, and it is compared
+whole, so the page your dev server serves is a different origin from the deployed one.
+
 ## What a refused peer sees
 
 The session closes as `WT_UNAUTHORIZED` before the server sends anything, so a refused peer
