@@ -91,4 +91,4 @@ export type { Authorize, CloseInfo, ConnectRequest, Transport } from './transpor
  * `changeset version` moves the manifest, so this moves in the same commit - which the test
  * enforces rather than trusting anyone to remember.
  */
-export const VERSION: string = '0.12.0'
+export const VERSION: string = '0.12.1'
