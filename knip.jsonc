@@ -61,8 +61,7 @@
       "entry": [
         "server.node.ts",
         "web/main.ts",
-        "web/agents.ts",
-        "deploy/*.node.ts"
+        "web/agents.ts"
       ],
       "project": [
         "**/*.ts"

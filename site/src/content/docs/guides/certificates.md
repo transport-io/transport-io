@@ -102,10 +102,11 @@ certificate minted for 13 days with the process leaving on the twelfth, and a 16
 certificate renewed before its seventh day. A page with `reconnect` comes back on its own,
 as [a new session](/guides/reconnect/).
 
-**Two things about the middle column are unmeasured.** Nobody here has watched a browser
-accept a CA's certificate for an address over WebTransport. And on Fly, nobody has checked
-that the platform's proxy passes the CA's validation request on port 80 through to the
-application.
+**Only the first column has been run.** Every browser test in this repository pins, and so
+did the first deployment, so a CA's certificate has not been watched end to end against this
+library, for a hostname or for an address. For an address two more things are unmeasured:
+whether a browser accepts such a certificate over WebTransport, and, on Fly, whether the
+platform's proxy passes the CA's validation request on port 80 through to the application.
 
 **A pinned server needs an HTTPS origin as well.** The page has to learn the hash before it
 can connect, and it can only trust a hash it fetched over HTTPS from an origin the browser
@@ -222,9 +223,9 @@ import { type AppMap, contract } from './contract.ts'
 export const client = await browserClient<AppMap>({ contract, url: 'https://example.com:443/' })
 ```
 
-`examples/chat/deploy` is a runbook for this path on a machine of your own, with certbot
-hooks that restart the process after each renewal. On a platform that replaces the machine
-on every deploy, the certificate has to live on a volume, or each start asks the CA again.
+Restart the process after each renewal, which with certbot is a deploy hook. On a platform
+that replaces the machine on every deploy, the certificate has to live on a volume, or each
+start asks the CA again.
 
 For an address, Certbot 5.4 or later asks for it by profile, and the page dials
 `https://203.0.113.7:4433/` with no hash:

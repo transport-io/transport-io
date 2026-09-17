@@ -1,7 +1,0 @@
-# /etc/systemd/system/transport-io-demo-restart.service
-[Unit]
-Description=Restart the transport-io demo
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/systemctl restart transport-io-demo.service

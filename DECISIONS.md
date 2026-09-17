@@ -4485,3 +4485,43 @@ steps in `node:24-trixie-slim` before it lands.
 
 **Reconsider when:** the second occurrence, as above; or esbuild stops being a dependency of
 a gate, at which point it goes back to being Vite's and Astro's concern.
+
+### D154. The demo's VPS runbook is retired: its premises went stale and the deploying guide exists
+`examples/chat/deploy/` was a design and a runbook for a public demo on a plain VPS: one Node
+process with three listeners, a Let's Encrypt certificate for a hostname, certbot hooks that
+restart it on renewal, a health check that takes the page down when the transport is down,
+systemd units, caps, and a first-deploy checklist. It said on its first line that nothing in
+it had been provisioned, bought or deployed, and for weeks that stayed true: the path it was
+to be the first test of, a browser against a CA certificate with no hash, has still never
+run.
+
+**Why it goes and is not repaired.** Its premises, not its details, are what went stale when
+the first real deployment arrived (D152). It argued that a pinned certificate "would break
+silently on the fifteenth day" and so was no way to run anything public; the first deployment
+runs pinned, rotates by leaving on the twelfth day, and open pages come back on their own,
+which was then run in a browser here. It called the CA path "the production path this
+library documents", and the documentation now says a deployed server usually pins. It set Fly
+aside because the server "would need those two changes first"; both changes are in the
+deploying guide. Around those sat smaller rot: one paragraph asking for A and AAAA records
+and the table above it forbidding the AAAA; "the connection does not expose the peer address
+to this code", true before `authorize` and false since; a restart "about every three days"
+on the `shortlived` profile, where the certificates guide counts six. A reader sent there by
+the certificates guide, as "a runbook for this path", was being handed an unrun design as
+working guidance, and two documents on deploying that disagree are worse than one.
+
+**What was kept.** The certificates guide keeps the one instruction a reader needs from it,
+restart after each renewal, which with certbot is a deploy hook, and now says plainly that
+only the pinned column has ever been run. D111 keeps the reason renewal is a restart. The
+outbound issue draft that cited the demo's health check says the same thing without it.
+Everything else, `server.node.ts`, `healthcheck.node.ts`, the three certbot hooks, the five
+systemd units and the README, is in history: `git show 25ead33:examples/chat/deploy/README.md`,
+and `git checkout 25ead33 -- examples/chat/deploy` brings the directory back whole.
+
+**What a public demo is now.** The shortest honest route is the one a deployment has already
+walked: `examples/chat` on a platform that routes UDP, pinned, by the deploying guide. It is
+not provisioned, and provisioning is a purchase and an account, which are not this
+repository's to make.
+
+**Reconsider when:** somebody runs the CA path for a hostname end to end, at which point the
+certificates guide's third column stops being unrun and earns a runbook written from what
+happened, the way the deploying guide was.
