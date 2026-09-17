@@ -39,6 +39,14 @@ so a token travels in the query string, and the page obtains that token over HTT
 library keeps the query out of its own errors: a failed handshake names the origin and the
 path it dialled and nothing after them. A URL your own code logs is yours to scrub.
 
+**A token in the query is seen by more than your server, so it has to be short-lived.** When
+a handshake fails, the browser prints its own console error with the whole URL, query
+included: `Failed to establish a connection to https://…/?token=…`. The error handed to
+JavaScript carries no URL, so there is nothing for a library to redact, and no library can
+suppress the browser's own line. Any log that records request paths has the token as well, a
+reverse proxy's access log in front of the WebSocket fallback for one. Mint the token for the
+connection and let it expire soon after. A day is too long for anything real.
+
 **The handshake discloses your event names and lanes to every peer `authorize` accepts, and
 to every peer when there is no `authorize`.** A refused peer is closed before frame 0 and
 receives the reason and nothing else. An accepted one receives the full event table before

@@ -4065,6 +4065,18 @@ WebSocket connector. SECURITY.md says so. That is the one code change in this en
 logs, the sizes in `WT_PAYLOAD_TOO_LARGE` or the port in `WT_PORT_IN_USE`, and is slicing the
 string to get it. The field is then named for a log, `detail`, and documented as one.
 
+**Note, 2026-09-17.** The first application's report on 0.12.1: this library's errors are
+clean, and the browser's are not. Measured in Chromium against a dead port, with a token in
+the query: the error handed to JavaScript is `WebTransportError: Opening handshake failed.`
+and carries no URL, and the browser prints its own console line, `Failed to establish a
+connection to https://127.0.0.1:45999/?token=…: net::ERR_CONNECTION_REFUSED`, token included.
+Nothing a library does reaches that line. So the statement beside "the token travels in the
+query", in the authorize guide and in SECURITY.md, is that the query is seen by the console
+and by any log that records request paths, and the token has to be short-lived. The
+application's own lasts a day, which it calls too long for anything real; the sentence is
+borrowed. Docs only, and neither document ships in the package, so no release was cut for it:
+the site publishes from main.
+
 ### D148. Signing in again under the provider is the pair from `useConnection()`, verified first
 D144 made a refusal final and said the way out is `disconnect()` then `connect()`. Under
 `TransportProvider` the page does not own the connection: the provider holds the one

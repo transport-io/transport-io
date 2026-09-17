@@ -40,6 +40,12 @@ export function connect(token: string): Client<AppMap> {
 }
 ```
 
+**Keep that token short-lived, because more than your server sees it.** When a handshake
+fails, the browser prints its own console error with the whole URL, query included, and no
+library can suppress it. Any log that records request paths has it too. This library keeps
+the query out of its own errors, and that is as far as it reaches. So mint the token for the
+connection and let it expire soon after: a day is too long for anything real.
+
 ## The door
 
 `authorize` receives the request: `path`, `query`, and `peerAddress`. Return what you
