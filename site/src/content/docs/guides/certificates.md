@@ -80,28 +80,32 @@ without connecting.
 
 ## Which certificate a deployed server is on
 
-It depends on what the page dials.
+It depends on what the page dials, and on how often you can let every session drop.
 
-**A hostname that resolves only to the address UDP reaches** can carry a certificate from a
-CA. **An address, or a hostname that also resolves somewhere UDP does not reach**, cannot, and
-you pin. The second is the one to expect. A platform whose shared ingress is a proxy has to
-give a UDP listener an address of its own, and on [Fly](https://fly.io), where this was first
-deployed, that is a dedicated IPv4 while the platform's hostname also has an AAAA record. A
-browser that resolves the name can land on IPv6, where nothing answers, so the page dials the
-literal IPv4, and the certificate a CA issues for a hostname does not cover a bare address.
-Any platform whose UDP answers on one address family while its hostname resolves in both
-puts you in the same place.
+A platform whose shared ingress is a proxy has to give a UDP listener an address of its own.
+On [Fly](https://fly.io), where this was first deployed, that is a dedicated IPv4, while the
+platform's hostname also has an AAAA record. A browser that resolves the name can land on
+IPv6, where nothing answers, so the page dials the literal IPv4, and a certificate issued for
+a hostname does not cover a bare address. Any platform whose UDP answers on one address
+family while its hostname resolves in both puts you in the same place, with three ways out:
 
-| | Pinned | From a CA |
-| --- | --- | --- |
-| The page dials | an address, or any hostname | a hostname of your own that resolves only to where UDP answers |
-| The certificate | self-signed, ECDSA P-256, valid at most 14 days | issued to that hostname, and held by your process, since nothing in front terminates TLS |
-| You run | `openssl` at startup, and an HTTPS endpoint that serves the hash | an ACME client in or beside the app, and storage that keeps the certificate across restarts |
-| Rotation | a restart before it lapses, so at least every 14 days | a restart after each renewal |
+| | Pinned | From a CA, for the address | From a CA, for a hostname |
+| --- | --- | --- | --- |
+| The page dials | an address, or any hostname | the address | a hostname of your own that resolves only to where UDP answers |
+| The certificate | self-signed, ECDSA P-256, valid at most 14 days | free from [Let's Encrypt](https://letsencrypt.org/docs/profiles/), in its `shortlived` profile only, valid 160 hours | any CA's, for as long as it issues them |
+| You run | `openssl` at startup, and an HTTPS endpoint that serves the hash | an ACME client, storage that keeps the certificate across restarts, and TCP port 80 or 443 on the same address, which is where the CA validates it | an ACME client, and that storage |
+| Every session drops | every 12 days | every 6 days | at each renewal |
 
-**The listener does not reload a certificate**, so both paths rotate by restarting the
-process, and every restart drops every session. A page with `reconnect` comes back on its
-own, as [a new session](/guides/reconnect/).
+**The listener does not reload a certificate**, so all three rotate by restarting the
+process, and every restart drops every session. That is what the last row counts: a pinned
+certificate minted for 13 days with the process leaving on the twelfth, and a 160-hour
+certificate renewed before its seventh day. A page with `reconnect` comes back on its own,
+as [a new session](/guides/reconnect/).
+
+**Two things about the middle column are unmeasured.** Nobody here has watched a browser
+accept a CA's certificate for an address over WebTransport. And on Fly, nobody has checked
+that the platform's proxy passes the CA's validation request on port 80 through to the
+application.
 
 **A pinned server needs an HTTPS origin as well.** The page has to learn the hash before it
 can connect, and it can only trust a hash it fetched over HTTPS from an origin the browser
@@ -192,7 +196,7 @@ HTTPS side is a different host, since that host being up says nothing about this
 
 ### From a CA
 
-The listener takes the PEM text, not a path:
+For a hostname or for an address, the listener takes the PEM text, not a path:
 
 ```ts file=deploy.node.ts title="server.node.ts, deployed"
 import { readFile } from 'node:fs/promises'
@@ -221,6 +225,16 @@ export const client = await browserClient<AppMap>({ contract, url: 'https://exam
 `examples/chat/deploy` is a runbook for this path on a machine of your own, with certbot
 hooks that restart the process after each renewal. On a platform that replaces the machine
 on every deploy, the certificate has to live on a volume, or each start asks the CA again.
+
+For an address, Certbot 5.4 or later asks for it by profile, and the page dials
+`https://203.0.113.7:4433/` with no hash:
+
+```bash
+certbot certonly --preferred-profile shortlived --webroot \
+  --webroot-path /var/www/html --ip-address 203.0.113.7
+```
+
+An address is validated over `http-01` or `tls-alpn-01` only, never over DNS.
 
 ## Pinning by hand
 

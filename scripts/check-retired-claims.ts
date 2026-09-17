@@ -133,6 +133,14 @@ const RETIRED: readonly Retired[] = [
     where: 'AGENTS.md, 2026-09-02',
     why: '@transport-io/react has shipped since 0.1.0',
   },
+  {
+    pattern:
+      /\b(a CA|from a CA|certificate authority)\b[^.]{0,60}\b(does not|cannot|can't)\b[^.]{0,20}\bcover a bare address\b/i,
+    lastSeen:
+      'A certificate from a CA does not cover a bare address, so a page that dials one pins a self-signed certificate',
+    where: 'guides/deploy.md and guides/certificates.md, 2026-09-17, for four commits',
+    why: "Let's Encrypt issues for an IP address in its shortlived profile; what does not cover an address is a certificate issued for a hostname (D152)",
+  },
 ]
 
 /** Files that quote a retired claim in order to say it was wrong. */

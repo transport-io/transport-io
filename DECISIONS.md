@@ -2816,6 +2816,8 @@ the listener grows a matching method and the hook stops restarting.
 
 *2026-09-06. Re-checked at 1.6.8: no `updateCert` in the quiche package's JavaScript or in the native binary's strings; the umbrella still guards the call. Holds. D119.*
 
+*2026-09-17. Re-checked at 1.6.8, which is still the latest of both packages on the registry: the umbrella's `updateCert` is guarded by `if (transport.updateCert)` in `lib/server.js`, and the quiche package has no `updateCert` in its JavaScript and none in the strings of `webtransport.node`. Holds. It is now the trigger for D152 as well.*
+
 ### D112. A claim found false is retired as a pattern, not removed as a sentence
 "`@transport-io/react` requires registration" was found stale three times and survived all
 three sweeps. Not through disagreement; the mechanics of a sweep let it through three
@@ -4401,3 +4403,42 @@ either: the cost section says two lines, about equal, the address and the smalle
 would show how much of the Fly column is wider than Fly; the listener learns to reload a
 certificate, at which point rotation stops dropping sessions and the twelve-day exit goes;
 or an adapter ships, at which point "one instance" goes.
+
+**Note, 2026-09-17, later. A CA does issue for an address, and it is worse.** "Not claimed"
+above was checked the same day, and the guides had gone further than it: for four commits
+they said a certificate from a CA does not cover a bare address and that a page dialling one
+pins. Let's Encrypt has issued for IP addresses since 2025-07-01 and generally since
+2026-01-15, free, over ACME, under conditions that are all its own words: only in the
+`shortlived` profile, which is valid 160 hours; validated by `http-01` on TCP port 80 or
+`tls-alpn-01` on TCP port 443 and never by `dns-01`; its `http-01` follows redirects to
+ports 80 and 443 and does not validate certificates on the way; Certbot needs 5.4 for
+`--ip-address` with `--preferred-profile shortlived`. For the other CAs a secondary source,
+Posh-ACME's comparison page, undated: Google Trust Services only for a stated business need,
+ZeroSSL not over ACME and not on its free plan, Actalis on paid OV certificates only, SSL.com
+not at all, and Buypass ended free ACME on 2025-10-15. So it is Let's Encrypt or nothing.
+
+The corrected guide is stronger than the wrong one. The CA path for an address is possible
+and free and worse, because the listener cannot reload a certificate: a 160-hour certificate
+is a restart, with every session dropped, every 6 days, against every 12 on the pinned path
+as the first deployment runs it. The certificates guide now has three columns, pinned, a CA
+for the address, a CA for a hostname, with both numbers in the table and no recommendation
+in prose. What the address column saves is the hostname of one's own, the hash fetched at
+connect and `openssl` in the image. What it adds is TCP port 80 or 443 on the same address
+for the CA to reach. The false sentence is retired as a pattern.
+
+**Unmeasured, and said to be.** Whether a browser accepts a CA's certificate for an address
+over WebTransport: no such certificate was at hand. Whether Fly's
+proxy passes the validation request on port 80 through to the application: the record did
+not try. The guide states both as unmeasured and implies neither way.
+
+**The one upstream change that flips it.** D111: the umbrella exposes `updateCert` and the
+quiche transport implements none, re-checked today at 1.6.8, still the latest published. If
+the transport gains it, the listener grows a matching method, rotation stops being a restart
+on every path, and the address column becomes the cheapest: no hash, no hostname, no dropped
+session, a renewal every few days that nobody sees. D111's trigger is this entry's trigger.
+
+Sources, read 2026-09-17: letsencrypt.org/2026/01/15/6day-and-ip-general-availability,
+letsencrypt.org/2025/07/01/issuing-our-first-ip-address-certificate,
+letsencrypt.org/docs/challenge-types, letsencrypt.org/docs/profiles,
+letsencrypt.org/2026/03/11/shorter-certs-certbot, and
+poshac.me/docs/v4/Guides/ACME-CA-Comparison.

@@ -39,10 +39,12 @@ resolves it can land on IPv6, where nothing answers UDP. The page dials the lite
 which it learns at runtime from an endpoint on its own origin, or a hostname of your own
 with only an A record.
 
-That choice decides your certificate. A certificate from a CA does not cover a bare address,
-so a page that dials one pins a self-signed certificate, in production, with everything that
-follows from it: [Certificates](/guides/certificates/#which-certificate-a-deployed-server-is-on)
-has both paths and what each costs.
+That choice decides your certificate. A certificate issued for a hostname does not cover a
+bare address, so a page that dials one pins a self-signed certificate, in production, or
+uses one a CA issued for the address itself, which lasts 160 hours. Either way the server
+restarts to rotate it, every 12 days or every 6:
+[Certificates](/guides/certificates/#which-certificate-a-deployed-server-is-on) has the three
+paths side by side.
 
 ## The port and the bind
 
