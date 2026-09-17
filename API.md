@@ -502,7 +502,11 @@ receives everything from the first session and from every session a reconnect pr
 `client.onSession(cb)` runs `cb` once for every session the client gets, with the snapshot
 as it connected: the first, and each one a reconnect produces. It returns the unsubscribe.
 A reconnect is a new session, so this is where rooms are rejoined and what was missed is
-fetched.
+fetched. It runs before anything from that session reaches a handler: the client holds what
+the server sent after its handshake until every callback has returned, so state a callback
+clears before its first `await` is cleared before the session's first event. The server's
+`onSession` has the same guarantee, so a handler registered there cannot miss the peer's
+first event.
 
 `reconnect: { minMs, maxMs }` in `ClientOptions` makes the client come back on its own after
 a connected session closes: a wait of `minMs`, doubled on each failed attempt up to `maxMs`

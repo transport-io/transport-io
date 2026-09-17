@@ -252,6 +252,7 @@ export class Server<M extends AnyMap = Registered, D = undefined> {
       table,
       origin,
       side: 'server',
+      holdDelivery: true,
       ...(this.#opts.validateInbound === undefined
         ? {}
         : { validateInbound: this.#opts.validateInbound }),
@@ -294,7 +295,13 @@ export class Server<M extends AnyMap = Registered, D = undefined> {
       .catch(() => undefined)
 
     await session.start()
-    for (const cb of this.#onPeer) cb(peer)
+    // Nothing the peer sent after its handshake is delivered until every `onSession` callback
+    // has returned, so a handler registered there cannot miss the peer's first event.
+    try {
+      for (const cb of this.#onPeer) cb(peer)
+    } finally {
+      session.release()
+    }
     return peer
   }
 

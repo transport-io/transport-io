@@ -339,7 +339,10 @@ busy room delays a quiet one to the same peer. Calls and datagrams are isolated.
 
 **Reconnect is a new session.** Membership does not survive; pending calls reject.
 `client.onSession(cb)` runs once per session, the first and each reconnect, which is where
-the rejoin goes. `new Client({ reconnect: { minMs, maxMs } })` reconnects on its own after a
+the rejoin goes. **`onSession` runs before anything from that session reaches a handler**, on
+the client and on the server: what the peer sent after its handshake is held until every
+callback has returned. So clear per-session state, and register `peer.on` handlers,
+synchronously in the callback; what follows an `await` there is not ordered against events. `new Client({ reconnect: { minMs, maxMs } })` reconnects on its own after a
 connected session closes, with a randomised doubling wait; off unless given, and the first
 `connect()` is not retried.
 

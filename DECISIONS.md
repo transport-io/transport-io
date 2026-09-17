@@ -3942,3 +3942,40 @@ returns a different token on each attempt connects both times, and the function 
 attempt. A query naming another host leaves the dialled hostname `127.0.0.1`.
 
 **Reconsider when:** D139's plugin is built, at which point this is what it calls.
+
+### D146. `onSession` runs before anything from that session reaches application code
+The first outside application could not find out when `onSession` runs relative to the
+session's first event, so it did not depend on it: its server sends history as one replacing
+event, where the client could have cleared its board in `onSession`. It also hit the rule
+that a `bytes()` slot is all bytes or all JSON and worked around it with two events, which
+the guide had in half a sentence and no example. Both from that application.
+
+**Determined.** It was not guaranteed. Over the loopback `onSession` ran first. With the
+server's handshake and its first emit arriving in one read, which a stream is free to do
+since it keeps no write boundaries, the event reached its handler first: the read loop
+decodes both frames from one chunk, and the handshake's continuation is several awaits from
+the `onSession` callbacks while the emit is one. The server had the same race the other way
+round, and worse: a handler registered in `server.onSession` missed a first event that came
+with the client's handshake, and an event with no handler is dropped.
+
+**Decision.** A guarantee, on both ends. A session built with `holdDelivery` parks everything
+the peer sent after its handshake, events, datagrams, membership notifications and incoming
+calls, until `release()`, which the client and the server call once their `onSession`
+callbacks have returned, in a `finally`. The hold is in the frame loop and not per handler,
+so the emit stream's order (D135) survives it, and `dispose()` releases it so a parked read
+loop always ends. It covers what a callback does before its first `await`; holding the emit
+lane for an application's asynchronous work would be a stall with no bound. A session nobody
+holds delivers as frames arrive, which is what every direct use of `Session` in the tests is.
+
+**Stated** in the reconnect guide, the way D135 states the emit ordering, in the API
+reference, and in the rooms guide for the server. The bytes rule is in the schema guide with
+the two-event pattern, a JSON header then its bytes, which rests on D135 for one sender's
+order and has its own test.
+
+**Measured.** `session-order.test.ts` builds a peer whose handshake and first two emits are
+one chunk. Before: `event, session`. After: `session, line:1, line:2`, with and without
+inbound validation, and a server handler registered in `onSession` receives both.
+
+**Reconsider when:** an application needs asynchronous work ordered before the first event,
+which is a request for the server to wait, a call the client makes first, and not for this
+hold to grow.

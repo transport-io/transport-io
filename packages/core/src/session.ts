@@ -104,6 +104,13 @@ export interface SessionOptions {
    * manual scheduler to exercise both deterministically.
    */
   readonly scheduleFlush?: (flush: () => void) => void
+  /**
+   * Hold everything the peer sends after its handshake, events, membership notifications and
+   * incoming calls, until `release()`. The client and the server ask for it so that their
+   * `onSession` callbacks have run before anything from that session reaches application
+   * code (D146). A session nobody holds delivers as frames arrive.
+   */
+  readonly holdDelivery?: boolean
 }
 
 /**
@@ -260,6 +267,9 @@ export class Session {
   #closeInfo: CloseInfo | undefined
   /** Releases `#explain`'s wait for the close info, which disposal would otherwise strand. */
   #releaseExplain: (() => void) | undefined
+  /** Settles `#opened`. `undefined` once released, and from the start when nothing is held. */
+  #open: (() => void) | undefined
+  readonly #opened: Promise<void>
   readonly #side: Direction | undefined
   #directionDropped = 0
 
@@ -275,6 +285,12 @@ export class Session {
     this.#now = opts.now ?? (() => Date.now())
     this.#deadlineMs = opts.handshakeDeadlineMs ?? HANDSHAKE_DEADLINE_MS
     this.#schedule = opts.scheduleFlush ?? ((flush) => queueMicrotask(flush))
+    this.#opened =
+      opts.holdDelivery === true
+        ? new Promise<void>((resolve) => {
+            this.#open = resolve
+          })
+        : Promise.resolve()
     this.ready = new Promise<Negotiated>((res, rej) => {
       this.#handshakeResolve = res
       this.#handshakeReject = rej
@@ -288,6 +304,15 @@ export class Session {
 
   get origin(): number {
     return this.#origin
+  }
+
+  /**
+   * Lets what was held through. Called by the owner once its `onSession` callbacks have
+   * returned, and by `dispose()`, so a read loop parked on the hold always ends. Idempotent.
+   */
+  release(): void {
+    this.#open?.()
+    this.#open = undefined
   }
 
   async start(): Promise<Negotiated> {
@@ -834,6 +859,7 @@ export class Session {
     this.#sweepTimer = undefined
     this.#handshakeTimer = undefined
     this.#releaseExplain?.()
+    this.release()
     if (!this.#handshakeSettled) this.#settleHandshake(this.#closedBeforeHandshake())
     this.#handlers.clear()
     this.#callHandlers.clear()
@@ -1051,6 +1077,8 @@ export class Session {
       controller.abort()
       return
     }
+
+    if (this.#open !== undefined) await this.#opened
 
     // The request is fully read at this point, so nothing is watching the stream any
     // more - which is why an abort never reached the handler. The initiator's abort
@@ -1437,6 +1465,9 @@ export class Session {
         'The handshake is frame 0 of the emit stream. Await connect() before sending.',
       )
     }
+    // Parked here and not per handler, so the emit stream's order survives the hold: the
+    // read loop takes one frame at a time and does not read the next until this returns.
+    if (this.#open !== undefined) await this.#opened
     if (frame.type === FrameType.EMIT) {
       await this.#deliver(frame.eventId, frame.payload, this.#origin, frame.codec)
       return
@@ -1468,6 +1499,7 @@ export class Session {
     if (this.#negotiated === undefined) return
     void (async () => {
       try {
+        if (this.#open !== undefined) await this.#opened
         const dg = decodeDatagram(bytes)
         if (!this.#gate.accept(dg.origin, dg.eventId, dg.sequence, this.#now())) return
         await this.#deliver(dg.eventId, dg.payload, dg.origin, dg.codec)

@@ -358,6 +358,7 @@ export class Client<M extends AnyMap = Registered> {
       table,
       origin: this.#opts.origin ?? 0x80000001,
       side: 'client',
+      holdDelivery: true,
       ...(this.#opts.validateInbound === undefined
         ? {}
         : { validateInbound: this.#opts.validateInbound }),
@@ -400,7 +401,14 @@ export class Client<M extends AnyMap = Registered> {
       transport: conn.kind(),
       fallbackReason,
     })
-    for (const cb of this.#onSession) cb(this.#snapshot)
+    // Nothing from this session reaches a handler until every `onSession` callback has
+    // returned: the session holds what the peer sent after its handshake. Released in a
+    // `finally`, so a callback that throws does not leave the session holding for ever.
+    try {
+      for (const cb of this.#onSession) cb(this.#snapshot)
+    } finally {
+      session.release()
+    }
 
     void conn.closed.then((info) => {
       // Superseded by a disconnect or a newer connect: that path patched its own state.

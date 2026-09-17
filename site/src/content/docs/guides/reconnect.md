@@ -140,6 +140,22 @@ export function keepUp(token: string, room: string): () => void {
 during the catch-up is a new session with its own run: the earlier run's calls reject with
 `WT_SESSION_CLOSED`, since they were on the session that is gone.
 
+**`onSession` runs before anything from that session reaches a handler.** The client holds
+what the server sent after its handshake until every `onSession` callback has returned, so
+state cleared there is cleared before the new session's first event:
+
+```ts
+let board: Message[] = []
+
+client.onSession(() => {
+  board = [] // a new session, so what the old one built is stale
+})
+client.on('message', (m) => board.push(m)) // never sees an event before the line above ran
+```
+
+That covers what a callback does before its first `await`. Whatever follows one, the calls
+in `keepUp` above, runs alongside live events, which is why `apply` is idempotent.
+
 **The watermark advances inside `apply`, from live messages as well as caught-up ones.**
 Between `resume` returning and `since` returning, live messages arrive on the emit stream.
 Advancing in one place means the next catch-up asks for the right window rather than

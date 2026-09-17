@@ -36,6 +36,10 @@ server.onSession((peer) => {
 })
 ```
 
+Register `peer.on` handlers in `onSession` itself, before any `await`. Nothing the peer sent
+is delivered until the callback returns, so a handler registered there cannot miss the peer's
+first event, and one registered after an `await` can.
+
 ## Membership is server-authoritative
 
 A client cannot join a room by sending a frame. There is no `client.join()`, and a
