@@ -78,7 +78,10 @@ export function installCommands(markdown: string): string[] {
  * below asks the registry, and a package that has since been published fails until its entry
  * is removed, so this cannot quietly become permanent.
  */
-const PENDING_PUBLISH: Readonly<Record<string, string>> = {}
+const PENDING_PUBLISH: Readonly<Record<string, string>> = {
+  '@transport-io/devtools':
+    'its first release, which needs transport-io 0.13.0 published first',
+}
 
 /** True when the registry has never heard of it. */
 async function isUnpublished(pkg: string): Promise<boolean> {
