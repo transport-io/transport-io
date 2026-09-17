@@ -3719,6 +3719,14 @@ arrives after the departure. So presence now has a measured shape, a dozen lines
 named defects, where it had an argument. What the application measured against includes
 D143: before it, a peer that vanished without closing stayed present on a quiet server.
 
+**Note, 2026-09-17. The first application's second report, not a second application.** On
+0.12.0 it reports everything in that release fixed and verified, and its two presence
+defects unchanged: a newcomer still sees nobody until the others move, and a departed peer's
+cursor still has to be filtered by hand. Neither was targeted, so neither was expected to
+move, and the report is recorded for exactly that: nothing built since has touched them by
+accident, and they are still the two things a presence lane would have to get right. This
+entry stays open, and its trigger stands unmet. One application, reporting twice.
+
 ### D137. Rate and size limits declared in the contract, recorded and not built
 From the same application: after sign-in, a client could send document updates of up to a
 megabyte as fast as it liked and the server applied every one. Its notes propose limits
