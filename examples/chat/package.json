@@ -9,6 +9,7 @@
     "start": "transport-io dev server.node.ts --static web"
   },
   "dependencies": {
+    "@transport-io/devtools": "*",
     "transport-io": "*"
   }
 }

@@ -6,6 +6,7 @@
  * Chromium. Deliberately ugly - it is a fixture, and every element exists to be asserted on.
  */
 
+import { TransportDevtools } from '@transport-io/devtools/react'
 import { TransportProvider } from '@transport-io/react'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -81,5 +82,6 @@ createRoot(document.getElementById('root') as HTMLElement).render(
     <TransportProvider client={client}>
       <Panel />
     </TransportProvider>
+    <TransportDevtools client={client} open />
   </StrictMode>,
 )
