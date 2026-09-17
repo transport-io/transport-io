@@ -19,6 +19,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEV_ENDPOINT } from '../transport/dev.ts'
+import { assertUdpPortFree } from '../transport/port.node.ts'
 import { daysLeft, ensureCertificate } from './certificate.node.ts'
 import { DEV_HOST, startDevServer } from './dev-server.node.ts'
 
@@ -107,6 +108,12 @@ async function main(): Promise<void> {
   const here = dirname(fileURLToPath(import.meta.url))
   // `dist/cli` -> `dist`, the directory served as ESM to the browser.
   const distDir = resolve(here, '..')
+
+  // Before anything starts or prints. The manifest below says this port is a server with
+  // this command's certificate, and with another process holding it that is false whatever
+  // runs next: the demo and an entry would fail to bind it, and with no entry nothing here
+  // binds it at all, so the command used to print a URL that was somebody else's server.
+  await assertUdpPortFree(args.wtPort, DEV_HOST)
 
   const staticDir = args.demo ? undefined : findStatic(args.staticDir)
   let demoPage: string | undefined

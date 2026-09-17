@@ -49,8 +49,9 @@ async function freePort(): Promise<number> {
   return port
 }
 
-/** Runs the demo and collects its output until it exits or `until` matches. */
-function runDemo(
+/** Runs the dev command and collects its output until it exits or `until` matches. */
+function runDev(
+  mode: readonly string[],
   port: number,
   wtPort: number,
   until: RegExp | undefined,
@@ -58,7 +59,7 @@ function runDemo(
   return new Promise((resolve) => {
     const child: ChildProcess = spawn(
       process.execPath,
-      [MAIN, 'dev', '--demo', '--port', String(port), '--wt-port', String(wtPort)],
+      [MAIN, 'dev', ...mode, '--port', String(port), '--wt-port', String(wtPort)],
       { stdio: ['ignore', 'pipe', 'pipe'] },
     )
     let out = ''
@@ -76,6 +77,12 @@ function runDemo(
     setTimeout(() => child.kill(), 15_000).unref()
   })
 }
+
+const runDemo = (
+  port: number,
+  wtPort: number,
+  until: RegExp | undefined,
+): Promise<{ code: number | null; out: string }> => runDev(['--demo'], port, wtPort, until)
 
 test('the dev command prints the address it binds, and exits with WT_PORT_IN_USE on a port held on ::', async () => {
   const port = await freePort()
@@ -109,6 +116,28 @@ test('a WebTransport port another socket holds exits with WT_PORT_IN_USE rather 
     assert.equal(taken.code, 1)
     assert.match(taken.out, /WT_PORT_IN_USE/)
     assert.match(taken.out, new RegExp(`UDP port ${wtPort}`))
+  } finally {
+    holder.close()
+  }
+})
+
+test('with no entry, a held WebTransport port is WT_PORT_IN_USE before a URL for it is printed', async () => {
+  // The application's case: its own server already held UDP 4433, no entry was passed, and
+  // the command printed `webtransport https://127.0.0.1:4433/` as though it were its own.
+  const port = await freePort()
+  const wtPort = await freePort()
+  const free = await runDev([], port, wtPort, /No entry given/)
+  assert.match(free.out, new RegExp(`webtransport\\s+https://127\\.0\\.0\\.1:${wtPort}/`))
+
+  const holder = createSocket('udp4')
+  holder.bind(wtPort, '127.0.0.1')
+  await once(holder, 'listening')
+  try {
+    const taken = await runDev([], port, wtPort, undefined)
+    assert.equal(taken.code, 1)
+    assert.match(taken.out, /WT_PORT_IN_USE/)
+    assert.match(taken.out, new RegExp(`UDP port ${wtPort}`))
+    assert.doesNotMatch(taken.out, /webtransport\s+https/)
   } finally {
     holder.close()
   }

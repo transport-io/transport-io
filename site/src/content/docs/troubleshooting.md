@@ -64,7 +64,9 @@ A listener was asked to bind a port another process holds. The message names the
 for a TCP port, the loopback address that answered: `transport-io dev` checks both
 `127.0.0.1` and `::1`, because a server bound to `::` alone lets `127.0.0.1` bind beside it
 and then takes the browser's `localhost`. The QUIC binding reports nothing for a held UDP
-port, so the check runs before it binds. Stop the other process, or pass another port.
+port, so the check runs before it binds, and `transport-io dev` checks its WebTransport port
+before it prints a URL for it, with or without a server entry. Stop the other process, or
+pass another port.
 
 ## WT_HANDSHAKE_TIMEOUT
 
