@@ -4442,3 +4442,46 @@ letsencrypt.org/2025/07/01/issuing-our-first-ip-address-certificate,
 letsencrypt.org/docs/challenge-types, letsencrypt.org/docs/profiles,
 letsencrypt.org/2026/03/11/shorter-certs-certbot, and
 poshac.me/docs/v4/Guides/ACME-CA-Comparison.
+
+### D153. An install that fails with ETXTBSY is rerun once, and the second one changes the job
+On 2026-09-17 CI went red on main with no fault in the push. Run 35261043571, on 326bf67, the
+tip of a ten-commit push. One job failed, "typecheck / lint / dead code / docs", at step 5,
+`npm ci`, before any code of ours had run:
+
+```
+npm error path .../node_modules/esbuild
+npm error command sh -c node install.js
+npm error Error: spawnSync .../node_modules/esbuild/bin/esbuild ETXTBSY
+npm error     at validateBinaryVersion (.../node_modules/esbuild/install.js:103:28)
+```
+
+esbuild's install script hard-links its platform binary to `bin/esbuild` and at once runs
+`bin/esbuild --version`. ETXTBSY is the kernel refusing to execute a file that something
+still has open for writing. The four other jobs of the same run, unit, integration, pack
+validation and e2e, ran the identical `npm ci` on the same commit and passed. The push had
+made esbuild a direct devDependency, for the bundle-size gate, and had changed nothing about
+how it installs: the lockfile's `node_modules/esbuild` entry is byte-identical before and
+after, one copy, 0.28.2, the same script every earlier green run had executed. It was the
+only failed run of 20 since 2026-09-05, about 100 executions of `npm ci`. A rerun of the
+failed job, same commit, nothing changed, passed.
+
+**Decision.** Environmental, and rerun. Nothing in the repository changed for one
+occurrence: a retry around `npm ci` would also hide a real install failure once, and a gate
+that is loosened to go green is worse than a red one. It was not reproduced in a container,
+because nothing was being loosened and the runners' own history is a better rate than an
+arm64 container on another filesystem would give.
+
+**The second occurrence is not investigated from scratch.** If `npm ci` fails again with
+`ETXTBSY` under `node_modules/esbuild`, in any job, the change is already chosen: that job
+installs with `npm ci --ignore-scripts`. It removes the race and retries nothing. esbuild
+works without its install script, which only replaces a JavaScript shim with the native
+binary it would otherwise spawn, and the bundle gate uses esbuild's JavaScript API. The
+static job needs no install script at all: it loads no native transport and `prepare` only
+installs git hooks. Checked the same day: installed with `--ignore-scripts`, `bin/esbuild`
+stays the Node shim, the JavaScript API bundles, and the command answers 0.28.2. The integration and e2e jobs do need one, the quiche prebuild's, so for
+those the change is `--ignore-scripts` followed by `npm rebuild
+@fails-components/webtransport-transport-http3-quiche`. Verify either by running the job's
+steps in `node:24-trixie-slim` before it lands.
+
+**Reconsider when:** the second occurrence, as above; or esbuild stops being a dependency of
+a gate, at which point it goes back to being Vite's and Astro's concern.
