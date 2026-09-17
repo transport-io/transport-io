@@ -60,7 +60,6 @@ const PACKAGES: readonly Published[] = [
     prefix: 'devtools-v',
     unpublishedTags: {},
     untaggedVersions: {},
-    unreleased: true,
   },
 ]
 
