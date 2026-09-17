@@ -4200,3 +4200,56 @@ the chat example at a real pointer rate, panel open against panel closed.
 which sends bytes it encoded once and so bypasses `sendFrame`; or an application needs a
 kind of drop `stats()` does not count, a malformed datagram or one that arrived before the
 handshake, which is a new counter first and a new kind second.
+
+### D150. The devtools panel's paint was measured before it shipped, and the first one did not pass
+D149 bounded the panel's paint by design, one paint a frame, rows appended, a capped list,
+and said plainly that it was unmeasured because no panel existed. The approval that followed
+asked for the measurement before the package ships: `examples/chat` at a real pointer rate,
+panel open against the same page with it closed. `scripts/bench-devtools-paint.node.ts` is
+that measurement. Two real clients in one room over real QUIC in headless Brave 152, both
+pointers driven at a fixed rate, so the measured page sends that many `cursor` datagrams a
+second and receives as many; main-thread time from the browser's own `TaskDuration` counter
+over 10 s windows, median of three; and a third mode, the same bundle with the `mountPanel`
+call taken out, as the floor.
+
+**Closed costs nothing that can be measured.** A closed panel observes and paints nothing.
+Absent against closed, ms of main-thread time a second, final panel: 73.5 and 61.2 at 60
+records a second each way, 78.8 and 72.1 at 120, 99.5 and 101.6 at the most the injector
+reached, about 280. The differences go both ways and are the run-to-run spread, about 10.
+
+**Open, the first version cost 170 to 190 ms of main-thread time a second**, and the same at
+60 records a second as at 500, so it was the painting and not the traffic: 273.0 ms against
+80.1 closed at 60 a second, 269.8 against 92.0 at 120, 263.3 against 96.3 at 500. No frame
+was dropped, which is how a cost like this ships unnoticed. It painted every animation frame
+into a `<table>`. A trace, open against closed, said where it went, in ms a second: Paint
+19.9, Layout 19.5, RasterTask 18.7, PrePaint 13.5, Layerize 13.3, HitTest 13.0, intersection
+observation 9.7, and script 2.6. So the record path and the store were never the cost. The
+cost was 2,000 small elements, nine cells a row, walked by the browser's layout, paint and
+layer passes on every frame of the page underneath, which the panel does not control; an
+auto-layout table laying out every row when one is added; and `content-visibility: auto` on
+each row, added as an optimisation, which is an intersection observer per row.
+
+**What shipped.** A row is one element holding one line of text, its columns padded in a
+monospace face, so a full list is 200 elements and not 2,000. The list is a reversed flex
+column, which stays pinned to its newest row and stays put once somebody scrolls up, with no
+script reading `scrollHeight`. A label is written only when its text changed. Paints are paced
+to ten a second, which reads as live and is a sixth of sixty; a click paints at once.
+`will-change: transform` on the panel was tried and measured and did nothing, so it is not
+there. Open against closed, the same runs: 95.3 against 61.2 at 60 a second, 93.2 against
+72.1 at 120, 102.4 against 101.6 at 280. So an open panel costs between 1 and 34 ms of
+main-thread time a second, 3% of it at worst, where the first cost 17 to 19%. Every run of
+the first panel and of the final one held 60 frames a second with no frame slower than 25 ms.
+
+**What it cost to look.** The event column is 18 characters and a longer name is cut in the
+list; Copy rows has it whole. A row is coloured as a whole by direction and lane, where the
+table coloured two cells.
+
+**Found on the way.** `transport-io dev` installs no signal handler, so a `SIGTERM` to it
+leaves the entry it spawned running and holding the UDP port. Ctrl-C does not show it, since
+the terminal signals the whole group. The bench starts the command in its own process group
+and stops the group. Recorded here and not fixed in this change.
+
+**Reconsider when:** the bench, on a machine with a display and a real pointer, disagrees
+with the headless figures by more than the run-to-run spread, which here is about 10 ms a
+second; or an application reports the page underneath an open panel dropping frames, which
+these runs never did.
