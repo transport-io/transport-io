@@ -58,6 +58,14 @@ nothing from `@transport-io/react`.
 | `visibleRows` | How many rows the list shows. 200 unless given. |
 | `target` | Where the panel is appended. `document.body` unless given. |
 
+## What it costs
+
+Closed, nothing that can be measured. Open, between 1 and 34 ms of main-thread time a second,
+3% of it at worst, with no dropped frame: measured on the chat example with two clients and
+both pointers driven at 60 to 280 events a second, in headless Chromium. Leave it mounted, and
+close it before you profile your own page. A closed panel still records, so opening it shows
+what already happened.
+
 ## What it shows
 
 - **Frames.** Every frame in and out: time, direction, lane, kind, event, stream, size, and a
@@ -66,7 +74,20 @@ nothing from `@transport-io/react`.
   have crossed it.
 - **The connection.** Status, transport, and why a session is on the fallback.
 - **Drops.** The counters from `client.stats()`, and beside them which event each drop was.
-  A dropped message is its own row, marked, after the row for the frame it discarded.
+  A dropped message is its own row, in the accent colour, after the row for the frame it
+  discarded.
+
+| In the bar | What happened |
+| --- | --- |
+| `queue` | Datagrams waiting to be sent right now. Not a drop. |
+| `overflow` | You emitted faster than datagrams leave: the queue holds 64, and the oldest was pushed out. |
+| `stale` | A datagram waited 150 ms in the queue and was discarded unsent. |
+| `stale rx` | A duplicate or out-of-order datagram arrived and was not handed to your handler. |
+| `direction` | The server sent an event the contract says only a client sends. |
+
+A dim row is on the unreliable lane. The
+[guide](https://transport-io.github.io/transport-io/guides/devtools/) has every column and
+every `kind`.
 
 **Pause** stops keeping records, so the rows you are reading are not overwritten, and counts
 what it skipped. **Filter** by event or by lane. **Copy rows** puts the visible rows on the

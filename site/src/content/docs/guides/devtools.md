@@ -40,9 +40,27 @@ if (['localhost', '127.0.0.1'].includes(location.hostname)) mountPanel(client)
 await client.connect()
 ```
 
-`mountPanel(client, options?)` puts a launcher in the corner of the page and returns the
-unmount. It reads no environment, so whether a build gets a panel is the line you wrote.
-Mount it before `connect()` and the handshake is the first thing it shows.
+`mountPanel(client, options?)` puts a launcher in the bottom right corner of the page, which
+opens the panel, and returns the unmount. It reads no environment, so whether a build gets a
+panel is the line you wrote. Mount it before `connect()` and the handshake is the first thing
+it shows.
+
+That condition keeps the panel off the page in production, and its code is still in the
+bundle. Import it where the condition is, and it becomes a chunk of its own that only your
+machine ever requests:
+
+```ts file=lazy.ts
+import { Client } from 'transport-io'
+import { connectDev } from 'transport-io/dev-transport'
+import { type AppMap, contract } from './contract.ts'
+
+export const client = new Client<AppMap>({ contract, connect: () => connectDev() })
+
+if (['localhost', '127.0.0.1'].includes(location.hostname)) {
+  const { mountPanel } = await import('@transport-io/devtools')
+  mountPanel(client)
+}
+```
 
 In React it is a component, anywhere in the tree:
 
@@ -63,19 +81,72 @@ production bundle contains none of the panel's code. It takes the client as a pr
 `capacity` is how many records it keeps, 1,000 unless given, and `visibleRows` is how many
 the list shows, 200 unless given.
 
-## What it shows
+## What it costs
 
-**Frames**, in and out: time, direction, lane, kind, event, stream, size, and a datagram's
-sequence number. Stream 0 is the emit stream; each `call()` and `stream()` takes the next
-number. A divider marks each new session, since a reconnect is one.
+<div class="tio-figure">
+Closed, nothing that can be measured. Open, between 1 and 34 ms of main-thread time a
+second, 3% of it at worst, with no dropped frame. Measured on the chat example with two
+clients in a room and both pointers driven at 60, 120 and 280 events a second, in headless
+Chromium. So leave it mounted, and close it before you profile your own page.
+</div>
+
+A closed panel still records, so opening it shows what already happened.
+
+## The rows
+
+One row for every frame in and out, newest last. A divider marks each new session, since a
+reconnect is one. A dim row is on the unreliable lane. A row in the accent colour is a drop.
+
+| Column | |
+| --- | --- |
+| `time UTC` | When this client sent it or received it, in UTC, to the millisecond. |
+| `dir` | `→ out` is sent by this client, `← in` is received. For `open` and `close`, which side opened the stream. |
+| `lane` | `reliable` or `unreliable`, as the contract declares the event. |
+| `kind` | What the row is. The next table has each one. |
+| `event` | The event's name. Empty for a frame that carries none, such as a handshake. |
+| `stream` | 0 is the emit stream, which carries every `emit` on the reliable lane. 1 and up is one `call()` or `stream()`, numbered as they open. Empty for a datagram, which travels on no stream. On a fallback session everything is 0. |
+| `size` | Bytes on the wire, header included. 0 for `open` and `close`, which are not frames. |
+| `seq` | A datagram's sequence number. Empty otherwise. |
+| `preview` | Empty unless you passed `preview: true`. Then the first 256 bytes of a JSON payload, or the first 32 bytes of a `bytes()` payload as hex. |
+
+| `kind` | |
+| --- | --- |
+| `handshake` | The first frame each way: protocol version and event table. |
+| `emit` | An event on the reliable lane. |
+| `datagram` | An event on the unreliable lane. |
+| `open`, `close` | A `call()` or a `stream()` starting and ending. Everything between them with the same `stream` number belongs to it. |
+| `request` | The payload of a `call()` or a `stream()`. |
+| `response` | The answer to a call, or one element of a stream. |
+| `error` | The responder failed, and this is what it said. |
+| `credit` | A stream's consumer telling its producer it may send more. See [Backpressure](/guides/backpressure/). |
+| `join`, `leave` | The server saying it put this client in a room, or took it out. |
+| the four drops | The table below. |
+
+## The drop counters
+
+The bar along the top has the counters from `client.stats()`, for the current session. They
+start again with each session. Next to them, **Drops by event** says which event each drop
+was, since the panel mounted. A drop is its own row too, in the accent colour, straight after
+the row of the frame it discarded, with the same `seq`.
+
+| In the bar | `stats()` | Row `kind` | What happened |
+| --- | --- | --- | --- |
+| `queue` | `queueDepth` | | Datagrams waiting to be sent right now. Not a drop. |
+| `overflow` | `overflowDropped` | `overflow-dropped` | You emitted faster than datagrams leave. The queue holds 64, and the oldest was pushed out to make room. |
+| `stale` | `staleDropped` | `stale-dropped` | A datagram waited 150 ms in the queue and was discarded unsent, because a late position is worse than none. |
+| `stale rx` | `staleReceived` | `stale-received` | A datagram arrived that was a duplicate, or older than one already delivered, and was not handed to your handler. |
+| `direction` | `directionDropped` | `direction-dropped` | The server sent an event the contract says only a client sends. See [the two lanes](/guides/lanes/). |
+
+`overflow` and `stale` climbing means this client produces datagrams faster than it can send
+them: send fewer. `stale rx` climbing is the network reordering or duplicating, and costs you
+nothing.
+
+## The rest of the panel
 
 **Open streams**: every call and stream in flight, with the frames and bytes that have
 crossed it.
 
 **The connection**: status, transport, and why a session is on the fallback.
-
-**Drops**: the counters from `stats()`, and beside them which event each drop was. A dropped
-message is its own row, marked, after the row for the frame it discarded.
 
 **Pause** stops keeping records, so the rows you are reading are not overwritten, and counts
 what it skipped. **Filter** by event or by lane. **Copy rows** puts the visible rows on the
