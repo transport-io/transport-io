@@ -248,13 +248,25 @@ describe('reconnect and a refusal', () => {
     })
     await client.connect()
     await wait(10)
+    // Recorded as they happen: a sample taken between attempts races the next `connecting`,
+    // which clears `lastError`.
+    const errors: string[] = []
+    let everRefused = false
+    client.subscribe(() => {
+      const state = client.getSnapshot()
+      if (state.lastError !== null) errors.push(state.lastError.message)
+      if (state.refused !== null) everRefused = true
+    })
     down = true
     peers[0]?.close(CloseCode.WT_NO_ERROR, 'restart')
     await wait(80)
     expect(dials.length).toBeGreaterThan(3)
-    expect(client.getSnapshot().refused).toBeNull()
-    expect(client.getSnapshot().lastError?.code).toBe('WT_SESSION_CLOSED')
-    expect(client.getSnapshot().lastError?.message).toContain('authorize failed')
+    expect(everRefused).toBe(false)
+    expect(errors.length).toBeGreaterThan(1)
+    for (const message of errors) {
+      expect(message).toContain('WT_SESSION_CLOSED')
+      expect(message).toContain('authorize failed')
+    }
     down = false
     await wait(60)
     expect(client.getSnapshot().status).toBe('connected')
@@ -279,7 +291,7 @@ describe('reconnect and a refusal', () => {
     client.disconnect()
   })
 
-  test('a session closed on any other error leaves that error in lastError, and reconnects', async () => {
+  test('a session closed on any other error leaves that error in lastError, and is not a refusal', async () => {
     const { peers, dials, connectWith } = await door(() => ({ user: 'ann' }))
     const client = new Client<AppMap>({ contract, connect: connectWith(() => 't') })
     await client.connect()
