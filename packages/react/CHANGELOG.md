@@ -1,5 +1,19 @@
 # @transport-io/react
 
+## 0.4.1
+
+### Patch Changes
+
+- `useConnection()` carries `refused`, `{ reason }` when the server's `authorize` refused this
+  client and `null` otherwise, beside `status: 'closed'`. It comes from the client's snapshot
+  in transport-io 0.12, which this release requires.
+- Updated dependencies [bf8e304]
+- Updated dependencies [76caf7e]
+- Updated dependencies [fed7b78]
+- Updated dependencies [3b393d9]
+- Updated dependencies [adc855d]
+  - transport-io@0.12.0
+
 ## 0.4.0
 
 ### Minor Changes

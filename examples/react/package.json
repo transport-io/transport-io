@@ -13,10 +13,10 @@
     "vite": "^8.2.2"
   },
   "dependencies": {
-    "@transport-io/react": "^0.4.0",
+    "@transport-io/react": "^0.4.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "transport-io": "^0.11.0",
+    "transport-io": "^0.12.0",
     "zod": "^4.5.4"
   }
 }

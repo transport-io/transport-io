@@ -1,5 +1,53 @@
 # transport-io
 
+## 0.12.0
+
+### Minor Changes
+
+- 76caf7e: `connectDev({ query })` and `devClient({ query })` add a query to the WebTransport URL, which
+  is where a listener's `authorize` reads a token and which a page could not reach, since the
+  URL comes from the dev manifest. An object, a `URLSearchParams`, or a function returning
+  either; the function is called on every attempt, so a token refreshed since the last one is
+  the one sent. `fetchDevManifest()` is exported from `transport-io/dev-transport`: the fetch
+  `connectDev` makes, with the same loopback refusals, for tooling that wants the hash or the
+  URL without connecting.
+- adc855d: A refusal says why, and is final. `authorize` may return `refuse('expired')`; the reason is a
+  code of 1 to 123 bytes that travels as the close reason, and `null` is the reason
+  `'refused'`. `connect()` rejects with a `RefusedError`, `code: 'WT_UNAUTHORIZED'` plus
+  `reason`, and the snapshot has `refused: { reason } | null` beside `status: 'closed'`. A
+  client with `reconnect` stops on a refusal, where it retried one for ever; `disconnect()`
+  then `connect()` starts over. In Chrome a refused peer saw `WT_SESSION_CLOSED`, because the
+  stream it opens fails before the close code arrives: a failed handshake now waits briefly for
+  the close and reports what it says. An `authorize` that throws is no longer a refusal: the
+  session closes without that code and stays retryable. `lastError` now says why a connected
+  session closed, where the close code was an error, and `peer.close(CloseCode.WT_UNAUTHORIZED,
+  reason)` refuses a live session the same way. A session whose handshake failed is no longer
+  left behind to swallow an `emit`.
+
+### Patch Changes
+
+- bf8e304: A connection that is lost, not closed, is noticed. The browser and reference transports
+  passed the platform's rejected `closed` across the seam, so a page whose server was killed
+  said `connected` for as long as anyone watched, never reconnected, and left two rejections
+  unhandled. `closed` now resolves however a connection ends; a lost one reports code `0` and a
+  reason beginning `connection lost`. The WebSocket mapping no longer reports the socket's own
+  close codes as session codes, where a lost socket's 1006 read as `WT_RELIABILITY_REFUSED`.
+  A session from `listenHttp3` or `listenDev` sends an empty datagram every 15 s, because the
+  reference binding never gave up on a silent peer: a killed client stayed in its rooms on a
+  server that sent nothing, and is now gone within about 25 s. A client that fails its opening
+  handshake no longer ends the listener's accept loop. The parity suite kills a peer with no
+  close handshake, in both directions, on every transport.
+- fed7b78: `transport-io dev` checks its WebTransport port before it starts or prints anything. With no
+  server entry it bound nothing on that port and checked nothing, so with another process
+  holding UDP 4433 it printed `webtransport https://127.0.0.1:4433/` for a server that was not
+  its own. It now exits with `WT_PORT_IN_USE`, as the demo and `listenDev` already did.
+- 3b393d9: `onSession` runs before anything from that session reaches a handler, on the client and on
+  the server. It was true over the loopback and false when the peer's handshake and its first
+  emit arrived in one read: the event reached its handler first, and on the server a handler
+  registered in `onSession` missed it. What the peer sent after its handshake is now held until
+  every `onSession` callback has returned, so state cleared there, before any `await`, is
+  cleared before the session's first event.
+
 ## 0.11.0
 
 ### Minor Changes
