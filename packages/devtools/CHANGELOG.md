@@ -1,5 +1,18 @@
 # @transport-io/devtools
 
+## 0.1.1
+
+### Patch Changes
+
+- b70573c: On a light page the panel's dim text was 4.38 to 1 against its ground and its accent text
+  3.46, under the 4.5 that text needs. Light-scheme text is now the site's next grey down and
+  its `accent-high`, and every text colour is held to 4.5 in both schemes by a test. The list
+  shows whole rows only: a few pixels of the row above the first used to show under the column
+  names.
+- f85de6c: The README says what an open panel costs, between 1 and 34 ms of main-thread time a second and
+  nothing measurable when closed, and what each counter in the bar means. The README ships in
+  the package, so this is what puts it on npm.
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@transport-io/devtools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A devtools panel for transport-io: the frames, streams and drops no browser panel shows for WebTransport. Framework-free, with a React mount.",
   "license": "MIT",
   "type": "module",
