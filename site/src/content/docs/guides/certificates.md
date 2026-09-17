@@ -1,11 +1,12 @@
 ---
 title: Certificates
-description: What transport-io dev does for you locally, and what you do yourself to deploy.
+description: Which certificate a deployed server ends up on and what each one costs, and what transport-io dev does for you locally.
 ---
 
 WebTransport does not accept an arbitrary self-signed certificate. A browser accepts one
-from a CA it trusts, or a short-lived one pinned by hash. Local development uses the second
-and deploying uses the first, and the two differ by one option at each end.
+from a CA it trusts, or a short-lived one pinned by hash. Local development pins. A deployed
+server is on whichever of the two its address allows, and that is often pinning as well, so
+[settle which](#which-certificate-a-deployed-server-is-on) before you plan anything else.
 
 The contract on this page:
 
@@ -77,9 +78,121 @@ path to the command's port. `examples/react` does exactly this. `fetchDevManifes
 fetch on its own, with the same loopback checks, for tooling that wants the hash or the URL
 without connecting.
 
-## Deploying
+## Which certificate a deployed server is on
 
-A certificate from a CA, and no hash anywhere. The listener takes the PEM text, not a path:
+It depends on what the page dials.
+
+**A hostname that resolves only to the address UDP reaches** can carry a certificate from a
+CA. **An address, or a hostname that also resolves somewhere UDP does not reach**, cannot, and
+you pin. The second is the one to expect. A platform whose shared ingress is a proxy has to
+give a UDP listener an address of its own, and on [Fly](https://fly.io), where this was first
+deployed, that is a dedicated IPv4 while the platform's hostname also has an AAAA record. A
+browser that resolves the name can land on IPv6, where nothing answers, so the page dials the
+literal IPv4, and the certificate a CA issues for a hostname does not cover a bare address.
+Any platform whose UDP answers on one address family while its hostname resolves in both
+puts you in the same place.
+
+| | Pinned | From a CA |
+| --- | --- | --- |
+| The page dials | an address, or any hostname | a hostname of your own that resolves only to where UDP answers |
+| The certificate | self-signed, ECDSA P-256, valid at most 14 days | issued to that hostname, and held by your process, since nothing in front terminates TLS |
+| You run | `openssl` at startup, and an HTTPS endpoint that serves the hash | an ACME client in or beside the app, and storage that keeps the certificate across restarts |
+| Rotation | a restart before it lapses, so at least every 14 days | a restart after each renewal |
+
+**The listener does not reload a certificate**, so both paths rotate by restarting the
+process, and every restart drops every session. A page with `reconnect` comes back on its
+own, as [a new session](/guides/reconnect/).
+
+**A pinned server needs an HTTPS origin as well.** The page has to learn the hash before it
+can connect, and it can only trust a hash it fetched over HTTPS from an origin the browser
+already trusts. So a UDP listener and an HTTPS endpoint are one requirement, not two. They
+can be one process, or the HTTPS side can be wherever your page is already served.
+[Deploying](/guides/deploy/) has the rest of what a platform has to provide.
+
+### Pinned, in production
+
+The server mints a certificate each time it starts, computes the hash over the DER, serves
+it, and leaves before the certificate lapses:
+
+```ts file=pinned-server.node.ts title="server.node.ts, pinned"
+import { execFileSync } from 'node:child_process'
+import { createHash, X509Certificate } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { createServer as createHttpServer } from 'node:http'
+import { createServer } from 'transport-io'
+import { listenHttp3 } from 'transport-io/node-transport'
+import { type AppMap, contract } from './contract.ts'
+
+// the address the page dials, and the one your platform delivers UDP to
+const ADDRESS = '203.0.113.7'
+const HOST = process.env.LISTEN_HOST ?? '0.0.0.0'
+const DAY = 24 * 60 * 60 * 1000
+
+execFileSync('openssl', ['ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', 'key.pem'])
+execFileSync('openssl', [
+  ...['req', '-new', '-x509', '-key', 'key.pem', '-out', 'cert.pem', '-days', '13'],
+  ...['-subj', `/CN=${ADDRESS}`, '-addext', `subjectAltName=IP:${ADDRESS}`],
+])
+const cert = readFileSync('cert.pem', 'utf8')
+const privKey = readFileSync('key.pem', 'utf8')
+const sha256 = createHash('sha256').update(new X509Certificate(cert).raw).digest('hex')
+
+const server = createServer<AppMap>({ contract })
+await server.listen(await listenHttp3({ port: 4433, host: HOST, cert, privKey, path: '/' }))
+
+// the page asks for this before every connect
+createHttpServer((req, res) => {
+  if (req.url === '/api/transport') {
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify({ url: `https://${ADDRESS}:4433/`, sha256 }))
+    return
+  }
+  res.statusCode = 404
+  res.end()
+}).listen(8080)
+
+// leave before the certificate lapses, and let the supervisor start a fresh process
+setTimeout(() => process.exit(0), 12 * DAY)
+```
+
+The page fetches the URL and the hash inside `connect`, which runs on every attempt, so a
+page that was open across a rotation reconnects with the new hash:
+
+```ts file=pinned-client.ts title="client.ts, pinned"
+import { Client } from 'transport-io'
+import { connectBrowser } from 'transport-io/browser-transport'
+import { type AppMap, contract } from './contract.ts'
+
+async function connect() {
+  const res = await fetch('/api/transport')
+  const { url, sha256 } = (await res.json()) as { url: string; sha256: string }
+  const bytes = sha256.match(/../g) ?? []
+  return connectBrowser({
+    url,
+    certificateHash: Uint8Array.from(bytes, (byte) => Number.parseInt(byte, 16)),
+    probe: `${location.origin}/.well-known/transport-io`,
+  })
+}
+
+export const client = new Client<AppMap>({
+  contract,
+  connect,
+  reconnect: { minMs: 500, maxMs: 30_000 },
+})
+```
+
+**The supervisor has to restart a clean exit.** Many restart only a failure by default, and
+a process that exits with 0 then stays down with an expired certificate behind it.
+
+**Say where the probe goes.** After a failed handshake the client asks whether the server
+answers over HTTPS, to tell a blocked UDP path from a dead server, and by default it asks the
+origin it dialled. Nothing speaks HTTPS on a bare address and a UDP port, so point `probe` at
+an HTTPS endpoint the same process serves. Any status is an answer. Leave it alone if the
+HTTPS side is a different host, since that host being up says nothing about this one.
+
+### From a CA
+
+The listener takes the PEM text, not a path:
 
 ```ts file=deploy.node.ts title="server.node.ts, deployed"
 import { readFile } from 'node:fs/promises'
@@ -96,7 +209,7 @@ await server.listen(await listenHttp3({ port: 443, host: '0.0.0.0', cert, privKe
 ```
 
 The browser connects to the origin like any other HTTPS origin, validated against the
-platform's CA store:
+platform's CA store, and no hash appears anywhere:
 
 ```ts file=production.ts title="client.ts, deployed"
 import { browserClient } from 'transport-io/browser-transport'
@@ -105,16 +218,13 @@ import { type AppMap, contract } from './contract.ts'
 export const client = await browserClient<AppMap>({ contract, url: 'https://example.com:443/' })
 ```
 
-**The listener does not reload a renewed certificate.** Restart the process after each
-renewal. `examples/chat/deploy` is a runbook that does this with certbot hooks.
-
-**The server needs raw UDP ingress**, on the port the listener binds. A reverse proxy, a CDN
-or a managed load balancer in front of it terminates TLS and drops UDP, and nothing connects.
-[The fallback](/guides/fallback/) is what carries emits through such a proxy.
+`examples/chat/deploy` is a runbook for this path on a machine of your own, with certbot
+hooks that restart the process after each renewal. On a platform that replaces the machine
+on every deploy, the certificate has to live on a volume, or each start asks the CA again.
 
 ## Pinning by hand
 
-A self-signed certificate without the command, for a setup the command does not cover:
+The two commands behind a pinned certificate, for a setup the dev command does not cover:
 
 ```bash
 openssl ecparam -name prime256v1 -genkey -noout -out key.pem

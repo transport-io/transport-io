@@ -4332,3 +4332,72 @@ abruptly whatever the signal, so an entry on Windows is stopped and is not asked
 its drain to one Ctrl-C, which is the case for `detached` and what it costs; or orphans are
 reported from commands killed with SIGKILL, by a test runner for instance, which is the
 case for a preload that watches the parent.
+
+### D152. A deployed server usually pins, an HTTPS origin is part of the requirement, and no origin is checked
+The first deployment record arrived: an application called quicdraw, a Node server with a
+WebTransport listener and an HTTP server in one process, put on Fly on 2026-09-17, written
+down as it happened with its failures. It showed the documentation wrong in two places and
+silent in a third.
+
+**Verified first.** The record says the library has no `CheckOrigin`, checks no origin, and
+that SECURITY.md says the library authenticates nothing. The first two are true: no listener
+reads `Origin`, the `ws` server is given no `verifyClient`, and a listener with no `authorize`
+accepts every peer. The third is true in substance and not in words: SECURITY.md said the
+door is `authorize` and said nothing about an origin at all, which is the omission. Measured
+in Chromium 152 against `listenDev`: the WebTransport request reaches `authorize` with
+`:authority`, `:method`, `:path`, `:protocol`, `:scheme`, `origin` and
+`sec-webtransport-http3-draft02`, and `origin` is the page's. The documents said `authorize`
+sees headers on the WebSocket listener only. They now say it sees them on both, that a
+browser puts `origin` there, that nothing in the library reads it, and what comparing it buys:
+it stops another site's page using a visitor's browser, and it does not stop a program.
+`e2e/refused.spec.ts` holds the header to the page's origin.
+
+**The chain, and whose each link is.** The certificates guide said development pins and
+deploying uses a CA. On Fly it is the other way round: UDP needs a dedicated IPv4, the
+platform's hostname also has an AAAA record, a browser resolving it can land on IPv6 where
+nothing answers, so the page dials the literal IPv4, a certificate issued for a hostname does
+not cover a bare address, so the page pins, so the 14-day cap applies in production, so the
+process restarts to re-mint and every session drops. Three links are this library's and a
+browser's, on any platform: no proxy can carry a session, a pinned certificate lasts at most
+14 days, and the listener cannot reload a certificate, so rotation is a restart. One is
+general to platforms whose shared ingress is a proxy: UDP gets an address of its own, and
+where that address answers on one family while the hostname resolves in both, the hostname
+cannot be dialled. The rest is Fly's: the dedicated IPv4 and never IPv6, the bind to the name
+`fly-global-services`, the port never rewritten, two machines by default, restart on failure
+by default, TCP and HTTP checks only, and a proxy that wakes machines on TCP.
+
+**Decision.** The certificates guide leads a deploying reader to the question first, which
+certificate a deployed server is on, with both paths in one table and what each costs. The CA
+path costs an ACME client in or beside the app, storage that keeps the certificate across
+restarts, and a hostname of one's own that resolves only to where UDP answers; the record
+did not build it. The pinned path costs a restart at least every 14 days. Both rotate by
+restarting. The second correction is said there once: because the page pins, it has to fetch
+the hash over HTTPS before it can connect, so a UDP listener and an HTTPS origin are one
+requirement and not two. A deployment guide is built from the record, and the limitations
+page and the README stop saying "UDP has to reach your process with no proxy in front",
+which read as "you probably cannot deploy this", and say what is required and how small it
+is: only the WebTransport server needs UDP, and the rest of an application stays put.
+
+**Run before it was written.** The guide's pinned server and client, unchanged but for the
+address, the ports and two static routes, in Chromium 152: a page pinned to `e12840222c6b…`,
+the server restarted with `2bf663032492…`, and the open page reconnected on its own as
+session 2, because `connect` runs on every attempt and fetches the hash inside it. Node's
+hash, SHA-256 over `X509Certificate.raw`, was compared with the `openssl` pipeline the guide
+already gave, and they agree.
+
+**Two things the record did not say, from the source.** `listenHttp3` binds `127.0.0.1`
+unless given `host`, which a deployed server has to know. And the reachability probe asks
+the origin it dialled, where a bare address on a UDP port has nothing speaking HTTPS, so a
+blocked path would report as a plain failed handshake: the guide points `probe` at an HTTPS
+endpoint the same process serves. The record fixed a 404 on HEAD for the probe's sake, and
+the probe did not need it: any status is an answer.
+
+**Not claimed.** That no CA will issue for an address. The guides say a certificate issued
+for a hostname does not cover one, which is the link the chain needs, and whether a CA
+issues for addresses was not verified from anything in the record or the source. No price
+either: the cost section says two lines, about equal, the address and the smallest machine.
+
+**Reconsider when:** a second deployment record comes from another platform, which is what
+would show how much of the Fly column is wider than Fly; the listener learns to reload a
+certificate, at which point rotation stops dropping sessions and the twelve-day exit goes;
+or an adapter ships, at which point "one instance" goes.

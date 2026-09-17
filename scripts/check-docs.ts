@@ -145,6 +145,7 @@ const COMPILED_DOCS = [
   'site/src/content/docs/guides/lanes.md',
   'site/src/content/docs/guides/schema.md',
   'site/src/content/docs/guides/certificates.md',
+  'site/src/content/docs/guides/deploy.md',
   'site/src/content/docs/guides/register.md',
   'site/src/content/docs/guides/rooms.md',
   'site/src/content/docs/guides/authorize.md',

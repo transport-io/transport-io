@@ -123,6 +123,7 @@ export default defineConfig({
             { label: 'Backpressure', slug: 'guides/backpressure' },
             { label: 'Reconnecting', slug: 'guides/reconnect' },
             { label: 'Certificates', slug: 'guides/certificates' },
+            { label: 'Deploying', slug: 'guides/deploy' },
             { label: 'The fallback', slug: 'guides/fallback' },
             { label: 'React', slug: 'guides/react' },
             { label: 'Devtools', slug: 'guides/devtools' },

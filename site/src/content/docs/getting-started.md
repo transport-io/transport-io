@@ -45,6 +45,7 @@ change at a time, and ends at the React example in the repository.
 
 [The two lanes](/guides/lanes/) covers choosing between them, and
 [`call()` and `stream()`](/guides/call-and-stream/) the request shapes.
-[Certificates](/guides/certificates/) is what changes when you deploy.
+[Deploying](/guides/deploy/) is what a server needs from a platform, and
+[Certificates](/guides/certificates/) is which certificate it ends up on.
 [React](/guides/react/) is the binding, if that is what you are building in.
 [Limitations](/limitations/) is worth reading before you commit to this.
