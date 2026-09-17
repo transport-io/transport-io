@@ -243,6 +243,7 @@ const UNREACHABLE = {
   "transport/probe.d.ts": "the probe after a failed handshake, reachable only through a connector option",
   "transport/websocket-connection.d.ts": "the WebSocket mapping, reachable only through connectWebSocket and listenWebSocket",
   "transport/port.node.d.ts": "the port probes behind listenHttp3, listenWebSocket and the dev command, reachable only through them",
+  "transport/closed.d.ts": "the closed mapping of the transport seam, which every adapter uses and no entry exports",
 }
 const missing = shipped
   .filter((f) => !listed.includes(f))
