@@ -42,6 +42,16 @@ time by the same route: a paragraph justifying a decision, with a measurement at
 rule is in CLAUDE.md under "Reader-facing documents answer three questions"; this is the
 mechanism, because rationale is what gets cut when something has to go.
 
+## `check-bundle-size.ts` - what every browser application pays
+
+Bundles what a browser application imports, the client, the contract helpers and the browser
+transport, from the built `dist`, minifies it, gzips it, and fails above a byte ceiling that
+may only go down. `Client.observe()` costs a session nobody observes one branch per frame,
+which is not measurable, and about a kilobyte of code, which is, and which ships in every
+production bundle whether or not a panel is ever opened. The bundler and the compressor are
+esbuild and fflate, pinned by the lockfile, so the figure is the same on a laptop and in CI;
+Bun's bundler and zlib are neither. See D149.
+
 ## `check-retired-claims.ts` - a claim found false stays false
 
 One sentence about the React package survived three documentation sweeps: each sweep was a
