@@ -3706,6 +3706,19 @@ built on them now would fix their shapes before a second application has pushed 
 its hand-rolled version cost after a month. The design then starts from the awareness
 protocol's vocabulary, since that is what a Yjs application would migrate from.
 
+**Note, 2026-09-17. One application, not two.** The same application moved to 0.11.0 and
+rebuilt presence on it, which is the first data on this entry and does not meet its trigger:
+it is the first application again, not a second. Presence is about a dozen lines on the
+server, on `peer.closed`, where it had been a poll of `memberCount` every two seconds, and
+by its own measure a clean disconnect is noticed in half a second where it took four. Two
+things its version
+gets wrong, both of which a lane would have to get right: a newcomer sees nobody until the
+others move, because state that travels only as datagrams has no first delivery, and a
+departed peer's cursor has to be filtered out by hand, because a datagram already in flight
+arrives after the departure. So presence now has a measured shape, a dozen lines and two
+named defects, where it had an argument. What the application measured against includes
+D143: before it, a peer that vanished without closing stayed present on a quiet server.
+
 ### D137. Rate and size limits declared in the contract, recorded and not built
 From the same application: after sign-in, a client could send document updates of up to a
 megabyte as fast as it liked and the server applied every one. Its notes propose limits
@@ -3739,6 +3752,16 @@ provider that is wrong about resync after a reconnect is worse than the twenty l
 **Reconsider when:** a second application writes the same twenty lines, or the first
 publishes its version and the shape has stopped moving.
 
+**Note, 2026-09-17. One application, not two.** The same application on 0.11.0: its Yjs sync
+is about eight lines on the server and twelve on the client, on `bytes()`, where it had been
+base64 inside JSON, and a resync after a server restart worked. That is the first data on
+this entry, from the first application again, so the trigger has not been met. It is a
+measured shape where there was an argument: twenty lines, and the case the entry feared
+most, resync after a reconnect, is the one reported working. The restart it survived is the
+one D142 made visible to the page; before that fix the page never learned the server had
+gone. The two-event pattern it used for a payload that needs JSON and bytes is now in the
+schema guide (D146).
+
 ### D139. A Vite plugin for development, recorded and not built
 Under Vite, `transport-io dev` prints a page URL that is not the page, a Vite proxy entry is
 needed for the manifest path, and the command's HTTP server takes no extra routes, which is
@@ -3758,6 +3781,12 @@ asked for twice.
 request handler ships first, as `serveDevManifest(req, res)` from the CLI's own server, and
 the plugin is a thin call to it.
 
+**Note, 2026-09-17. One application, not two.** The same application on 0.11.0 reimplemented
+the manifest fetch a second time, eight lines, to put a token in the WebTransport URL. D145
+answers both halves without the plugin: `connectDev` takes the query, and `fetchDevManifest`
+is exported with its loopback refusals, which is the piece a plugin would call. The proxy
+entry is unchanged, and it is the first application reporting again, so the trigger stands.
+
 ### D140. Room member lists and join or leave events, recorded and not built
 The notes list `fetchSockets()` and adapter events as things Socket.IO has. `memberCount` is
 a number for a health line and cannot see another node; a member list would need to be one
@@ -3770,6 +3799,12 @@ ids that identify nobody.
 
 **Reconsider when:** the Redis adapter exists, at which point membership queries are designed
 against it and not against memory.
+
+**Note, 2026-09-17. One application, not two.** No report against this entry by name, but
+one finding under D136 bears on it: a newcomer to the application's board sees nobody until
+the others move. That is the absence of a member list felt from the client, and it is an
+argument for presence carrying first state, as this entry already says, not for a query on
+the adapter. From the first application again.
 
 ### D141. A configurable idle timeout on `listenHttp3`, recorded and not built
 The application noticed a client that exited without closing stayed in its online list for
@@ -3784,6 +3819,17 @@ WebSocket mapping's deadline (D126) is a constant for the same reason.
 **Reconsider when:** an application reports a case where fifteen seconds is the problem,
 at which point the option is surfaced on both listeners together, with the floor the binding
 tolerates measured first.
+
+**Note, 2026-09-17. One application, not two.** Two corrections from measuring it, and one
+figure from the application. The fifteen seconds it first reported was not QUIC's idle
+timeout: the reference binding's server gives up on a peer only when something it sent goes
+unacknowledged, about 8 s after the send, and never on a silent one, so a quiet server held a
+killed client for as long as it was watched, 240 s (D143). And the binding surfaces no idle
+timeout option, so the first paragraph's "exposes it as a server option" was wrong: there is
+nothing to pass through. What a vanished peer costs now is the liveness probe's interval plus
+that give-up, about 25 s, measured at 21. The application's own figure on 0.11.0 is for the
+other case, a clean disconnect, noticed in half a second where it took four. The knob, if it
+is ever asked for with a number, is the probe's interval, and it is ours to expose.
 
 ### D142. `closed` resolves, always, and the parity suite kills a peer to prove it
 The first outside application, on 0.11.0, killed its server and watched the page say
