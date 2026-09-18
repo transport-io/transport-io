@@ -167,9 +167,20 @@ for (const r of RETIRED) {
   }
 }
 
+// A package manifest's description is the one line npm shows above the README, so the
+// manifests are read too: the core one said "no fallback" from 0.8.0, the release that shipped
+// the fallback, to 0.13.0, because only prose was being checked.
 const files = execFileSync(
   'git',
-  ['ls-files', '--cached', '--others', '--exclude-standard', '*.md', '*.mdx'],
+  [
+    'ls-files',
+    '--cached',
+    '--others',
+    '--exclude-standard',
+    '*.md',
+    '*.mdx',
+    'packages/*/package.json',
+  ],
   { encoding: 'utf8' },
 )
   .split('\n')

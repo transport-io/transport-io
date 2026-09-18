@@ -1,7 +1,7 @@
 {
   "name": "transport-io",
-  "version": "0.13.0",
-  "description": "Real-time apps over WebTransport. Two lanes, one contract, no fallback.",
+  "version": "0.13.1",
+  "description": "Real-time apps over WebTransport. Two lanes, one contract, one fallback.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,

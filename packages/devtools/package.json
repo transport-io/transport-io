@@ -1,6 +1,6 @@
 {
   "name": "@transport-io/devtools",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A devtools panel for transport-io: the frames, streams and drops no browser panel shows for WebTransport. Framework-free, with a React mount.",
   "license": "MIT",
   "type": "module",
@@ -39,11 +39,11 @@
     "@types/react-dom": "^19.3.0",
     "react": ">=19.2",
     "react-dom": "^19.3.0",
-    "transport-io": "^0.13.0"
+    "transport-io": "^0.13.1"
   },
   "peerDependencies": {
     "react": ">=19.2",
-    "transport-io": "^0.13.0"
+    "transport-io": "^0.13.1"
   },
   "peerDependenciesMeta": {
     "react": {

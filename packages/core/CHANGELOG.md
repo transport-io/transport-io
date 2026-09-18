@@ -1,5 +1,18 @@
 # transport-io
 
+## 0.13.1
+
+### Patch Changes
+
+- f5b55f2: The package README points to `@transport-io/devtools` and to the deploying guide, and says
+  the fourteen-day ECDSA rule is for a pinned certificate, where it said a pinned development
+  one: a deployed server is often pinned too. The README ships in the package, so this is what
+  puts it on npm. `ConnectRequest`'s documentation says `authorize` is handed the request's
+  headers on both listeners, and that a browser puts `origin` there.
+- The package's one-line description, the line npm shows above the README, said "no
+  fallback". It says "one fallback", as the README has since 0.8.0 shipped it. The gate that
+  keeps retired claims out of the prose reads the package manifests now as well.
+
 ## 0.13.0
 
 ### Minor Changes
