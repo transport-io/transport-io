@@ -7,7 +7,7 @@ and why.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/transport-io/transport-io/main/assets/devtools/page-dark.png">
-  <img alt="The chat example with the devtools panel open along the bottom: a bar with the connection and its drop counters, a list of frames with dropped datagrams in the accent colour, and a side column with one open stream and the drops by event." src="https://raw.githubusercontent.com/transport-io/transport-io/main/assets/devtools/page-light.png" width="880">
+  <img alt="The chat example's agents page with the devtools panel open along the bottom: a bar with the connection and its drop counters, a list of frames with the responses and close rows of two streams and the open and request rows of the two that replaced them, and a side column listing the two open streams." src="https://raw.githubusercontent.com/transport-io/transport-io/main/assets/devtools/page-light.png" width="880">
 </picture>
 
 ```bash

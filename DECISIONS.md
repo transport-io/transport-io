@@ -4278,6 +4278,15 @@ scroller's padding does not clip: its space is a margin now, and a resize observ
 when the panel opens or the window changes and never per frame, sets its height to a whole
 number of rows.
 
+**Note, 2026-09-18.** The picture that answers "what is this" is taken on `/agents.html`
+now, not on `/`: open streams is the one column that has nowhere to be interesting on the
+chat page, and the agents page runs two on one session, so the script restarts them both and
+captures the list with their two close rows and the side column with the two that replaced
+them. Mounting the panel there found that a fixed panel with no reserved space covers the
+page's stop buttons at a laptop's height, and a control under it was unreachable until it was
+closed. The open panel now pads the page by its own height and puts the padding back when it
+closes; the agents page is the e2e fixture for it, since its buttons sit where the panel goes.
+
 ### D151. The dev command passes SIGTERM, SIGINT and SIGHUP to its entry, and ends as the entry ended
 `transport-io dev <entry>` spawned the entry and installed no signal handler, so a signal
 sent to the command alone ended it and left the entry running with its UDP port held.

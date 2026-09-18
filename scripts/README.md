@@ -54,11 +54,13 @@ Bun's bundler and zlib are neither. See D149.
 
 ## `render-devtools-screenshots.node.ts` - the panel's pictures, from real traffic
 
-`npm run render:devtools`. Two real clients on `examples/chat` over real QUIC, in both colour
-schemes: pointers move, a message goes out and comes back, a burst of pointer events overflows
-the library's own datagram queue so `overflowDropped` is a real number, and a stream is open
-while the pictures are taken. Three per scheme, written to `assets/devtools/`, where the
-package README points and where the site's `prebuild` copies them from. It refuses to capture a page
+`npm run render:devtools`. Real clients on `examples/chat` over real QUIC, in both colour
+schemes. On `/`, two of them: pointers move, a message goes out and comes back, a burst of
+pointer events overflows the library's own datagram queue so `overflowDropped` is a real
+number, and a stream is open while the frame list is pictured. On `/agents.html`, one client
+with two streams running, restarted, so the panel is pictured with their close rows and the
+two that replaced them. Three per scheme, written to `assets/devtools/`, where the package
+README points and where the site's `prebuild` copies them from. It refuses to capture a page
 that renders a filesystem path, or a text colour under 4.5 to 1 against its ground. A changed
 panel is one command from a changed screenshot, where a picture made by hand goes stale
 without anybody noticing. `E2E_BROWSER` names a Chromium when Playwright has none installed.

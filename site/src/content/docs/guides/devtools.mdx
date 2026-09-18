@@ -18,10 +18,11 @@ streams. `@transport-io/devtools` is a panel in the page that shows both, and th
 <Shot
   light={pageLight}
   dark={pageDark}
-  alt="The chat example with the devtools panel open along the bottom of the page. The panel's bar reads connected on webtransport with its counters, and below it a list of frames: datagrams, dropped datagrams in the accent colour, a chat message going out and coming back, and a stream's open, request and responses. A side column lists one open stream and the drops by event."
+  alt="The chat example's agents page with the devtools panel open along the bottom. The page's header reads open streams 2 and both agents are streaming. The panel's bar reads connected on webtransport with its counters at zero, and below it a list of frames: responses on streams 1 and 2 with a word in each preview, a close row for each of them, then an open and a request row for streams 3 and 4. A side column lists two open streams, 3 and 4, and no drops."
 >
-  The panel under the chat example, over real QUIC. Every row is a frame that crossed the
-  wire, or a datagram this client dropped.
+  The panel under the chat example's agents page, over real QUIC: two streams on one session,
+  restarted, so the list has their close rows and the side column the two that replaced them.
+  Every row is a frame that crossed the wire.
 </Shot>
 
 ```bash

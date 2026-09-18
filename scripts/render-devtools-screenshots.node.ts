@@ -1,11 +1,14 @@
 /**
  * Renders the devtools panel's screenshots, in both colour schemes, from real traffic.
  *
- * Two real clients on `examples/chat` over real QUIC, nothing mocked: both pointers move, so
- * datagrams go out and come in; a chat message goes out and comes back; a burst of pointer
- * events arrives inside one task, faster than the datagram queue drains, so the library's own
- * ring overflows and `overflowDropped` is a real number; and a `/say` stream is open while
- * the pictures are taken. A changed panel is one command from a changed screenshot.
+ * Real clients on `examples/chat` over real QUIC, nothing mocked. On `/`, two of them: both
+ * pointers move, so datagrams go out and come in; a chat message goes out and comes back; a
+ * burst of pointer events arrives inside one task, faster than the datagram queue drains, so
+ * the library's own ring overflows and `overflowDropped` is a real number; and a `/say`
+ * stream is open while the pictures are taken. On `/agents.html`, one client with two
+ * `stream()` calls running at once, restarted, so the list has the close rows of the first
+ * two and the side column the two that replaced them. A changed panel is one command from a
+ * changed screenshot.
  *
  *   npm run build && npm run build:web -w examples/chat
  *   E2E_BROWSER="/path/to/chromium" node scripts/render-devtools-screenshots.node.ts
@@ -13,8 +16,9 @@
  * Three pictures per scheme, written to `assets/devtools/`. The package README points at
  * them there, and the site's `prebuild` copies them to where the guide imports them from:
  *
- *   page    the panel open under the application, which answers "what is this"
- *   frames  the frame list close up, at a size where the columns read
+ *   page    the panel open under the agents page, which answers "what is this": two open
+ *           streams, and the close rows of the two before them
+ *   frames  the frame list close up on the chat page, at a size where the columns read
  *   drops   the counters and the per-event drops, with real numbers in them
  *
  * The panel's face is IBM Plex Mono when the page has it. The pictures give the page that
@@ -35,6 +39,8 @@ const OUT = join(ROOT, 'assets/devtools')
 const VIEWPORT = { width: 1100, height: 760 }
 /** Narrow enough that the whole panel reads at the width of a documentation column. */
 const NARROW = { width: 760, height: 700 }
+/** Tall enough that the close rows of two streams and the opening of two more all fit. */
+const TALL = { width: 1100, height: 840 }
 /** One more than the ring holds, five times over: five real drops. */
 const BURST = 64 + 5
 
@@ -75,8 +81,8 @@ function plex(): string {
     .join('\n')
 }
 
-async function connected(page: Page): Promise<void> {
-  await page.goto(ORIGIN)
+async function connected(page: Page, path = '/'): Promise<void> {
+  await page.goto(`${ORIGIN}${path}`)
   await page.waitForFunction(
     () => document.getElementById('status')?.textContent === 'connected',
     undefined,
@@ -109,9 +115,38 @@ async function renderedText(page: Page): Promise<string> {
   })
 }
 
+/** A kind of text on the panel, and a selector that finds one of it. */
+type Kind = [what: string, selector: string]
+
+/** Everything the chat page paints, after the burst and with a stream open. */
+const CHAT_KINDS: Kind[] = [
+  ['a reliable row', '.rows .r:not(.session):not([data-lane="unreliable"]):not([data-drop])'],
+  ['an unreliable row', '.rows .r[data-lane="unreliable"]:not([data-drop])'],
+  ['a drop row', '.rows .r[data-drop]'],
+  ['the column names', '.head'],
+  ['a counter label', '.counter'],
+  ['a counter above zero', '.counter[data-hot="true"] b'],
+  ['a button', 'button'],
+  ['a side label', '.side h2'],
+]
+
+/** The agents page has no datagram and drops nothing, and its side column is not empty. */
+const STREAM_KINDS: Kind[] = [
+  ['a reliable row', '.rows .r:not(.session):not([data-lane="unreliable"]):not([data-drop])'],
+  ['the column names', '.head'],
+  ['a counter label', '.counter'],
+  ['a button', 'button'],
+  ['a side label', '.side h2'],
+  ['an open stream', '.side .row'],
+  ['its frame count', '.side .row .muted'],
+]
+
 /** Text colour against the first opaque background behind it, for one of each kind of text. */
-async function contrasts(page: Page): Promise<{ what: string; ratio: number }[]> {
-  return page.evaluate(() => {
+async function contrasts(
+  page: Page,
+  kinds: Kind[],
+): Promise<{ what: string; ratio: number }[]> {
+  return page.evaluate((kinds) => {
     const root = document.querySelector('[data-transport-io-devtools]')?.shadowRoot
     if (root === null || root === undefined) throw new Error('the panel is not mounted')
     const rgb = (css: string): number[] => (css.match(/[\d.]+/g) ?? []).slice(0, 4).map(Number)
@@ -129,19 +164,6 @@ async function contrasts(page: Page): Promise<{ what: string; ratio: number }[]>
       }
       return [255, 255, 255]
     }
-    const kinds: [string, string][] = [
-      [
-        'a reliable row',
-        '.rows .r:not(.session):not([data-lane="unreliable"]):not([data-drop])',
-      ],
-      ['an unreliable row', '.rows .r[data-lane="unreliable"]:not([data-drop])'],
-      ['a drop row', '.rows .r[data-drop]'],
-      ['the column names', '.head'],
-      ['a counter label', '.counter'],
-      ['a counter above zero', '.counter[data-hot="true"] b'],
-      ['a button', 'button'],
-      ['a side label', '.side h2'],
-    ]
     return kinds.map(([what, selector]) => {
       const node = root.querySelector(selector)
       if (node === null)
@@ -152,10 +174,48 @@ async function contrasts(page: Page): Promise<{ what: string; ratio: number }[]>
       ].sort((a, b) => b - a)
       return { what, ratio: ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05) }
     })
-  })
+  }, kinds)
 }
 
-async function render(browser: Browser, scheme: 'light' | 'dark'): Promise<string[]> {
+/** Nothing is captured until the page has been searched for a path and read for contrast. */
+async function inspect(page: Page, scheme: string, kinds: Kind[]): Promise<void> {
+  const text = await renderedText(page)
+  const path = /(\/Users\/|\/home\/|[A-Za-z]:\\|file:\/\/)/.exec(text)
+  if (path !== null || text.includes(ROOT)) {
+    throw new Error(`a filesystem path is rendered on the page, near "${path?.[0]}"`)
+  }
+  for (const { what, ratio } of await contrasts(page, kinds)) {
+    console.log(`  ${scheme}: ${what.padEnd(22)} ${ratio.toFixed(2)} to 1`)
+    if (ratio < 4.5)
+      throw new Error(`${what} is ${ratio.toFixed(2)} to 1 in ${scheme}, under 4.5`)
+  }
+}
+
+/** The page's face is the site's, so the panel is pictured in it. */
+async function facing(page: Page): Promise<void> {
+  await page.addStyleTag({ content: plex() })
+  await page.evaluate(() =>
+    Promise.all([
+      document.fonts.load("12px 'IBM Plex Mono'"),
+      document.fonts.load("600 12px 'IBM Plex Mono'"),
+    ]),
+  )
+}
+
+async function keep(
+  page: Page,
+  name: string,
+  scheme: string,
+  take: (file: string) => Promise<unknown>,
+): Promise<string> {
+  const file = `${name}-${scheme}.png`
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await take(join(OUT, file))
+  return file
+}
+
+/** The chat page: the drops picture, then the frame list with a stream open. */
+async function renderChat(browser: Browser, scheme: 'light' | 'dark'): Promise<string[]> {
   const mine = await browser.newContext({
     viewport: VIEWPORT,
     deviceScaleFactor: 2,
@@ -166,13 +226,7 @@ async function render(browser: Browser, scheme: 'light' | 'dark'): Promise<strin
   const other = await theirs.newPage()
   await connected(page)
   await connected(other)
-  await page.addStyleTag({ content: plex() })
-  await page.evaluate(() =>
-    Promise.all([
-      document.fonts.load("12px 'IBM Plex Mono'"),
-      document.fonts.load("600 12px 'IBM Plex Mono'"),
-    ]),
-  )
+  await facing(page)
 
   const panel = page.locator('[data-transport-io-devtools]')
   await panel.locator('.launcher').click()
@@ -202,64 +256,91 @@ async function render(browser: Browser, scheme: 'light' | 'dark'): Promise<strin
   await panel.locator('.counter[data-hot="true"]').first().waitFor({ timeout: 10_000 })
   await panel.locator('.rows .r').filter({ hasText: 'after the burst' }).nth(1).waitFor()
 
-  // Nothing is captured until the page has been searched for a path and read for contrast.
-  const inspect = async (): Promise<void> => {
-    const text = await renderedText(page)
-    const path = /(\/Users\/|\/home\/|[A-Za-z]:\\|file:\/\/)/.exec(text)
-    if (path !== null || text.includes(ROOT)) {
-      throw new Error(`a filesystem path is rendered on the page, near "${path?.[0]}"`)
-    }
-    for (const { what, ratio } of await contrasts(page)) {
-      console.log(`  ${scheme}: ${what.padEnd(22)} ${ratio.toFixed(2)} to 1`)
-      if (ratio < 4.5)
-        throw new Error(`${what} is ${ratio.toFixed(2)} to 1 in ${scheme}, under 4.5`)
-    }
-  }
-
   // The drops picture, while the drops are still the newest rows: the whole panel, in a
   // window narrow enough that nothing has to be cropped through the middle of a word.
   const written: string[] = []
-  const keep = async (
-    name: string,
-    take: (file: string) => Promise<unknown>,
-  ): Promise<void> => {
-    const file = `${name}-${scheme}.png`
-    await page.evaluate(() => window.scrollTo(0, 0))
-    await take(join(OUT, file))
-    written.push(file)
-  }
-  await inspect()
+  await inspect(page, scheme, CHAT_KINDS)
   await page.setViewportSize(NARROW)
-  await keep('drops', (path) => panel.locator('.panel').screenshot({ path, type: 'png' }))
+  written.push(
+    await keep(page, 'drops', scheme, (path) =>
+      panel.locator('.panel').screenshot({ path, type: 'png' }),
+    ),
+  )
   await page.setViewportSize(VIEWPORT)
 
-  // A stream that is still open while the pictures are taken: a word every 80 ms.
+  // A stream that is still open while the picture is taken: a word every 80 ms.
   const words = Array.from({ length: 70 }, (_, i) => `word${i + 1}`).join(' ')
   await say(page, `/say ${words}`)
   await panel.locator('.side .row').filter({ hasText: 'say' }).waitFor({ timeout: 10_000 })
   await panel.locator('.rows .r').filter({ hasText: 'response' }).nth(3).waitFor()
 
-  await inspect()
+  await inspect(page, scheme, CHAT_KINDS)
 
   const frames = await panel.locator('.frames').boundingBox()
   if (frames === null)
     throw new Error('the frame list has no box, so there is nothing to crop to')
-  await keep('page', (path) => page.screenshot({ path, type: 'png' }))
-  await keep('frames', (path) =>
-    page.screenshot({
-      path,
-      type: 'png',
-      clip: {
-        x: frames.x,
-        y: frames.y,
-        width: Math.min(frames.width, 800),
-        height: frames.height,
-      },
-    }),
+  written.push(
+    await keep(page, 'frames', scheme, (path) =>
+      page.screenshot({
+        path,
+        type: 'png',
+        clip: {
+          x: frames.x,
+          y: frames.y,
+          width: Math.min(frames.width, 800),
+          height: frames.height,
+        },
+      }),
+    ),
   )
   await mine.close()
   await theirs.close()
   return written
+}
+
+const tokensPast = (page: Page, id: 'a' | 'b', n: number): Promise<unknown> =>
+  page.waitForFunction(
+    ([id, n]) => Number(document.getElementById(`${id}-tokens`)?.textContent) > n,
+    [id, n] as const,
+    { timeout: 15_000 },
+  )
+
+/** The agents page: the panel under two streams on one session, after a restart. */
+async function renderStreams(browser: Browser, scheme: 'light' | 'dark'): Promise<string[]> {
+  const context = await browser.newContext({
+    viewport: TALL,
+    deviceScaleFactor: 2,
+    colorScheme: scheme,
+  })
+  const page = await context.newPage()
+  await connected(page, '/agents.html')
+  await facing(page)
+
+  const panel = page.locator('[data-transport-io-devtools]')
+  await panel.locator('.launcher').click()
+
+  // Both agents start on load. Far enough in that the restart lands mid-generation, so the
+  // two close rows are of streams that had frames on them.
+  await tokensPast(page, 'a', 10)
+  await tokensPast(page, 'b', 10)
+  await page.click('#restart')
+  await panel
+    .locator('.rows .r')
+    .filter({ hasText: /\bclose\s+generate\b/ })
+    .nth(1)
+    .waitFor()
+  await panel.locator('.side .row').nth(1).waitFor()
+  // And the two that replaced them are answering. A word each is enough: the words keep
+  // coming, and the close rows have to still be in the list when the picture is taken.
+  await tokensPast(page, 'a', 0)
+  await tokensPast(page, 'b', 0)
+
+  await inspect(page, scheme, STREAM_KINDS)
+  const file = await keep(page, 'page', scheme, (path) =>
+    page.screenshot({ path, type: 'png' }),
+  )
+  await context.close()
+  return [file]
 }
 
 mkdirSync(OUT, { recursive: true })
@@ -271,9 +352,11 @@ const browser = await chromium.launch({
 })
 try {
   for (const scheme of ['light', 'dark'] as const) {
-    for (const file of await render(browser, scheme)) {
-      console.log(`wrote assets/devtools/${file}`)
-    }
+    const files = [
+      ...(await renderChat(browser, scheme)),
+      ...(await renderStreams(browser, scheme)),
+    ]
+    for (const file of files) console.log(`wrote assets/devtools/${file}`)
   }
 } finally {
   await browser.close()
