@@ -355,6 +355,27 @@ describe('pause, filter, copy', () => {
   })
 })
 
+describe('the page under it', () => {
+  test('an open panel reserves its height under the page, and gives it back', () => {
+    document.body.style.paddingBottom = '7px'
+    const p = mount()
+    expect(document.body.style.paddingBottom).toBe('7px')
+
+    button(p.root, 'transport-io').click()
+    const panel = p.root.querySelector<HTMLElement>('.panel')
+    expect(document.body.style.paddingBottom).toBe(`${panel?.offsetHeight ?? -1}px`)
+
+    button(p.root, 'Close').click()
+    expect(document.body.style.paddingBottom).toBe('7px')
+
+    // Unmounting an open panel is a close as well.
+    button(p.root, 'transport-io').click()
+    p.unmount()
+    expect(document.body.style.paddingBottom).toBe('7px')
+    document.body.style.paddingBottom = ''
+  })
+})
+
 describe('unmounting', () => {
   test('removes the host and stops observing', () => {
     const p = mount({ open: true })

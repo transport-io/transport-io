@@ -60,7 +60,8 @@ await client.connect()
 `mountPanel(client, options?)` puts a launcher in the bottom right corner of the page, which
 opens the panel, and returns the unmount. It reads no environment, so whether a build gets a
 panel is the line you wrote. Mount it before `connect()` and the handshake is the first thing
-it shows.
+it shows. The open panel sits along the bottom of the window and pads the page by its own
+height, so a control it would have covered is a scroll away.
 
 That condition keeps the panel off the page in production, and its code is still in the
 bundle. Import it where the condition is, and it becomes a chunk of its own that only your

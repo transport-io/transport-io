@@ -490,6 +490,22 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
     paintSide(state)
   }
 
+  // The panel is fixed along the bottom of the window, so while it is open the page gets
+  // that much padding under it, and a control the panel would have covered can be scrolled
+  // to instead. The padding the page had is put back when the panel closes.
+  let pagePadding: string | null = null
+  const reserve = (): void => {
+    const body = host.ownerDocument.body
+    if (open) {
+      if (pagePadding === null) pagePadding = body.style.paddingBottom
+      const height = `${panel.offsetHeight}px`
+      if (body.style.paddingBottom !== height) body.style.paddingBottom = height
+    } else if (pagePadding !== null) {
+      body.style.paddingBottom = pagePadding
+      pagePadding = null
+    }
+  }
+
   // ---------------------------------------------------------------- wiring
   // What somebody clicked is painted at once: the pacing is for traffic, not for a button.
   const setOpen = (next: boolean): void => {
@@ -497,6 +513,7 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
     // Rows that arrived while closed were never painted, so the list starts over.
     paintedEpoch = -1
     paint()
+    reserve()
   }
   launcher.addEventListener('click', () => setOpen(true))
   close.addEventListener('click', () => setOpen(false))
@@ -543,12 +560,14 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
   // rarely a multiple of a row, and the row cut by the top edge showed as a few pixels of
   // text under the column names. An observer is told after layout, so reading a height here
   // forces nothing, and it runs when the panel opens or the window changes, never per frame.
+  // The same resize moves the panel's edge, so the page's padding follows it here too.
   const fit =
     typeof ResizeObserver === 'function'
       ? new ResizeObserver(() => {
           const room = frames.clientHeight - head.offsetHeight - 2 * ROWS_MARGIN
           const height = `${Math.max(1, Math.floor(room / ROW_HEIGHT)) * ROW_HEIGHT}px`
           if (rowsEl.style.height !== height) rowsEl.style.height = height
+          reserve()
         })
       : undefined
   fit?.observe(frames)
@@ -556,12 +575,15 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
   const unsubscribe = store.subscribe(paint)
   ;(options.target ?? document.body).append(host)
   paint()
+  reserve()
 
   return () => {
     fit?.disconnect()
     clearTimeout(relabel)
     unsubscribe()
     store.destroy()
+    open = false
+    reserve()
     host.remove()
   }
 }
