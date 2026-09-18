@@ -4525,3 +4525,28 @@ repository's to make.
 **Reconsider when:** somebody runs the CA path for a hostname end to end, at which point the
 certificates guide's third column stops being unrun and earns a runbook written from what
 happened, the way the deploying guide was.
+
+### D155. The demo recording plan is retired: the slot it was written for is gone
+`site/DEMO.md` was the plan for an eleven-second loop of `/agents.html`: the shot list, the
+frame that carried it, the capture format, the `ffmpeg` line, and where to drop the file.
+Its last paragraph said what the recording was for: a placeholder on the landing page, with
+the `<video>` element commented beside it, to be replaced once the file existed. Nothing was
+ever recorded.
+
+**Why it goes.** The placeholder is gone. The landing page's `tio-demo-slot` holds one
+paragraph now, the command that runs the demo locally and the sentence that there is no live
+one, and no `<video>` element or comment is anywhere near it. The job the recording was to
+do, showing what is hard to believe from prose, is done by still pictures: the hero's
+`assets/demo/two-streams.png`, two streams on one session with one stopped and the other
+counting past it, and the devtools panel's own pictures in its guide. A plan for a file that
+nothing on the site can hold is an instruction nobody can follow, and this repository keeps
+records and instructions apart.
+
+**What was kept.** `e2e/two-streams-one-session.spec.ts` still holds the claim the recording
+was to show, with the bound the plan cited, and `examples/chat/agents.ts` still paces from
+the token index, so two runs are identical. Both predate the plan's retirement and neither
+depended on it. The plan itself is in history: `git show f5b55f2:site/DEMO.md`, and
+`git checkout f5b55f2 -- site/DEMO.md` brings it back.
+
+**Reconsider when:** the landing page gets a slot for moving pictures again, at which point
+the shot list is the starting point and the format table is still right.
