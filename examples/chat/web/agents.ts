@@ -1,3 +1,4 @@
+import { mountPanel } from '@transport-io/devtools'
 import { Client, type TransportError } from 'transport-io'
 import { connectDev } from 'transport-io/dev-transport'
 import { AGENTS } from '../agents.ts'
@@ -21,6 +22,10 @@ function setLive(id: string, streaming: boolean) {
 
 // new Client, so the page can show "connecting"
 const client = new Client<ChatMap>({ contract, connect: () => connectDev() })
+
+// the devtools panel, on your own machine only
+if (['localhost', '127.0.0.1'].includes(location.hostname))
+  mountPanel(client, { preview: true })
 
 client.subscribe(() => {
   const s = client.getSnapshot()

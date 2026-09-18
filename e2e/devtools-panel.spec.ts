@@ -77,6 +77,40 @@ test('the panel shows a call, an emit and a datagram as they cross the wire', as
   await context.close()
 })
 
+test('on the agents page the panel lists both open streams, and a stopped one closes', async ({
+  page,
+}) => {
+  await page.goto('/agents.html')
+  await expect(page.locator('#status')).toHaveText('connected', { timeout: 20_000 })
+  await expect(page.locator('#open')).toHaveText('2', { timeout: 15_000 })
+  await panel(page).locator('.launcher').click()
+
+  // Two `stream()` calls on one session: two open rows, and two entries in the side column,
+  // each on its own stream. The kind and event columns are adjacent, so the pattern cannot
+  // match a word the answer happens to contain.
+  const streams = panel(page).locator('.side .row').filter({ hasText: 'generate' })
+  await expect(streams).toHaveCount(2)
+  await expect(rows(page).filter({ hasText: /\bopen\s+generate\b/ })).toHaveCount(2)
+  const ids = await streams.allInnerTexts()
+  expect(ids[0]?.split(' ')[0]).not.toBe(ids[1]?.split(' ')[0])
+
+  // The words come back one response frame each, with the word in the preview.
+  await expect(
+    rows(page)
+      .filter({ hasText: /\bresponse\s+generate\b/ })
+      .nth(3),
+  ).toBeVisible({
+    timeout: 15_000,
+  })
+
+  // Stopping one is a close row for that stream and one entry fewer, and the other is
+  // still listed.
+  await page.click('#a-stop')
+  await expect(page.locator('#a-state')).toHaveText('stopped', { timeout: 5_000 })
+  await expect(rows(page).filter({ hasText: /\bclose\s+generate\b/ })).toHaveCount(1)
+  await expect(streams).toHaveCount(1)
+})
+
 test('the React mount leaves one open panel under StrictMode, and it sees the session', async ({
   page,
 }) => {
