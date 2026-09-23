@@ -132,6 +132,46 @@ describe('reconnect', () => {
     client.disconnect()
   })
 
+  test("a connect that throws its own error is retried, with it on lastError's cause", async () => {
+    // The deploying guide's shape: `connect` fetches a token first and throws when the
+    // endpoint refuses, which is not a transport failure and not a refusal from `authorize`.
+    let signedOut = 2
+    const far = await farEnd()
+    const thrown: Error[] = []
+    const connect = async () => {
+      if (far.connects.length > 0 && signedOut > 0) {
+        signedOut--
+        const e = new Error('/api/session answered 401')
+        thrown.push(e)
+        throw e
+      }
+      return far.connect()
+    }
+    const client = new Client<AppMap>({
+      contract,
+      connect,
+      reconnect: { minMs: 10, maxMs: 20 },
+    })
+    const errors: unknown[] = []
+    client.subscribe(() => {
+      const e = client.getSnapshot().lastError
+      if (e !== null && !errors.includes(e)) errors.push(e)
+    })
+    await client.connect()
+    await wait(10)
+    far.peers[0]?.close(CloseCode.WT_NO_ERROR, 'server side')
+    await wait(150)
+
+    expect(client.getSnapshot().status).toBe('connected')
+    // The drop itself has no error, so each one here is a throw from `connect`.
+    expect(errors).toHaveLength(2)
+    for (const [i, e] of errors.entries()) {
+      expect((e as TransportError).code).toBe('WT_SESSION_CLOSED')
+      expect((e as TransportError).cause).toBe(thrown[i])
+    }
+    client.disconnect()
+  })
+
   test('disconnect() stops a reconnect that is waiting, and none follow', async () => {
     const { peers, connect, connects } = await farEnd()
     const client = new Client<AppMap>({

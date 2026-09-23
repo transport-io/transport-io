@@ -181,8 +181,10 @@ import { type AppMap, contract } from './contract.ts'
 
 async function connect() {
   const session = await fetch('/api/session')
+  if (!session.ok) throw new Error(`/api/session answered ${session.status}`)
   const { token } = (await session.json()) as { token: string }
   const transport = await fetch('/api/transport')
+  if (!transport.ok) throw new Error(`/api/transport answered ${transport.status}`)
   const { url, sha256 } = (await transport.json()) as { url: string; sha256: string }
 
   const target = new URL(url)
@@ -201,6 +203,12 @@ export const client = new Client<AppMap>({
   reconnect: { minMs: 500, maxMs: 30_000 },
 })
 ```
+
+**What `connect` throws is the reason the page sees.** It rejects that attempt, and
+`lastError` has it on `cause` under `WT_SESSION_CLOSED`, so a signed-out user shows up as
+`/api/session answered 401` and not as a transport failure. The library logs nothing. With
+`reconnect`, a throw is retried on the same schedule, and only a refusal from `authorize`
+stops it, so a page that knows its user signed out calls `disconnect()`.
 
 [Authenticating a peer](/guides/authorize/) has the server side, and why the token has to be
 short-lived.
