@@ -1,5 +1,14 @@
 # @transport-io/devtools
 
+## 0.1.4
+
+### Patch Changes
+
+- 47f1615: Copy rows puts `lastError` in its header, on a line of its own between the connection and
+  the counters: the code, what was thrown or, with no cause, what the error says, and the
+  remedy. `no lastError` when there is none, so the header is three lines every time.
+  `formatRows` produces the same text.
+
 ## 0.1.3
 
 ### Patch Changes
