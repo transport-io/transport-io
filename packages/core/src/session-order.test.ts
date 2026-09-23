@@ -113,8 +113,13 @@ describe('the client', () => {
     client.disconnect()
   })
 
-  test('a callback that throws does not leave the session holding', async () => {
-    const conn = await peerInOneRead()
+  test('a callback that throws ends the session, so it neither holds nor delivers', async () => {
+    const closes: string[] = []
+    const conn = Object.assign(await peerInOneRead(), {
+      close: (_code: number, reason: string) => {
+        closes.push(reason)
+      },
+    })
     const client = new Client<AppMap>({ contract, connect: async () => conn })
     const seen: number[] = []
     client.onSession(() => {
@@ -123,8 +128,11 @@ describe('the client', () => {
     client.on('line', ({ n }) => seen.push(n))
     await client.connect().catch(() => undefined)
     await wait(10)
-    expect(seen).toEqual([1, 2])
-    client.disconnect()
+    // It released the session instead, and these arrived under a snapshot that said `closed`
+    // (D156).
+    expect(seen).toEqual([])
+    expect(closes).toEqual(['session setup failed'])
+    expect(client.getSnapshot().status).toBe('closed')
   })
 
   test('over the loopback too, with a server that emits from its own onSession', async () => {

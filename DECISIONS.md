@@ -4645,3 +4645,19 @@ thrown that nothing had checked, and retrying a `TypeError` from a missing API t
 again. It now says that `cause` is what was thrown, and nothing about what to do. The library
 still logs nothing: the consumer asked for console output, and the answer is that `lastError`
 is how an application learns this, and now it tells the truth.
+
+**An `onSession` callback that throws ends the session.** It ran after the handshake with its
+throw rethrown to `connect()`, whose catch wrote `closed` and the error to the snapshot, while
+the session stayed adopted and open: `emit` still reached the server, and the snapshot said
+`closed`. That is the same lie as the one above, a state that says something nothing checked.
+The callbacks now run inside the `try` that already closed a session whose handshake failed,
+so a throw closes this one too, with the reason `session setup failed`, which is true of both.
+`#attempt` resets after the callbacks rather than before, so a callback that throws on every
+session backs off like any other failed attempt. One test pinned the old behaviour, from the
+commit that made `onSession` run before delivery: a throwing callback released the session
+and its two events were delivered. Its concern was a session left holding for ever, and a
+closed session cannot hold, so it now asserts that nothing is delivered and the session is
+closed.
+
+Its bytes were found in the same change: sharing the handshake's catch rather than adding a
+second one put all of D156's fixes at exactly 13,810 in the entry chunk.

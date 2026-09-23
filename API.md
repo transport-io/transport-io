@@ -508,7 +508,8 @@ fetched. It runs before anything from that session reaches a handler: the client
 the server sent after its handshake until every callback has returned, so state a callback
 clears before its first `await` is cleared before the session's first event. The server's
 `onSession` has the same guarantee, so a handler registered there cannot miss the peer's
-first event.
+first event. A callback that throws ends that session: `connect()` rejects, the status is
+`closed`, and `lastError` has what was thrown on `cause`.
 
 `reconnect: { minMs, maxMs }` in `ClientOptions` makes the client come back on its own after
 a connected session closes: a wait of `minMs`, doubled on each failed attempt up to `maxMs`

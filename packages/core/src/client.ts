@@ -430,29 +430,29 @@ export class Client<M extends AnyMap = Registered> {
 
     try {
       await session.start()
+      this.#patch({
+        status: 'connected',
+        sessionId: `s-${session.origin}`,
+        transport: conn.kind(),
+        fallbackReason,
+      })
+      // Nothing from this session reaches a handler until every `onSession` callback has
+      // returned: the session holds what the peer sent after its handshake.
+      for (const cb of this.#onSession) cb(this.#snapshot)
     } catch (e) {
-      // A session that never started is nobody's session. Left in place it answered `emit`
-      // by dropping, where a client with no session throws. `close` is idempotent, so a
-      // session the peer or the deadline already closed is not closed twice.
-      session.close(CloseCode.WT_NO_ERROR, 'handshake failed')
+      // A session that never started, or whose `onSession` callback threw, is nobody's
+      // session. Left in place, the first answered `emit` by dropping where a client with no
+      // session throws, and the second was reported `closed` while `emit` still reached the
+      // server (D156). `close` is idempotent, so a session the peer or the deadline already
+      // closed is not closed twice.
+      session.close(CloseCode.WT_NO_ERROR, 'session setup failed')
       if (this.#session === session) this.#session = undefined
       throw e
     }
+    // After `onSession`, so a callback that throws on every session backs off like any
+    // other failed attempt instead of retrying at the shortest wait for ever.
     this.#attempt = 0
-    this.#patch({
-      status: 'connected',
-      sessionId: `s-${session.origin}`,
-      transport: conn.kind(),
-      fallbackReason,
-    })
-    // Nothing from this session reaches a handler until every `onSession` callback has
-    // returned: the session holds what the peer sent after its handshake. Released in a
-    // `finally`, so a callback that throws does not leave the session holding for ever.
-    try {
-      for (const cb of this.#onSession) cb(this.#snapshot)
-    } finally {
-      session.release()
-    }
+    session.release()
 
     void conn.closed.then((info) => {
       // Superseded by a disconnect or a newer connect: that path patched its own state.

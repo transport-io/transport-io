@@ -13,7 +13,7 @@ import { defineContract, type MapOf, reliable } from './contract.ts'
 import type { TransportError } from './errors.ts'
 import { createServer } from './server.ts'
 import { loopbackPair } from './transport/loopback.ts'
-import type { Connection } from './transport/types.ts'
+import type { CloseInfo, Connection } from './transport/types.ts'
 
 const contract = defineContract({ chat: reliable<{ body: string }>() })
 interface AppMap extends MapOf<typeof contract> {}
@@ -96,5 +96,37 @@ describe('an attempt superseded by disconnect() and a newer connect()', () => {
     expect(client.getSnapshot().status).toBe('connected')
     client.disconnect()
     client.disconnect()
+  })
+})
+
+describe('an onSession callback that throws', () => {
+  test('ends the session it was given, so the closed the snapshot says is true', async () => {
+    const server = createServer<AppMap>({ contract })
+    await server.listen()
+    let received = 0
+    const peerClosed = new Promise<CloseInfo>((resolve) => {
+      server.onSession((peer) => {
+        peer.on('chat', () => {
+          received++
+        })
+        void peer.closed.then(resolve)
+      })
+    })
+    const [serverSide, clientSide] = loopbackPair()
+    void server.accept(serverSide).catch(() => undefined)
+    const client = new Client<AppMap>({ contract, connect: async () => clientSide })
+    const thrown = new Error('the rejoin failed')
+    client.onSession(() => {
+      throw thrown
+    })
+
+    const err = await rejection(client.connect())
+    expect(err.cause).toBe(thrown)
+    expect(client.getSnapshot().status).toBe('closed')
+    expect(client.getSnapshot().lastError).toBe(err)
+    // It said `closed` while this still reached the server.
+    expect(() => client.emit('chat', { body: 'after the throw' })).toThrow('not connected')
+    expect((await peerClosed).reason).toBe('session setup failed')
+    expect(received).toBe(0)
   })
 })
