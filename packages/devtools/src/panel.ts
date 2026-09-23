@@ -16,13 +16,14 @@
  * Every string a peer controls, an event name or a payload preview, reaches the page through
  * `textContent`. None of it is ever parsed as markup.
  */
-import type { FrameRecord, TransportError } from 'transport-io'
+import type { FrameRecord } from 'transport-io'
 import {
   clock,
   createStore,
   type ObservableClient,
   type PanelState,
   type PanelStore,
+  reasonOf,
   type StoreOptions,
 } from './store.ts'
 
@@ -188,19 +189,6 @@ function el<K extends keyof HTMLElementTagNameMap>(
   if (className !== undefined) node.className = className
   if (text !== undefined) node.textContent = text
   return node
-}
-
-/**
- * The sentence between the code and the remedy. `TransportError` joins the three into
- * `message` as `code: sentence - remedy`, and the code and the remedy are shown on their own.
- */
-function sentenceOf(e: TransportError): string {
-  const head = `${e.code}: `
-  const tail = ` - ${e.remedy}`
-  let text = e.message
-  if (text.startsWith(head)) text = text.slice(head.length)
-  if (text.endsWith(tail)) text = text.slice(0, -tail.length)
-  return text
 }
 
 /** A write is a style and layout invalidation, so a label that did not change is left alone. */
@@ -511,9 +499,9 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
     why.hidden = err === null || !expanded
     if (err !== null) {
       say(error, err.code)
-      // What was thrown, where there is a cause, and otherwise what the error itself says.
-      say(causeLabel, err.cause === undefined ? 'what' : 'cause')
-      say(causeText, err.cause === undefined ? sentenceOf(err) : String(err.cause))
+      const [label, text] = reasonOf(err)
+      say(causeLabel, label)
+      say(causeText, text)
       say(remedyText, err.remedy)
     }
     for (const [key] of counterNames) {

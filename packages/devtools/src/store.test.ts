@@ -15,6 +15,7 @@ import {
   rpc,
   type SessionStats,
   streaming,
+  TransportError,
   unreliable,
 } from 'transport-io'
 import { loopbackPair } from 'transport-io/testing'
@@ -332,14 +333,47 @@ describe('copying rows', () => {
 
     expect(store.copy().split('\n')).toEqual([
       'transport-io devtools: connected, webtransport, s-1',
+      'no lastError',
       'queueDepth 0, overflowDropped 0, staleDropped 0, staleReceived 0, directionDropped 0',
       'time\tsession\tdir\tlane\tkind\tevent\tstream\tsize\tseq\tpreview',
       '12:00:00.005\t1\tin\treliable\temit\tchat\t0\t21\t-\t',
       '12:00:01.250\t1\tout\tunreliable\tdatagram\tcursor\t-\t40\t7\t{"x":1}',
     ])
     // The newest rows, when the list shows fewer than the ring holds.
-    expect(store.copy(1).split('\n')).toHaveLength(4)
-    expect(formatRows(store.getSnapshot(), 0).split('\n')).toHaveLength(3)
+    expect(store.copy(1).split('\n')).toHaveLength(5)
+    expect(formatRows(store.getSnapshot(), 0).split('\n')).toHaveLength(4)
+  })
+
+  test('a failed connect is in the header: the code, what was thrown, and the remedy', () => {
+    const c = fake()
+    const store = createStore(c.client, { schedule: frames().schedule })
+    const closed = { ...connected, status: 'closed' as const, transport: null, sessionId: null }
+    c.setState({
+      ...closed,
+      lastError: new TransportError(
+        'WT_SESSION_CLOSED',
+        "TypeError: Cannot read properties of undefined (reading 'digest')",
+        'Read `cause`, which is what was thrown.',
+        new TypeError("Cannot read properties of undefined (reading 'digest')"),
+      ),
+    })
+    expect(store.copy().split('\n').slice(0, 2)).toEqual([
+      'transport-io devtools: closed, no transport, no session',
+      "lastError: WT_SESSION_CLOSED; cause: TypeError: Cannot read properties of undefined (reading 'digest'); remedy: Read `cause`, which is what was thrown.",
+    ])
+
+    // With no cause, the error's own sentence, without the code and remedy it already shows.
+    c.setState({
+      ...closed,
+      lastError: new TransportError(
+        'WT_UDP_UNREACHABLE',
+        'the server answers over HTTPS but the WebTransport handshake failed',
+        'Open UDP to the port.',
+      ),
+    })
+    expect(store.copy().split('\n')[1]).toBe(
+      'lastError: WT_UDP_UNREACHABLE; what: the server answers over HTTPS but the WebTransport handshake failed; remedy: Open UDP to the port.',
+    )
   })
 })
 

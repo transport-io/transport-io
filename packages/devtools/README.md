@@ -101,8 +101,8 @@ every `kind`.
 
 **Pause** stops keeping records, so the rows you are reading are not overwritten, and counts
 what it skipped. **Filter** by event or by lane. **Copy rows** puts the visible rows on the
-clipboard as text, under two lines that say what they were taken from, which is what to paste
-into an issue.
+clipboard as text, under three lines that say what they were taken from, `lastError` among
+them, which is what to paste into an issue.
 
 ## What will bite you
 

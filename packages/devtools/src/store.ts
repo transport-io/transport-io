@@ -16,6 +16,7 @@ import type {
   FrameRecord,
   ObserveOptions,
   SessionStats,
+  TransportError,
 } from 'transport-io'
 
 /** What the store needs of a client. `Client` and `FallbackClient` both are one. */
@@ -320,8 +321,24 @@ export function clock(at: number): string {
 }
 
 /**
- * The visible rows as tab-separated text, under two lines that say what they were taken
- * from. It is what gets pasted into an issue, so it has to stand on its own there.
+ * What `lastError` says beyond its code and remedy: what was thrown, where there is a cause,
+ * and otherwise its own sentence. `TransportError` joins code, sentence and remedy into
+ * `message` as `code: sentence - remedy`, and the code and remedy are shown on their own.
+ */
+export function reasonOf(e: TransportError): readonly ['cause' | 'what', string] {
+  if (e.cause !== undefined) return ['cause', String(e.cause)]
+  const head = `${e.code}: `
+  const tail = ` - ${e.remedy}`
+  let text = e.message
+  if (text.startsWith(head)) text = text.slice(head.length)
+  if (text.endsWith(tail)) text = text.slice(0, -tail.length)
+  return ['what', text]
+}
+
+/**
+ * The visible rows as tab-separated text, under three lines that say what they were taken
+ * from: the connection, its `lastError`, and the counters. It is what gets pasted into an
+ * issue, so it has to stand on its own there, and a failed connect is the issue most often.
  */
 export function formatRows(state: PanelState, limit: number = state.rows.length): string {
   const c = state.connection
@@ -330,6 +347,10 @@ export function formatRows(state: PanelState, limit: number = state.rows.length)
     `transport-io devtools: ${c.status}, ${c.transport ?? 'no transport'}` +
       (c.fallbackReason === null ? '' : ` (fallback: ${c.fallbackReason})`) +
       `, ${c.sessionId ?? 'no session'}`,
+    c.lastError === null
+      ? 'no lastError'
+      : `lastError: ${c.lastError.code}; ${reasonOf(c.lastError).join(': ')}; ` +
+        `remedy: ${c.lastError.remedy}`,
     s === null
       ? 'no session counters'
       : `queueDepth ${s.queueDepth}, overflowDropped ${s.overflowDropped}, staleDropped ` +

@@ -438,10 +438,11 @@ describe('pause, filter, copy', () => {
     await Promise.resolve()
     const lines = written[0]?.split('\n') ?? []
     expect(lines[0]).toContain('transport-io devtools: connected, webtransport, s-7')
-    // Two header lines, the column names, then the two rows the list shows.
-    expect(lines).toHaveLength(5)
-    expect(lines[3]).toContain('\tb\t')
-    expect(lines[4]).toContain('\tc\t')
+    expect(lines[1]).toBe('no lastError')
+    // Three header lines, the column names, then the two rows the list shows.
+    expect(lines).toHaveLength(6)
+    expect(lines[4]).toContain('\tb\t')
+    expect(lines[5]).toContain('\tc\t')
   })
 })
 
