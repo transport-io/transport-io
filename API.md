@@ -490,7 +490,9 @@ void status
 `transport` is what carries the current session, `null` until connected. `fallbackReason`
 says why that session is on a fallback transport, and is `null` on a native one. `lastError`
 is why the last attempt failed or the last session closed, where the close code was an
-error. `refused` is `{ reason }` when the server's `authorize` refused this client, beside a
+error. Anything thrown before the handshake that is not a `TransportError`, by a connector
+or a subscriber, is there as `WT_SESSION_CLOSED` with what was thrown on `cause`; the library
+logs nothing, so this is where an application learns it. `refused` is `{ reason }` when the server's `authorize` refused this client, beside a
 `status` of `closed`, and `null` otherwise (§3.3); both clear when the next attempt starts.
 
 **`getSnapshot()` returns the same reference until something changes**, so it is safe to hand

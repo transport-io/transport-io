@@ -4628,3 +4628,20 @@ handshake over the WebSocket fallback with a Node server.
 
 `fallbackReason` is `unsupported` there, which is what a runtime with no WebTransport already
 meant. No new member was needed, so no consumer's exhaustive switch breaks.
+
+**The connect path.** Every throw between `connect()` and the handshake rejects `connect()`
+and lands in `lastError`, and three places where that was not so are fixed. The first write
+of the attempt, `connecting`, ran before the `try`, so a subscriber that threw there rejected
+`connect()` with no `lastError` and left the status at `connecting`. A throw that was not a
+`TransportError` was wrapped with no `cause`; it keeps it now. And an attempt superseded by
+`disconnect()` and a newer `connect()`, the shape StrictMode produces on every mount, wrote
+`closed` and its error over the newer attempt that was still connecting, while `connect()`'s
+own catch cleared the newer attempt, so a third `connect()` started another beside it.
+
+The code stays `WT_SESSION_CLOSED`. A code for this one case would widen
+`TransportErrorCode`, which breaks an exhaustive switch in consumer code and makes the fix a
+minor. What changed is the remedy: "Retry the connection." claimed something about what was
+thrown that nothing had checked, and retrying a `TypeError` from a missing API throws it
+again. It now says that `cause` is what was thrown, and nothing about what to do. The library
+still logs nothing: the consumer asked for console output, and the answer is that `lastError`
+is how an application learns this, and now it tells the truth.

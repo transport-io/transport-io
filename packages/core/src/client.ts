@@ -176,11 +176,14 @@ export class Client<M extends AnyMap = Registered> {
    *  down, which matters because React StrictMode mounts twice in development. */
   async connect(): Promise<void> {
     this.#refs++
-    if (this.#connecting === undefined) this.#connecting = this.#doConnect()
+    this.#connecting ??= this.#doConnect()
+    const attempt = this.#connecting
     try {
-      await this.#connecting
+      await attempt
     } catch (e) {
-      this.#connecting = undefined
+      // Only this attempt's: after `disconnect()` and a newer `connect()`, clearing it would
+      // let a third `connect()` start an attempt beside the one in flight.
+      if (this.#connecting === attempt) this.#connecting = undefined
       throw e
     }
   }
@@ -291,9 +294,11 @@ export class Client<M extends AnyMap = Registered> {
   }
 
   async #doConnect(): Promise<void> {
-    this.#patch({ status: 'connecting', lastError: null, refused: null })
     const generation = this.#generation
+    // Everything from here to the handshake is inside the `try`, this first write included: a
+    // subscriber that throws on it left the status at `connecting` with no `lastError`.
     try {
+      this.#patch({ status: 'connecting', lastError: null, refused: null })
       const table = await buildEventTable(this.#opts.contract)
       const fallback = fallbacks.get(this)
 
@@ -348,11 +353,22 @@ export class Client<M extends AnyMap = Registered> {
         }
       }
     } catch (e) {
+      // Anything that is not a `TransportError` is not a statement about the transport, so
+      // the remedy says where the real error is rather than what to do about it (D156).
       const err =
         e instanceof TransportError
           ? e
-          : new TransportError('WT_SESSION_CLOSED', String(e), 'Retry the connection.')
-      this.#patch({ status: 'closed', lastError: err, refused: refusedBy(err) })
+          : new TransportError(
+              'WT_SESSION_CLOSED',
+              String(e),
+              'Read `cause`, which is what was thrown.',
+              e,
+            )
+      // Superseded by `disconnect()`: the snapshot is the newer state's, and this attempt's
+      // failure is its own caller's rejection and nothing more.
+      if (generation === this.#generation) {
+        this.#patch({ status: 'closed', lastError: err, refused: refusedBy(err) })
+      }
       throw err
     }
   }

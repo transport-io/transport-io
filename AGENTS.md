@@ -182,7 +182,8 @@ where `status` is `'idle' | 'connecting' | 'connected' | 'closing' | 'closed'`, 
 `'webtransport' | 'websocket' | null`, `fallbackReason` is
 `'unsupported' | 'unreachable' | null`, and `refused` is `{ reason: string } | null`: set when
 the server's `authorize` refused this client, beside `status: 'closed'`. `lastError` is why
-the last attempt failed or why the last session closed.
+the last attempt failed or why the last session closed; a throw that is not a
+`TransportError` arrives as `WT_SESSION_CLOSED` with it on `cause`. The library logs nothing.
 
 ## Server
 
