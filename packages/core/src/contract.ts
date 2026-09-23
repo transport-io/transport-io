@@ -421,12 +421,17 @@ export interface EventTable {
 /**
  * PROTOCOL.md §5.4 - the first four bytes of SHA-256 of the event name, big-endian.
  *
- * Async because `crypto.subtle` is, and because writing SHA-256 by hand would mean typing
- * its round constants from memory, which is the one thing D58 forbids. Both `connect()`
- * and `listen()` are already async, so the table is built once at session start.
+ * `crypto.subtle` where there is one. A page that is not a secure context, `http` on any
+ * host but loopback, has none, and there the digest comes from `@noble/hashes`, loaded on
+ * demand so no other page pays for it (D156). Writing SHA-256 by hand would mean typing its
+ * round constants from memory, which is the one thing D58 forbids. Async because both are,
+ * and `connect()` and `listen()` already are, so the table is built once at session start.
  */
 export async function eventIdOf(name: string): Promise<number> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(name))
+  const bytes = new TextEncoder().encode(name)
+  const digest = crypto.subtle
+    ? await crypto.subtle.digest('SHA-256', bytes)
+    : (await import('./sha256.ts')).sha256(bytes)
   return new DataView(digest).getUint32(0, false)
 }
 

@@ -224,6 +224,11 @@ does not depend on it; with a WebSocket configured, the WebSocket handshake is t
 - **A dead path takes up to 45 seconds to notice.** Each side sends a keepalive after 15
   seconds of silence and closes the session after 45 seconds without a message. Keep any
   proxy's idle timeout above 15 seconds, or it closes quiet sessions first.
+- **A page that is not a secure context is always on it.** `http` on any host but loopback,
+  a LAN address for one, has no WebTransport, so every connect from it takes the fallback,
+  with `fallbackReason: 'unsupported'`. It has no `crypto.subtle` either, so the page loads a
+  SHA-256 on demand for the event ids, about 2.6 KB gzipped. A bundler that does not split
+  dynamic imports puts that in every page's bundle instead.
 - **Safari reaches it after 5 seconds.** Safari establishes a WebTransport session and never
   sends, so the fallback engages when the handshake deadline passes, on every connect and
   every reconnect. Emits only, as everywhere on the fallback.

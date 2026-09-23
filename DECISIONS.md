@@ -4587,3 +4587,44 @@ whatever it imports statically, and chunks reached only dynamically have a ceili
 own. The method changed in the same round as what it measures, so it was proven first, on the
 base commit be56030 before any fix: the old method and the new one produced the same 39,659
 minified bytes, byte for byte by SHA-256, and 13,810 gzipped, the ceiling.
+
+**Event ids without `crypto.subtle`.** `eventIdOf` uses `crypto.subtle` where there is one,
+and otherwise `sha256` from `@noble/hashes`, pinned at exactly 2.4.0: MIT, no dependencies,
+no install script, its tarball's SHA-1 checked against the registry's. D58 rules out a
+hand-written SHA-256, and a vetted one is what D58 asks for. Measured with the gate's own
+bundler, gzipped, against the entry chunk:
+
+| | entry chunk | loaded on demand |
+| --- | --- | --- |
+| the library imported statically | +2,569 | none |
+| `import('@noble/hashes/sha2.js')` when `crypto.subtle` is absent | +46 | 5,421 |
+| `import('./sha256.ts')`, a module that imports only `sha256` | +45 | 2,642 |
+
+The third, with the module returning the `ArrayBuffer` that `crypto.subtle.digest` resolves
+to so the entry reads both one way, cost the entry 31 and the chunk 2,655. Only a page with
+no `crypto.subtle` requests that chunk; every other page pays the 31. A bundler that does not
+split dynamic imports inlines the chunk, and the fallback guide says so. A page that imports
+the built package as native ESM with no bundler, on an origin that is not a secure context,
+cannot resolve `@noble/hashes` without an import map, and `connect()` then rejects with that
+`TypeError` on `cause`; the demo imports the package that way, and only on loopback.
+
+The 31 were paid for first, in a commit of their own, so the ceiling stayed at 13,810: the
+client had spread each of the four options it shares with the session behind its own
+`=== undefined ? {} : {…}`, and it now hands its options to the session whole. The session
+reads each of those four with `??`, so absent and `undefined` are the same, and it reads
+nothing else of what is spread in. That took the entry from 13,810 to 13,759. Two other
+candidates were measured and dropped, because gzip had already folded the repetition they
+removed: one constant for the fields a closed snapshot clears, 65 bytes smaller minified and
+5 larger gzipped, and one method each for the three guards `emit`, `call` and `stream` share,
+547 smaller minified and 8 larger gzipped.
+
+The ids must not change by a byte: the handshake exchanges `[name, id, lane]`, and a server
+computes its own with `crypto.subtle`. Five vectors, pinned with `shasum -a 256` rather than
+with either implementation, are asserted through both paths: `chat`, `cursor`, `café` for
+two bytes of UTF-8, `🚀 launch` for four, and a name longer than one 64-byte SHA-256 block. A
+page with no `crypto.subtle` builds the same `wire()` as the server, and a Chromium page on a
+hostname that is not loopback requests the chunk, builds that `wire()`, and completes a
+handshake over the WebSocket fallback with a Node server.
+
+`fallbackReason` is `unsupported` there, which is what a runtime with no WebTransport already
+meant. No new member was needed, so no consumer's exhaustive switch breaks.

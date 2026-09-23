@@ -34,12 +34,17 @@ import { gzipSync } from 'fflate'
 /**
  * Gzipped bytes, measured with this script on 2026-09-17: 12,803 at e288d12, before the
  * observer seam, and 13,810 with it. The seam is 1,007 of them, for records of every frame,
- * every call stream and every drop. It started at 1,146; D149 has what came out.
+ * every call stream and every drop. It started at 1,146; D149 has what came out. Unchanged
+ * on 2026-09-23, when the SHA-256 fallback cost the entry 31 and 51 came out first (D156).
  */
 const CEILING = 13_810
 
-/** Gzipped bytes of every chunk loaded only through a dynamic `import()`. None is. */
-const LAZY_CEILING = 0
+/**
+ * Gzipped bytes of every chunk loaded only through a dynamic `import()`. One is, measured on
+ * 2026-09-23: SHA-256 from `@noble/hashes`, which only a page with no `crypto.subtle` loads,
+ * a page that is not a secure context. Every other page loads none of it (D156).
+ */
+const LAZY_CEILING = 2_655
 
 const core = resolve(process.argv[2] ?? 'packages/core')
 const index = resolve(core, 'dist/index.js')
