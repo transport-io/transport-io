@@ -87,8 +87,10 @@ export function Providers({ children }: { children: ReactNode }): ReactNode {
 it is connected, since it does the connecting itself in an effect, so the client has to exist
 synchronously inside the `useState` initialiser.
 
-`TransportProvider` connects while it is mounted. Pass `autoConnect={false}` to drive the
-connection yourself. `connect` and `disconnect` are refcounted in core, so two providers or a
+`TransportProvider` connects while it is mounted. It catches `connect()`'s rejection on
+purpose and reports it through `lastError`, so a component that shows `status` without
+`lastError` shows a failed connect as `closed` with no reason. Pass `autoConnect={false}` to
+drive the connection yourself. `connect` and `disconnect` are refcounted in core, so two providers or a
 StrictMode double mount cannot tear down each other's session.
 
 **Your `connect` function must be able to produce a new connection each time it is called.**
