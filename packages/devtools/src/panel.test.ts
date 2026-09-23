@@ -4,6 +4,7 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { ClientState, FrameObserver, FrameRecord, SessionStats } from 'transport-io'
+import { TransportError } from 'transport-io'
 import { mountPanel } from './panel.ts'
 import type { ObservableClient } from './store.ts'
 
@@ -17,8 +18,14 @@ const connected: ClientState = Object.freeze({
   fallbackReason: null,
 })
 
-function fake(): { client: ObservableClient; push: (r?: Partial<FrameRecord>) => void } {
+function fake(): {
+  client: ObservableClient
+  push: (r?: Partial<FrameRecord>) => void
+  setState: (next: Partial<ClientState>) => void
+} {
   const observers = new Set<FrameObserver>()
+  const listeners = new Set<() => void>()
+  let snapshot = connected
   const stats: SessionStats = {
     queueDepth: 2,
     overflowDropped: 3,
@@ -33,9 +40,16 @@ function fake(): { client: ObservableClient; push: (r?: Partial<FrameRecord>) =>
         observers.add(o)
         return () => void observers.delete(o)
       },
-      subscribe: () => () => undefined,
-      getSnapshot: () => connected,
+      subscribe: (l) => {
+        listeners.add(l)
+        return () => void listeners.delete(l)
+      },
+      getSnapshot: () => snapshot,
       stats: () => stats,
+    },
+    setState: (next) => {
+      snapshot = Object.freeze({ ...snapshot, ...next })
+      for (const l of listeners) l()
     },
     push: (r = {}) => {
       const record: FrameRecord = {
@@ -82,6 +96,7 @@ afterEach(() => {
 function mount(options: Parameters<typeof mountPanel>[1] = {}): {
   root: ShadowRoot
   push: (r?: Partial<FrameRecord>) => void
+  setState: (next: Partial<ClientState>) => void
   tick: () => void
   unmount: () => void
 } {
@@ -92,7 +107,7 @@ function mount(options: Parameters<typeof mountPanel>[1] = {}): {
   const host = document.querySelector('[data-transport-io-devtools]')
   const root = host?.shadowRoot
   if (root === null || root === undefined) throw new Error('the panel did not mount')
-  return { root, push: c.push, tick: f.tick, unmount }
+  return { root, push: c.push, setState: c.setState, tick: f.tick, unmount }
 }
 
 /** Oldest first, as they read on screen. The list is a reversed column in the document. */
@@ -280,6 +295,81 @@ describe('the brand', () => {
         contrast(scheme['accent'] as string, scheme['ground'] as string),
       ).toBeGreaterThanOrEqual(3)
     }
+  })
+})
+
+describe('lastError in the status line', () => {
+  const failed = new TransportError(
+    'WT_SESSION_CLOSED',
+    "TypeError: Cannot read properties of undefined (reading 'digest')",
+    'Read `cause`, which is what was thrown.',
+    new TypeError("Cannot read properties of undefined (reading 'digest')"),
+  )
+  const error = (root: ShadowRoot): HTMLButtonElement | null =>
+    root.querySelector<HTMLButtonElement>('button.error')
+  const why = (root: ShadowRoot): HTMLElement | null => root.querySelector<HTMLElement>('.why')
+  /** Each line under the bar as its label and its text. */
+  const lines = (root: ShadowRoot): string[][] =>
+    [...root.querySelectorAll('.why div')].map((d) =>
+      [...d.children].map((c) => c.textContent ?? ''),
+    )
+
+  test('nothing beside the status while there is no lastError', () => {
+    const p = mount({ open: true })
+    p.tick()
+    expect(error(p.root)?.hidden).toBe(true)
+    expect(why(p.root)?.hidden).toBe(true)
+  })
+
+  test('the code always, and the cause and remedy when it is opened', () => {
+    const p = mount({ open: true })
+    p.setState({ status: 'closed', transport: null, sessionId: null, lastError: failed })
+    p.tick()
+    expect(error(p.root)?.hidden).toBe(false)
+    expect(error(p.root)?.textContent).toBe('WT_SESSION_CLOSED')
+    expect(p.root.querySelector('.bar')?.textContent).toContain('closed')
+    expect(why(p.root)?.hidden).toBe(true)
+
+    error(p.root)?.click()
+    expect(error(p.root)?.getAttribute('aria-expanded')).toBe('true')
+    expect(why(p.root)?.hidden).toBe(false)
+    expect(lines(p.root)).toEqual([
+      ['cause', "TypeError: Cannot read properties of undefined (reading 'digest')"],
+      ['remedy', 'Read `cause`, which is what was thrown.'],
+    ])
+
+    error(p.root)?.click()
+    expect(why(p.root)?.hidden).toBe(true)
+  })
+
+  test('with no cause, what the error says in its place', () => {
+    const p = mount({ open: true })
+    p.setState({
+      status: 'closed',
+      lastError: new TransportError(
+        'WT_UDP_UNREACHABLE',
+        'the server answers over HTTPS but the WebTransport handshake failed',
+        'Open UDP to the port.',
+      ),
+    })
+    p.tick()
+    error(p.root)?.click()
+    // The code is on the button, so the sentence is shown without it, and without the remedy.
+    expect(lines(p.root)).toEqual([
+      ['what', 'the server answers over HTTPS but the WebTransport handshake failed'],
+      ['remedy', 'Open UDP to the port.'],
+    ])
+  })
+
+  test('it follows the snapshot: the next attempt clears it', () => {
+    const p = mount({ open: true })
+    p.setState({ status: 'closed', lastError: failed })
+    p.tick()
+    error(p.root)?.click()
+    p.setState({ status: 'connecting', lastError: null })
+    p.tick()
+    expect(error(p.root)?.hidden).toBe(true)
+    expect(why(p.root)?.hidden).toBe(true)
   })
 })
 

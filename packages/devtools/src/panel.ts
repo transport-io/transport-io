@@ -16,7 +16,7 @@
  * Every string a peer controls, an event name or a payload preview, reaches the page through
  * `textContent`. None of it is ever parsed as markup.
  */
-import type { FrameRecord } from 'transport-io'
+import type { FrameRecord, TransportError } from 'transport-io'
 import {
   clock,
   createStore,
@@ -137,6 +137,12 @@ const STYLE = `
 .counter b { color: var(--ink); font-weight: 600; }
 .counter[data-hot="true"] b { color: var(--accent-text); }
 .drops { color: var(--accent-text); }
+button.error { color: var(--accent-text); border-color: var(--accent); }
+.why { padding: 5px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
+  max-height: 9em; overflow: auto; }
+.why div { display: flex; gap: 12px; }
+.why .muted { flex: none; width: 6ch; }
+.why span:last-child { white-space: pre-wrap; overflow-wrap: anywhere; }
 .spacer { flex: 1; }
 button, select {
   font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line);
@@ -182,6 +188,19 @@ function el<K extends keyof HTMLElementTagNameMap>(
   if (className !== undefined) node.className = className
   if (text !== undefined) node.textContent = text
   return node
+}
+
+/**
+ * The sentence between the code and the remedy. `TransportError` joins the three into
+ * `message` as `code: sentence - remedy`, and the code and the remedy are shown on their own.
+ */
+function sentenceOf(e: TransportError): string {
+  const head = `${e.code}: `
+  const tail = ` - ${e.remedy}`
+  let text = e.message
+  if (text.startsWith(head)) text = text.slice(head.length)
+  if (text.endsWith(tail)) text = text.slice(0, -tail.length)
+  return text
 }
 
 /** A write is a style and layout invalidation, so a label that did not change is left alone. */
@@ -268,7 +287,22 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
   const counters = new Map<string, { wrap: HTMLElement; value: HTMLElement }>()
   const state = el('span', 'status')
   state.append(dot, status)
-  bar.append(lockup(), state, session)
+  // `lastError`'s code, always, and a button that opens its cause and remedy under the bar. A
+  // status of `closed` with no reason beside it is how a failed connect reads when only the
+  // status is shown (D156).
+  const error = el('button', 'error')
+  error.setAttribute('aria-expanded', 'false')
+  bar.append(lockup(), state, error, session)
+  const why = el('div', 'why')
+  const causeLabel = el('span', 'muted')
+  const causeText = el('span')
+  const remedyText = el('span')
+  const causeLine = el('div')
+  causeLine.append(causeLabel, causeText)
+  const remedyLine = el('div')
+  remedyLine.append(el('span', 'muted', 'remedy'), remedyText)
+  why.append(causeLine, remedyLine)
+  let expanded = false
   for (const [key, label] of counterNames) {
     const wrap = el('span', 'counter muted', `${label} `)
     const value = el('b', undefined, '0')
@@ -331,7 +365,7 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
   )
 
   body.append(frames, side)
-  panel.append(bar, tools, body)
+  panel.append(bar, why, tools, body)
   root.append(launcher, panel)
 
   // ---------------------------------------------------------------- painting
@@ -472,6 +506,16 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
             (c.fallbackReason === null ? '' : ` (fallback: ${c.fallbackReason})`),
     )
     say(session, c.sessionId ?? '')
+    const err = c.lastError
+    error.hidden = err === null
+    why.hidden = err === null || !expanded
+    if (err !== null) {
+      say(error, err.code)
+      // What was thrown, where there is a cause, and otherwise what the error itself says.
+      say(causeLabel, err.cause === undefined ? 'what' : 'cause')
+      say(causeText, err.cause === undefined ? sentenceOf(err) : String(err.cause))
+      say(remedyText, err.remedy)
+    }
     for (const [key] of counterNames) {
       const counter = counters.get(key)
       if (counter === undefined) continue
@@ -516,6 +560,11 @@ export function mountPanel(client: ObservableClient, options: PanelOptions = {})
     reserve()
   }
   launcher.addEventListener('click', () => setOpen(true))
+  error.addEventListener('click', () => {
+    expanded = !expanded
+    error.setAttribute('aria-expanded', String(expanded))
+    paint()
+  })
   close.addEventListener('click', () => setOpen(false))
   pause.addEventListener('click', () => {
     if (store.getSnapshot().paused) store.resume()
