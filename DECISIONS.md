@@ -4559,3 +4559,31 @@ depended on it. The plan itself is in history: `git show f5b55f2:site/DEMO.md`, 
 
 **Reconsider when:** the landing page gets a slot for moving pictures again, at which point
 the shot list is the starting point and the format table is still right.
+
+### D156. A page that is not a secure context: event ids without `crypto.subtle`, and a connect path that tells the truth
+Reported from a consumer app on 2026-09-23: a page at `http://<LAN address>:3000` is not a
+secure context, so it has no `crypto.subtle` and no `WebTransport`, and a `withFallback`
+client on it never reached either connector. `eventIdOf` took the event id from
+`crypto.subtle.digest`, and building the event table at session start threw a `TypeError`
+before any connector ran.
+
+**What reproduced, and what did not.** Reproduced in Bun with `crypto.subtle` and
+`WebTransport` removed, and in Chromium on `http://insecure.transport-io.test`, a name the
+browser's resolver maps to loopback, where `isSecureContext` is `false` and neither API
+exists: the table build throws, no connector is called, the status ends `closed`, and the
+library logs nothing. The report's "no rejected `connect()`, no `lastError`" did not reproduce:
+both happened, in both runtimes. What surfaced was the lie. The error was `WT_SESSION_CLOSED`,
+which reads as a network session that ended, its remedy was "Retry the connection.", which
+would throw the same `TypeError` again, and the `TypeError` itself was dropped, since the
+wrap passed no `cause`. `<TransportProvider>` catches the rejection on purpose and reports
+through `lastError` alone, so an application showing only `status` saw `closed` and nothing
+else.
+
+**The gate measures split chunks.** The fix below puts a SHA-256 implementation behind a
+dynamic `import()`. The bundle gate bundled without splitting, and esbuild inlines a dynamic
+import then, so it would have counted a chunk most pages never load as though every page did.
+It now splits the way an application's bundler does, the ceiling is on the entry chunk and
+whatever it imports statically, and chunks reached only dynamically have a ceiling of their
+own. The method changed in the same round as what it measures, so it was proven first, on the
+base commit be56030 before any fix: the old method and the new one produced the same 39,659
+minified bytes, byte for byte by SHA-256, and 13,810 gzipped, the ceiling.

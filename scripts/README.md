@@ -48,9 +48,12 @@ Bundles what a browser application imports, the client, the contract helpers and
 transport, from the built `dist`, minifies it, gzips it, and fails above a byte ceiling that
 may only go down. `Client.observe()` costs a session nobody observes one branch per frame,
 which is not measurable, and about a kilobyte of code, which is, and which ships in every
-production bundle whether or not a panel is ever opened. The bundler and the compressor are
-esbuild and fflate, pinned by the lockfile, so the figure is the same on a laptop and in CI;
-Bun's bundler and zlib are neither. See D149.
+production bundle whether or not a panel is ever opened. The bundle is split the way an
+application's bundler splits it: the ceiling is on what a page loads before anything runs, the
+entry chunk and what it imports statically, and a chunk reached only through a dynamic
+`import()` has a ceiling of its own. The bundler and the compressor are esbuild and fflate,
+pinned by the lockfile, so the figure is the same on a laptop and in CI; Bun's bundler and zlib
+are neither. See D149 and D156.
 
 ## `render-devtools-screenshots.node.ts` - the panel's pictures, from real traffic
 
