@@ -385,21 +385,16 @@ export class Client<M extends AnyMap = Registered> {
       )
     }
 
+    // The client's options pass straight through: the ones a session also takes,
+    // `validateInbound`, `handshakeDeadlineMs`, `scheduleFlush` and `now`, have the same names
+    // and meanings, the session reads each with `??` so an absent one and an undefined one
+    // are the same, and it reads nothing else of what is spread in.
     const session = new Session(conn, {
+      ...this.#opts,
       table,
       origin: this.#opts.origin ?? 0x80000001,
       side: 'client',
       holdDelivery: true,
-      ...(this.#opts.validateInbound === undefined
-        ? {}
-        : { validateInbound: this.#opts.validateInbound }),
-      ...(this.#opts.handshakeDeadlineMs === undefined
-        ? {}
-        : { handshakeDeadlineMs: this.#opts.handshakeDeadlineMs }),
-      ...(this.#opts.scheduleFlush === undefined
-        ? {}
-        : { scheduleFlush: this.#opts.scheduleFlush }),
-      ...(this.#opts.now === undefined ? {} : { now: this.#opts.now }),
     })
     // Superseded while the transport was being established. Adopting this session would
     // register every handler on it alongside the one the newer connect built.
