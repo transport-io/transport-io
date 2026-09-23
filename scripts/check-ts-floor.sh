@@ -244,6 +244,7 @@ const UNREACHABLE = {
   "transport/websocket-connection.d.ts": "the WebSocket mapping, reachable only through connectWebSocket and listenWebSocket",
   "transport/port.node.d.ts": "the port probes behind listenHttp3, listenWebSocket and the dev command, reachable only through them",
   "transport/closed.d.ts": "the closed mapping of the transport seam, which every adapter uses and no entry exports",
+  "sha256.d.ts": "the SHA-256 a page with no crypto.subtle loads on demand, reached only through the dynamic import in eventIdOf",
 }
 const missing = shipped
   .filter((f) => !listed.includes(f))
