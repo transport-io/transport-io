@@ -1,5 +1,29 @@
 # transport-io
 
+## 0.13.2
+
+### Patch Changes
+
+- 05838b8: Whatever is thrown between `connect()` and the handshake now lands in `lastError` as what it
+  is. A throw that is not a `TransportError` still arrives as `WT_SESSION_CLOSED`, but with what
+  was thrown on `cause`, where it was dropped, and a remedy that points at `cause` instead of
+  saying "Retry the connection.", which retried a `TypeError` into the same `TypeError`. A
+  subscriber that throws on the attempt's first state change no longer leaves the status at
+  `connecting` with no `lastError`. An attempt superseded by `disconnect()` and a newer
+  `connect()` no longer writes its failure over the newer attempt, and no longer clears it, so a
+  third `connect()` joins the attempt in flight instead of starting another.
+- 6c19f18: A page that is not a secure context, `http` on any host but loopback, now connects through the
+  WebSocket fallback. It has no `crypto.subtle`, and building the event table threw a `TypeError`
+  before either connector ran, so a `withFallback` client there never connected. The event ids
+  now come from `crypto.subtle` where there is one and otherwise from SHA-256 in `@noble/hashes`,
+  loaded on demand as a chunk of its own, so no other page pays for it. The ids are the same to
+  the byte, and the snapshot says `fallbackReason: 'unsupported'`, as it does for any runtime
+  with no WebTransport. `@noble/hashes` 2.4.0 is a new dependency.
+- b6815c2: An `onSession` callback that throws now ends the session it was given. `connect()` already
+  rejected and the status already said `closed`, but the session stayed open and `emit` still
+  reached the server. Now the session is closed, with the reason `session setup failed`, and
+  `lastError` has what was thrown on `cause`.
+
 ## 0.13.1
 
 ### Patch Changes
