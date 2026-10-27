@@ -34,13 +34,16 @@ export const contract = defineContract({
 export interface AppMap extends MapOf<typeof contract> {}
 ```
 
-The payload types are inferred either way, so the rest of your application is identical.
+Inbound is either side: a request or an emit where it arrives, and a call's reply or a
+stream's elements on the side that called. Outbound payloads are not validated. The payload
+types are inferred either way, so the rest of your application is identical.
 
 | | `reliable<T>()` | a schema |
 |---|---|---|
 | inbound validation | none | every message, on arrival |
 | runtime cost | zero | one check per message |
 | bad payload from a peer | reaches your handler | rejected with `WT_VALIDATION_FAILED` |
+| bad reply or stream element | reaches the caller | `call()` rejects, or the loop throws and the stream is cancelled, with `WT_VALIDATION_FAILED` |
 | dependency | none | your validator |
 
 Use a schema wherever a peer you do not control can reach, which for a server is every

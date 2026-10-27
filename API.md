@@ -67,14 +67,17 @@ export interface ValidatedMap extends MapOf<typeof validated> {}
 ```
 
 A payload the schema rejects never reaches a handler; the sender's call fails with
-`WT_VALIDATION_FAILED` and an emit is dropped. Use a schema wherever a peer you do not
-control can reach, which for a server is every client. Use a type argument where both ends
-are yours and the traffic is high.
+`WT_VALIDATION_FAILED` and an emit is dropped. On the calling side, a reply that fails
+`returns` rejects `call()` with `WT_VALIDATION_FAILED`, and an element that fails `yields`
+throws it from the loop and cancels the stream, so the responder's `ctx.signal` fires. Use a
+schema wherever a peer you do not control can reach, which for a server is every client. Use
+a type argument where both ends are yours and the traffic is high.
 
 `type$<T>()` is the same types-only schema the helpers build for you, exported for the
 object form below.
 
-Inbound payloads are validated; outbound are not.
+Inbound payloads are validated, on both sides: a request or an emit where it arrives, and a
+reply or a stream element on the side that called. Outbound payloads are not.
 
 **Or bytes.** `bytes()` declares a slot whose value is a `Uint8Array` on both ends and bytes
 on the wire, under its own codec, never through JSON: a Yjs update, an image chunk,
@@ -447,7 +450,8 @@ export async function sample(): Promise<string[]> {
 
 An error partway through is delivered after the elements that preceded it: the loop yields
 what arrived, then throws. `toArray()` rejects and discards the partial. A cancelled stream
-ends with `WT_ABORTED`, the same as an `AbortSignal`.
+ends with `WT_ABORTED`, the same as an `AbortSignal`. An element that fails its `yields`
+schema ends the loop with `WT_VALIDATION_FAILED` and cancels the stream.
 
 **Backpressure is accounted for.** The generator does not resume until its frame has been
 accepted, and the responder may be at most **32 frames** ahead of what the consumer has

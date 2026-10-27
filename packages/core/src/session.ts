@@ -11,7 +11,7 @@ import {
   slotCodec,
   validate,
 } from './codec.ts'
-import type { Direction, EventEntry, EventTable } from './contract.ts'
+import type { Direction, EventEntry, EventTable, Schema } from './contract.ts'
 import { type Datagram, decodeDatagram, encodeDatagram, SequenceGate } from './datagram.ts'
 import { errorForClose, TransportError } from './errors.ts'
 import { encodeFrame, type Frame, FrameDecoder } from './framer.ts'
@@ -1042,7 +1042,10 @@ export class Session {
         )
       }
       expectCodec(entry.name, 'returns', slotCodec(entry.def, 'returns'), first.codec)
-      return decodeWith(first.codec, first.payload)
+      const reply = decodeWith(first.codec, first.payload)
+      // A reply is inbound to this side, so it meets its schema like any inbound payload.
+      // `call()` has already refused an event with no `returns`.
+      return this.#validateInbound ? await validate(entry.def.returns as Schema, reply) : reply
     } finally {
       signal?.removeEventListener('abort', onAbort)
       if (this.#tap !== undefined) this.#mark('close', 'out', n, entry)
@@ -1065,6 +1068,8 @@ export class Session {
     const eventId = entry.id
     const requestCodec = slotCodec(entry.def, 'payload')
     const yieldCodec = slotCodec(entry.def, 'yields')
+    // `stream()` has already refused an event with no `yields`.
+    const yieldSchema = entry.def.yields as Schema
     /**
      * What `cancel()` aborts. It is watched by the same listener as the caller's signal, so
      * cancelling from outside the loop takes the path an `AbortSignal` already takes:
@@ -1140,7 +1145,10 @@ export class Session {
             }
             if (f.type !== FrameType.CALL_RESPONSE) continue
             expectCodec(entry.name, 'yields', yieldCodec, f.codec)
-            yield decodeWith(f.codec, f.payload)
+            const element = decodeWith(f.codec, f.payload)
+            // An element is inbound to this side too. A throw here leaves `ended` false, so
+            // the `finally` resets the stream and the responder's signal fires.
+            yield self.#validateInbound ? await validate(yieldSchema, element) : element
             // Reached only when the consumer asks for the next element, so this
             // acknowledges consumption rather than arrival.
             taken++
