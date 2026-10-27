@@ -1,5 +1,12 @@
 # @transport-io/devtools
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [0d58356]
+  - transport-io@0.14.0
+
 ## 0.1.4
 
 ### Patch Changes
