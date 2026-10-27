@@ -377,6 +377,9 @@ it - so core has zero runtime dependency and zero peer dependency. A types-only 
 helper serves users who want inference without runtime validation. Validate inbound only,
 never outbound: you produced your own payload, and double validation doubles hot-path cost.
 
+**Note, 2026-10-27.** Inbound includes a call's reply and a stream's elements, on the side that
+called. D157 has what is validated there and how a failure surfaces.
+
 ### D18. No default call timeout
 Peer death is already handled: QUIC's idle timeout rejects `session.closed`, which rejects
 every pending call with `WT_SESSION_CLOSED`. A default timeout would reintroduce the
@@ -4661,3 +4664,39 @@ closed.
 
 Its bytes were found in the same change: sharing the handshake's catch rather than adding a
 second one put all of D156's fixes at exactly 13,810 in the entry chunk.
+
+### D157. Replies and stream elements are inbound to the side that called, and are validated
+Amends D17. "Validate inbound only" was implemented for emits and for a call's or a stream's
+request on the responder, and not for what comes back: a `call()` reply was decoded and handed
+over without meeting `returns`, and each `stream()` element without meeting `yields`. Both are
+inbound to the initiator, and the documentation already said every inbound payload was
+validated, so the code now does what D17 and the documents say. Outbound stays unvalidated.
+
+**What is validated.** Every inbound payload against the schema of its slot, behind the same
+`validateInbound` option, default on: an emit's `payload` where it arrives, a request's
+`payload` on the responder, a reply's `returns` and each element's `yields` on the initiator.
+A types-only slot costs nothing, because `type$<T>()` validates by returning its input. A
+`bytes()` slot always passes on arrival, because the decoder hands over a `Uint8Array` copy.
+As with every other inbound payload, the value the caller receives is the schema's output, so
+a transforming schema hands over the transformed value.
+
+**Failure semantics.**
+- `call()` rejects with `WT_VALIDATION_FAILED`, the code and message `validate()` already
+  produces for a request, naming the field. The response stream is complete by then, so there
+  is nothing to reset.
+- `stream()` throws `WT_VALIDATION_FAILED` from the loop after the elements before the bad one,
+  which matches §6.4's rule for an error partway through, and resets the stream with
+  `WT_ABORTED` (§10.1), so the responder sees STOP_SENDING, its `ctx.signal` fires and its
+  generator's `finally` runs. Leaving the producer running would hold a stream slot and keep
+  spending credit for a consumer that has stopped. It takes the path a consumer that throws
+  inside its loop already takes: the generator's `finally` resets whenever it did not end
+  cleanly. `WT_ABORTED` is the right code on the wire, because from the responder's side the
+  initiator cancelled; why it cancelled is local to the initiator, as a schema disagreement is
+  in §4. PROTOCOL.md needed no change.
+
+**Cost.** 31 bytes gzipped in the browser entry chunk, which the bundle ceiling now carries at
+13,841, measured with `bun run scripts/check-bundle-size.ts`. One schema check per reply and
+per element when a schema is declared, the same per-message cost a request already paid.
+
+**Version.** A reply or element that does not match its schema resolved before and rejects
+now, so the changeset is a minor with a breaking note, and the commit carries `!`.

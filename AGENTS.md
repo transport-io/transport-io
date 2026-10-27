@@ -102,8 +102,10 @@ export const validated = defineContract({
 ```
 
 Use a schema where an untrusted peer can reach, a type argument where both ends are yours and
-the traffic is high. Inbound payloads are validated; outbound are not. `type$<T>()` is the
-types-only schema the helpers build, exported for the object form.
+the traffic is high. Inbound payloads are validated, on both sides: a reply that fails
+`returns` rejects `call()` with `WT_VALIDATION_FAILED`, and a stream element that fails
+`yields` throws it from the loop and cancels the stream. Outbound payloads are not.
+`type$<T>()` is the types-only schema the helpers build, exported for the object form.
 
 ### Rules the contract enforces
 

@@ -36,8 +36,10 @@ import { gzipSync } from 'fflate'
  * observer seam, and 13,810 with it. The seam is 1,007 of them, for records of every frame,
  * every call stream and every drop. It started at 1,146; D149 has what came out. Unchanged
  * on 2026-09-23, when the SHA-256 fallback cost the entry 31 and 51 came out first (D156).
+ * Raised to 13,841 on 2026-10-27: validating a call's reply and a stream's elements against
+ * their schemas, which the documentation already promised, costs every application 31 (D157).
  */
-const CEILING = 13_810
+const CEILING = 13_841
 
 /**
  * Gzipped bytes of every chunk loaded only through a dynamic `import()`. One is, measured on

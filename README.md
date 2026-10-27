@@ -67,10 +67,11 @@ your validator's internals in it. `AppMap` is what each end is given,
 
 ### A type, or a schema
 
-A type argument describes the payload and costs nothing at runtime, because nothing checks
-it. A peer that sends the wrong shape reaches your handler. Pass a
+A type argument describes the payload and costs nothing at runtime: nothing checks it, so a
+peer that sends the wrong shape reaches your handler. Pass a
 [Standard Schema](https://standardschema.dev) validator instead - zod, valibot, arktype -
-and every inbound payload is validated on arrival, at one check per message:
+and every inbound payload, replies and stream elements included, is validated on arrival, at
+one check per message:
 
 ```ts standalone
 import { defineContract, reliable, unreliable } from 'transport-io'
@@ -82,8 +83,8 @@ export const validated = defineContract({
 })
 ```
 
-The payload types are inferred either way, so nothing downstream changes. Use a schema
-wherever a peer you do not control can reach, which for a server is every client. Use a type
+The payload types are inferred either way; nothing downstream changes. Use a schema
+wherever an untrusted peer can reach, which for a server is every client. Use a type
 argument where both ends are yours and the traffic is high, such as cursor positions at
 pointer rate.
 

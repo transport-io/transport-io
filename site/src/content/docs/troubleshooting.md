@@ -151,10 +151,11 @@ spelling, or use the method the declaration asks for.
 
 ## WT_VALIDATION_FAILED
 
-A payload failed the contract's schema on arrival, and the message names the field. Or a
-payload could not be serialised on the way out: a cycle, a function, a `BigInt`, or
-`undefined` as the whole payload. Send `null` rather than `undefined`. See
-[Types, or a schema](/guides/schema/).
+A payload failed the contract's schema on arrival, and the message names the field. On the
+side that called, a bad reply rejects `call()`, and a bad stream element throws from the loop
+after the elements before it and cancels the stream. Or a payload could not be serialised on
+the way out: a cycle, a function, a `BigInt`, or `undefined` as the whole payload. Send
+`null` rather than `undefined`. See [Types, or a schema](/guides/schema/).
 
 ## WT_HANDLER_ERROR
 
